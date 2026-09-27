@@ -27,11 +27,6 @@ internal sealed class GraphVerificationContext(ModelGraph graph)
 
     public void AddEdge(NodeId producer, NodeId consumer)
     {
-        if (producer == consumer)
-        {
-            return;
-        }
-
         if (!Edges.TryGetValue(producer, out var consumers))
         {
             consumers = [];

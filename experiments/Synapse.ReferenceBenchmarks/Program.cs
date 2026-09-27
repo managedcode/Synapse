@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Reflection;
 using System.Text.Json;
 using LLama;
 using LLama.Common;
@@ -38,6 +39,9 @@ internal static class ReferenceBenchmarkCommand
 
     private static async Task<BenchmarkResult> RunLlamaSharpAsync(BenchmarkArguments options)
     {
+        using var process = Process.GetCurrentProcess();
+        var subjectTimer = Stopwatch.StartNew();
+        var subjectCpuStart = process.TotalProcessorTime;
         _ = NativeLibraryConfig.All.WithLogCallback(static (_, _) => { });
         var parameters = new ModelParams(options.ModelPath)
         {
@@ -51,6 +55,8 @@ internal static class ReferenceBenchmarkCommand
         using var model = await LLamaWeights.LoadFromFileAsync(parameters).ConfigureAwait(false);
         var executor = new StatelessExecutor(model, parameters);
         loadTimer.Stop();
+        process.Refresh();
+        var workingSetAfterLoad = process.WorkingSet64;
 
         var inference = new InferenceParams
         {
@@ -70,13 +76,22 @@ internal static class ReferenceBenchmarkCommand
         }
 
         generationTimer.Stop();
+        subjectTimer.Stop();
+        process.Refresh();
+        var maximumObservedWorkingSet = Math.Max(workingSetAfterLoad, process.WorkingSet64);
+        if (process.PeakWorkingSet64 > 0)
+        {
+            maximumObservedWorkingSet = Math.Max(maximumObservedWorkingSet, process.PeakWorkingSet64);
+        }
+
+        var subjectCpu = process.TotalProcessorTime - subjectCpuStart;
         var decodeSeconds = Math.Max(
             0.000_001,
             generationTimer.Elapsed.TotalSeconds - (firstTokenAt?.TotalSeconds ?? 0));
 
         return new BenchmarkResult(
             Subject: "llamasharp",
-            SubjectVersion: typeof(LLamaWeights).Assembly.GetName().Version?.ToString() ?? "unknown",
+            SubjectVersion: options.SubjectVersion ?? GetAssemblyVersion(typeof(LLamaWeights).Assembly),
             Backend: options.Backend,
             ModelPath: Path.GetFullPath(options.ModelPath),
             Prompt: options.Prompt,
@@ -87,7 +102,12 @@ internal static class ReferenceBenchmarkCommand
             LoadMilliseconds: loadTimer.Elapsed.TotalMilliseconds,
             TimeToFirstTokenMilliseconds: firstTokenAt?.TotalMilliseconds,
             TotalGenerationMilliseconds: generationTimer.Elapsed.TotalMilliseconds,
-            DecodeTokensPerSecond: generatedTokens <= 1 ? null : (generatedTokens - 1) / decodeSeconds);
+            DecodeTokensPerSecond: generatedTokens <= 1 ? null : (generatedTokens - 1) / decodeSeconds,
+            SubjectWallMilliseconds: subjectTimer.Elapsed.TotalMilliseconds,
+            ProcessCpuMilliseconds: subjectCpu.TotalMilliseconds,
+            AverageCpuCores: AverageCpuCores(subjectCpu, subjectTimer.Elapsed),
+            WorkingSetAfterLoadBytes: workingSetAfterLoad,
+            MaximumObservedWorkingSetBytes: maximumObservedWorkingSet);
     }
 
     private static async Task<BenchmarkResult> RunDotLlmAsync(BenchmarkArguments options)
@@ -106,11 +126,15 @@ internal static class ReferenceBenchmarkCommand
         };
         AddDotLlmArguments(startInfo, options);
 
+        var subjectTimer = Stopwatch.StartNew();
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("dotLLM process did not start.");
+        var metricsTask = ObserveProcessAsync(process);
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
         await process.WaitForExitAsync().WaitAsync(TimeSpan.FromMinutes(5)).ConfigureAwait(false);
+        subjectTimer.Stop();
+        var processMetrics = await metricsTask.ConfigureAwait(false);
         var output = await outputTask.ConfigureAwait(false);
         var error = await errorTask.ConfigureAwait(false);
         if (process.ExitCode != 0)
@@ -133,7 +157,12 @@ internal static class ReferenceBenchmarkCommand
             LoadMilliseconds: result.Timings.LoadMilliseconds,
             TimeToFirstTokenMilliseconds: result.Timings.PrefillMilliseconds,
             TotalGenerationMilliseconds: result.Timings.TotalMilliseconds,
-            DecodeTokensPerSecond: result.Timings.DecodeTokensPerSecond);
+            DecodeTokensPerSecond: result.Timings.DecodeTokensPerSecond,
+            SubjectWallMilliseconds: subjectTimer.Elapsed.TotalMilliseconds,
+            ProcessCpuMilliseconds: processMetrics.Cpu.TotalMilliseconds,
+            AverageCpuCores: AverageCpuCores(processMetrics.Cpu, subjectTimer.Elapsed),
+            WorkingSetAfterLoadBytes: null,
+            MaximumObservedWorkingSetBytes: processMetrics.MaximumObservedWorkingSetBytes);
     }
 
     private static void AddDotLlmArguments(ProcessStartInfo startInfo, BenchmarkArguments options)
@@ -159,7 +188,46 @@ internal static class ReferenceBenchmarkCommand
             "<dotllm|llamasharp> --model <path.gguf> --prompt <text> " +
             "[--max-tokens 32] [--threads 8] [--backend cpu|metal] " +
             "[--subject-executable <path>] [--subject-version <commit|version>]");
+
+    private static double? AverageCpuCores(TimeSpan cpu, TimeSpan wall) => wall.TotalSeconds == 0
+        ? null
+        : cpu.TotalSeconds / wall.TotalSeconds;
+
+    private static string GetAssemblyVersion(Assembly assembly) =>
+        assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ??
+        assembly.GetName().Version?.ToString() ??
+        "unknown";
+
+    private static async Task<ObservedProcessMetrics> ObserveProcessAsync(Process process)
+    {
+        var cpu = TimeSpan.Zero;
+        long? maximumObservedWorkingSetBytes = null;
+        while (!process.HasExited)
+        {
+            try
+            {
+                process.Refresh();
+                cpu = process.TotalProcessorTime;
+                var observed = Math.Max(process.WorkingSet64, process.PeakWorkingSet64);
+                if (observed > 0 &&
+                    (maximumObservedWorkingSetBytes is null || observed > maximumObservedWorkingSetBytes))
+                {
+                    maximumObservedWorkingSetBytes = observed;
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                break;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(5)).ConfigureAwait(false);
+        }
+
+        return new ObservedProcessMetrics(cpu, maximumObservedWorkingSetBytes);
+    }
 }
+
+internal sealed record ObservedProcessMetrics(TimeSpan Cpu, long? MaximumObservedWorkingSetBytes);
 
 internal sealed record BenchmarkArguments(
     string Subject,
@@ -232,7 +300,12 @@ internal sealed record BenchmarkResult(
     double LoadMilliseconds,
     double? TimeToFirstTokenMilliseconds,
     double TotalGenerationMilliseconds,
-    double? DecodeTokensPerSecond);
+    double? DecodeTokensPerSecond,
+    double SubjectWallMilliseconds,
+    double ProcessCpuMilliseconds,
+    double? AverageCpuCores,
+    long? WorkingSetAfterLoadBytes,
+    long? MaximumObservedWorkingSetBytes);
 
 internal sealed record DotLlmResult(
     string Text,

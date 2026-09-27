@@ -54,6 +54,25 @@ public sealed class TypedGraphIrTests
     }
 
     [Test]
+    public async Task SelfDependencyRejectedAsCycle()
+    {
+        var shape = new TensorShape(ShapeDimension.Fixed(4));
+        var value = new GraphValue(new ValueId(1), shape, Fp32);
+        var node = new GraphNode(
+            new NodeId(1),
+            GraphOperationKind.Add,
+            [value.Id, value.Id],
+            [value.Id]);
+        var graph = CreateGraph([value], [node], [value.Id], [value.Id]);
+
+        var result = ModelGraphVerifier.Verify(graph);
+
+        await Assert.That(result.Diagnostics.Any(item =>
+            item.Code == GraphDiagnosticCode.IllegalCycle &&
+            item.NodeId == node.Id)).IsTrue();
+    }
+
+    [Test]
     public async Task UnorderedStateWritersRejected()
     {
         var shape = new TensorShape(ShapeDimension.Fixed(4));

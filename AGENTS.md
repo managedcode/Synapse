@@ -15,8 +15,10 @@ before editing. Never mark planned runtime or benchmark work as complete.
   dependencies.
 - Keep one monorepo and the same PascalCase `Features/<SliceName>` under every
   applicable technical root.
-- Orleans is the coarse control plane. Rust owns kernels, memory, hot KV state,
-  and direct data transfer. Local mode must work without Orleans or a network.
+- Orleans accepts and coordinates distributed requests as the coarse control
+  plane. C# owns the portable/reference path; Rust owns an optimized kernel,
+  allocator, hot-KV operation, or direct transfer path only after profiling
+  proves the boundary. Local mode must work without Orleans or a network.
 - Model math, precision, adapters, and KV compatibility are explicit. Do not
   skip dense layers without a qualified numerical or routing profile.
 - Session state has one fenced owner. Stale epochs and conflicting retries
@@ -61,7 +63,8 @@ Preserve unrelated changes. Use the current checkout.
 ## Canonical commands
 
 ```text
-dotnet build Synapse.slnx --configuration Release --locked-mode
+dotnet restore Synapse.slnx --locked-mode
+dotnet build Synapse.slnx --configuration Release --no-restore
 dotnet test Synapse.slnx --configuration Release --no-build
 cargo test --manifest-path native/Cargo.toml --locked
 cargo fmt --manifest-path native/Cargo.toml --all --check

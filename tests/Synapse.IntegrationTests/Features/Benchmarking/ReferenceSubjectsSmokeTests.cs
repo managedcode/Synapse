@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
-using ManagedCode.Synapse.Runtime.Features.TextGeneration.Qwen2;
+using ManagedCode.Synapse.Contracts.Features.GraphExecution;
+using ManagedCode.Synapse.Runtime.Features.GraphExecution.Validation;
+using ManagedCode.Synapse.Runtime.Features.ModelLoading;
 
 namespace ManagedCode.Synapse.IntegrationTests.Features.Benchmarking;
 
@@ -48,10 +50,16 @@ public sealed class ReferenceSubjectsSmokeTests
     [Test]
     public async Task SynapseManagedQwen2MatchesReferenceFirstToken()
     {
-        using var model = Qwen2Model.Load(GetModelPath(), contextSize: 512);
+        using var model = ModelLoader.Load(GetModelPath(), contextSize: 512);
 
+        var graphVerification = ModelGraphVerifier.Verify(model.Graph);
         var result = model.Generate(PromptTokens, maximumNewTokens: 1);
 
+        await Assert.That(graphVerification.IsValid).IsTrue();
+        await Assert.That(model.Architecture).IsEqualTo("qwen2");
+        await Assert.That(model.Graph.Regions.Count).IsEqualTo(26);
+        await Assert.That(model.Graph.Regions.All(region =>
+            region.Eligibility is AlwaysRequiredEligibility)).IsTrue();
         await Assert.That(result.GeneratedTokens).IsEquivalentTo([12095]);
         await Assert.That(result.Elapsed).IsGreaterThan(TimeSpan.Zero);
     }
@@ -124,13 +132,17 @@ public sealed class ReferenceSubjectsSmokeTests
     }
 
     private static string GetModelPath() => Path.Combine(
-            FindRepositoryRoot(),
-            "tests",
-            "Fixtures",
-            "Models",
-            "Qwen",
-            "Qwen2.5-0.5B-Instruct-GGUF",
+            GetModelRoot(),
+            "qwen2.5-0.5b-instruct-q8_0",
             "qwen2.5-0.5b-instruct-q8_0.gguf");
+
+    private static string GetModelRoot()
+    {
+        var configured = Environment.GetEnvironmentVariable("SYNAPSE_MODEL_ROOT");
+        return string.IsNullOrWhiteSpace(configured)
+            ? Path.Combine(FindRepositoryRoot(), "artifacts", "models")
+            : Path.GetFullPath(configured);
+    }
 
     private static string RequireEnvironmentFile(string variableName)
     {

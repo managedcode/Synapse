@@ -35,16 +35,21 @@ This represents the `what executes` axis. Execution IR will add kernels,
 layouts, lifetimes, memory spaces, and precision. Deployment plans will bind
 the resulting regions to local or remote devices and worker incarnations.
 
-## Current boundary
+## Qwen2 integration and current boundary
 
-The working Qwen2 executor has not yet been lowered through this IR. Its dense
-checkpoint therefore remains fully required. Conditional routing, demand
-paging, latent region edges, and Orleans placement are not claimed until the
-corresponding trained/evaluated graph and execution/deployment plans exist.
+The working Qwen2 loader now materializes its embedding region, every dense
+transformer block, KV state/effect dependencies, and logits region as Model IR.
+The real GGUF-backed graph must verify before scratch or KV allocation, and all
+regions are `AlwaysRequired`. The optimized executor still invokes its managed
+C# kernels directly; a general DAG executor and Execution IR are the next
+boundary. Conditional routing, demand paging, latent region edges, and Orleans
+placement are not claimed until the corresponding trained/evaluated graph and
+execution/deployment plans exist.
 
 ## Acceptance mapping
 
 `TypedGraphIrTests` covers a valid linear region, shape mismatch with NodeId,
-an illegal cycle, unordered state writers, a non-boolean region predicate,
-caller-owned collection mutation, and overlapping execution ownership. These
-tests exercise the real verifier and run in the shared .NET gate.
+multi-node and self cycles, unordered state writers, a non-boolean region
+predicate, caller-owned collection mutation, and overlapping execution
+ownership. The shared Qwen smoke test also verifies its real 26-region graph
+before checking generation against dotLLM and LLamaSharp.

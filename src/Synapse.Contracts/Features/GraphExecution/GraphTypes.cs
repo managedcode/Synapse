@@ -90,7 +90,7 @@ public sealed class TensorShape
     public TensorShape(params ShapeDimension[] dimensions)
     {
         ArgumentNullException.ThrowIfNull(dimensions);
-        Dimensions = Array.AsReadOnly<ShapeDimension>([.. dimensions]);
+        Dimensions = Array.AsReadOnly([.. dimensions]);
     }
 
     /// <summary>Dimensions in row-major logical order.</summary>

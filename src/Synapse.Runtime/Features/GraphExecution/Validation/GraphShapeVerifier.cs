@@ -66,8 +66,13 @@ internal static class GraphShapeVerifier
             case GraphOperationKind.Linear or GraphOperationKind.QuantizedLinear:
                 ValidateLinear(context, node);
                 break;
-            case GraphOperationKind.RmsNorm or GraphOperationKind.LayerNorm or
-                GraphOperationKind.Silu or GraphOperationKind.Gelu or
+            case GraphOperationKind.RmsNorm:
+                ValidateNormalization(context, node, biasAllowed: false);
+                break;
+            case GraphOperationKind.LayerNorm:
+                ValidateNormalization(context, node, biasAllowed: true);
+                break;
+            case GraphOperationKind.Silu or GraphOperationKind.Gelu or
                 GraphOperationKind.Softmax or GraphOperationKind.Rope:
                 ValidateShapePreservingUnary(context, node);
                 break;
@@ -78,39 +83,32 @@ internal static class GraphShapeVerifier
                 ValidateMerge(context, node);
                 break;
             case GraphOperationKind.Embedding:
+                ValidateEmbedding(context, node);
                 break;
-            case GraphOperationKind.Transpose:
-                break;
-            case GraphOperationKind.Slice:
-                break;
-            case GraphOperationKind.Concat:
-                break;
-            case GraphOperationKind.Gather:
-                break;
-            case GraphOperationKind.Scatter:
-                break;
-            case GraphOperationKind.CausalAttention:
-                break;
-            case GraphOperationKind.StateRead:
-                break;
-            case GraphOperationKind.StateAppend:
-                break;
-            case GraphOperationKind.StateCommit:
-                break;
-            case GraphOperationKind.StateRollback:
-                break;
-            case GraphOperationKind.TopKRoute:
-                break;
-            case GraphOperationKind.Branch:
-                break;
-            case GraphOperationKind.Loop:
-                break;
-            case GraphOperationKind.SelectLogits:
-                break;
-            case GraphOperationKind.Sample:
+            case GraphOperationKind.Transpose or GraphOperationKind.Slice or
+                GraphOperationKind.Concat or GraphOperationKind.Gather or
+                GraphOperationKind.Scatter or GraphOperationKind.CausalAttention or
+                GraphOperationKind.StateRead or GraphOperationKind.StateAppend or
+                GraphOperationKind.StateCommit or GraphOperationKind.StateRollback or
+                GraphOperationKind.TopKRoute or GraphOperationKind.Branch or
+                GraphOperationKind.Loop or GraphOperationKind.SelectLogits or
+                GraphOperationKind.Sample:
+                ValidateExtendedOperation(context, node);
                 break;
             default:
                 break;
+        }
+    }
+
+    private static void ValidateExtendedOperation(GraphVerificationContext context, GraphNode node)
+    {
+        if (node.Operation == GraphOperationKind.CausalAttention)
+        {
+            ValidateShapePreservingUnary(context, node);
+        }
+        else if (node.Operation == GraphOperationKind.StateAppend)
+        {
+            _ = RequireCounts(context, node, 1, int.MaxValue, 0);
         }
     }
 
@@ -156,6 +154,44 @@ internal static class GraphShapeVerifier
             !SameShape(inputs[0].Shape, output.Shape))
         {
             AddShapeMismatch(context, node, "operation must preserve shape");
+        }
+    }
+
+    private static void ValidateNormalization(
+        GraphVerificationContext context,
+        GraphNode node,
+        bool biasAllowed)
+    {
+        var maximumInputs = biasAllowed ? 3 : 2;
+        if (!RequireCounts(context, node, 2, maximumInputs, 1) ||
+            !TryResolve(context, node, out var inputs, out var output))
+        {
+            return;
+        }
+
+        if (!SameShape(inputs[0].Shape, output.Shape) ||
+            inputs.Skip(1).Any(parameter => !SameShape(parameter.Shape, output.Shape)))
+        {
+            AddShapeMismatch(context, node, "normalization input, parameters, and output must have identical shapes");
+        }
+    }
+
+    private static void ValidateEmbedding(GraphVerificationContext context, GraphNode node)
+    {
+        if (!RequireCounts(context, node, 2, 2, 1) ||
+            !TryResolve(context, node, out var inputs, out var output))
+        {
+            return;
+        }
+
+        var indices = inputs[0];
+        var weights = inputs[1];
+        if (indices.NumericType.Compute != ComputeDataType.I32 ||
+            indices.Shape.Rank != 1 || indices.Shape.Dimensions[0] != ShapeDimension.Fixed(1) ||
+            weights.Shape.Rank != 2 || output.Shape.Rank != 1 ||
+            !SameDimension(weights.Shape.Dimensions[1], output.Shape.Dimensions[0]))
+        {
+            AddShapeMismatch(context, node, "embedding expects one integer index, weights [vocabulary,hidden], and output [hidden]");
         }
     }
 

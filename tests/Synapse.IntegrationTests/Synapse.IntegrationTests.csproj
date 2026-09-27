@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../experiments/Synapse.ReferenceBenchmarks/Synapse.ReferenceBenchmarks.csproj" />
+    <ProjectReference Include="../../src/Synapse.Cli/Synapse.Cli.csproj" />
     <ProjectReference Include="../../src/Synapse.Contracts/Synapse.Contracts.csproj" />
     <ProjectReference Include="../../src/Synapse.Runtime/Synapse.Runtime.csproj" />
     <PackageReference Include="TUnit" />

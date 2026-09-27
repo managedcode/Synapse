@@ -40,7 +40,8 @@ internal static unsafe class Q8Operators
         GgufFile file,
         GgufTensorInfo tensor,
         float[] input,
-        float[] output)
+        float[] output,
+        ParallelOptions parallelOptions)
     {
         var columns = GetMatrixColumns(tensor);
         var rows = GetMatrixRows(tensor);
@@ -58,7 +59,7 @@ internal static unsafe class Q8Operators
         {
             var inputAddress = (nint)inputPointer;
             var outputAddress = (nint)outputPointer;
-            _ = Parallel.For(0, rows, row =>
+            _ = Parallel.For(0, rows, parallelOptions, row =>
             {
                 var weights = (byte*)tensorAddress + checked(row * rowBytes);
                 var values = (float*)inputAddress;

@@ -33,11 +33,10 @@ jobs:
       DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
       SYNAPSE_REQUIRED_RUNTIME_IDENTIFIER: ${{ matrix.runtime_identifier }}
       SYNAPSE_DOTLLM_VERSION: d88040451d7db56e5dfef9d5754ad0955b0f7fe5
+      SYNAPSE_MODEL_ROOT: ${{ runner.temp }}/synapse-models
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          lfs: true
 
       - name: Checkout pinned dotLLM benchmark subject
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -60,6 +59,20 @@ jobs:
 
       - name: Build .NET
         run: dotnet build Synapse.slnx --configuration Release --no-restore
+
+      - name: Restore verified model cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ${{ env.SYNAPSE_MODEL_ROOT }}
+          key: synapse-models-${{ runner.os }}-${{ matrix.runtime_identifier }}-${{ hashFiles('models/catalog.json') }}
+
+      - name: Fetch verified small model packages
+        shell: bash
+        run: |
+          dotnet run --project src/Synapse.Cli --configuration Release --no-build -- \
+            model fetch --set family-small --output "${SYNAPSE_MODEL_ROOT}"
+          dotnet run --project src/Synapse.Cli --configuration Release --no-build -- \
+            model fetch --set embedding-small --output "${SYNAPSE_MODEL_ROOT}"
 
       - name: Build pinned dotLLM benchmark subject
         run: dotnet build _external/dotLLM/src/DotLLM.Cli/DotLLM.Cli.csproj --configuration Release

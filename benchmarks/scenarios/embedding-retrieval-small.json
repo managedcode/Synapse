@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "embedding-retrieval-small",
+  "kind": "embeddings",
+  "dimensions": "model-native",
+  "documents": [
+    "Paris museums should be scheduled with step-free entrances and lift availability.",
+    "Berlin public transport has elevators, but outages should be checked before travel.",
+    "Barcelona combines modernist architecture with several steep pedestrian routes.",
+    "The overnight train connects New York and Chicago but takes much longer than flying.",
+    "Peanut allergy cards should be translated and shown before ordering food.",
+    "A fixed hotel ceiling leaves less budget for meals, transit, and attractions.",
+    "San Francisco cable cars are iconic but are not the easiest accessible transport option.",
+    "Model weights are immutable while KV pages belong to a fenced session epoch."
+  ],
+  "queries": [
+    "Which note discusses wheelchair-friendly city travel?",
+    "Find the food safety requirement.",
+    "What explains the remaining budget risk?",
+    "Which text is about inference state rather than travel?"
+  ],
+  "batches": [1, 8, 32],
+  "repetitions": 5
+}

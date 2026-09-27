@@ -33,9 +33,27 @@
       "requirement": "REQ-BMK-001",
       "slice": "Benchmarking",
       "stage": "D1",
-      "status": "planned",
+      "status": "in_progress",
       "dependsOn": ["TASK-BST-004"],
       "tests": ["TEST-BMK-001-1", "TEST-BMK-001-2", "TEST-BMK-001-3"]
+    },
+    {
+      "id": "TASK-PKG-001",
+      "requirement": "REQ-PKG-001",
+      "slice": "ModelPackages",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-BST-003"],
+      "tests": ["TEST-PKG-001-1", "TEST-PKG-001-2", "TEST-PKG-001-3"]
+    },
+    {
+      "id": "TASK-PKG-003",
+      "requirement": "REQ-PKG-003",
+      "slice": "ModelPackages",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-PKG-001", "TASK-BST-002"],
+      "tests": ["TEST-PKG-003-1", "TEST-PKG-003-2", "TEST-PKG-003-3"]
     },
     {
       "id": "TASK-GRF-001",

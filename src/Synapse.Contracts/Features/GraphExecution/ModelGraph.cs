@@ -119,7 +119,7 @@ public sealed class LoopDescriptor
     public IReadOnlyList<ValueId> CarriedOutputs { get; }
 
     private static System.Collections.ObjectModel.ReadOnlyCollection<T> Copy<T>(IEnumerable<T> source) =>
-        Array.AsReadOnly<T>([.. source]);
+        Array.AsReadOnly([.. source]);
 }
 
 /// <summary>One typed operation and its data and effect dependencies.</summary>
@@ -191,7 +191,7 @@ public sealed class GraphEntryPoint
     public IReadOnlyList<ValueId> Outputs { get; }
 
     private static System.Collections.ObjectModel.ReadOnlyCollection<T> Copy<T>(IEnumerable<T> source) =>
-        Array.AsReadOnly<T>([.. source]);
+        Array.AsReadOnly([.. source]);
 }
 
 /// <summary>Portable typed model graph before backend lowering.</summary>

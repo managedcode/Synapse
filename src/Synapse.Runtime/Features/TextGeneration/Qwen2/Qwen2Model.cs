@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using ManagedCode.Synapse.Contracts.Features.GraphExecution;
 using ManagedCode.Synapse.Runtime.Features.GraphExecution;
+using ManagedCode.Synapse.Runtime.Features.GraphExecution.Validation;
 using ManagedCode.Synapse.Runtime.Features.ModelLoading.Gguf;
 
 namespace ManagedCode.Synapse.Runtime.Features.TextGeneration.Qwen2;
@@ -7,24 +9,20 @@ namespace ManagedCode.Synapse.Runtime.Features.TextGeneration.Qwen2;
 /// <summary>
 /// Executes the Qwen2 dense decoder directly from Q8_0 GGUF weights using managed C# operators.
 /// </summary>
-public sealed class Qwen2Model : IDisposable
+public sealed class Qwen2Model : ITextGenerationModel
 {
     private const int EndOfSequenceToken = 151645;
     private readonly GgufFile _file;
     private readonly Qwen2Weights _weights;
     private readonly Qwen2Scratch _scratch;
     private readonly Qwen2KvCache _cache;
+    private readonly ParallelOptions _parallelOptions;
     private readonly int _headDimension;
     private readonly int _kvWidth;
 
-    private Qwen2Model(GgufFile file, int contextSize)
+    private Qwen2Model(GgufFile file, int contextSize, int maximumParallelism)
     {
         _file = file;
-        if (!string.Equals(file.GetRequiredString("general.architecture"), "qwen2", StringComparison.Ordinal))
-        {
-            throw new NotSupportedException("The initial managed engine supports only Qwen2 GGUF models.");
-        }
-
         LayerCount = file.GetRequiredInt32("qwen2.block_count");
         HiddenSize = file.GetRequiredInt32("qwen2.embedding_length");
         FeedForwardSize = file.GetRequiredInt32("qwen2.feed_forward_length");
@@ -35,10 +33,26 @@ public sealed class Qwen2Model : IDisposable
         _headDimension = HiddenSize / AttentionHeads;
         _kvWidth = KeyValueHeads * _headDimension;
         ContextSize = Math.Min(contextSize, file.GetRequiredInt32("qwen2.context_length"));
-        _weights = LoadWeights(file, LayerCount);
+        Graph = Qwen2GraphBuilder.Build(
+            file,
+            LayerCount,
+            HiddenSize,
+            FeedForwardSize,
+            _kvWidth,
+            ContextSize);
+        var verification = ModelGraphVerifier.Verify(Graph);
+        if (!verification.IsValid)
+        {
+            throw new InvalidDataException(
+                "Qwen2 model graph verification failed: " +
+                string.Join(" | ", verification.Diagnostics.Select(diagnostic => diagnostic.Message)));
+        }
+
+        _weights = Qwen2WeightLoader.Load(file, LayerCount);
         VocabularySize = checked((int)_weights.TokenEmbedding.Dimensions[1]);
         _scratch = new Qwen2Scratch(HiddenSize, _kvWidth, FeedForwardSize, VocabularySize, ContextSize);
         _cache = new Qwen2KvCache(LayerCount, ContextSize, _kvWidth);
+        _parallelOptions = new ParallelOptions { MaxDegreeOfParallelism = maximumParallelism };
     }
 
     /// <summary>Number of transformer blocks.</summary>
@@ -68,15 +82,29 @@ public sealed class Qwen2Model : IDisposable
     /// <summary>RMS normalization epsilon.</summary>
     public float RmsNormEpsilon { get; }
 
+    /// <inheritdoc />
+    public string Architecture => "qwen2";
+
+    /// <inheritdoc />
+    public string RuntimeProfile => "managed-qwen2-q8_0";
+
+    /// <summary>Verified portable dense graph corresponding to this loaded model.</summary>
+    public ModelGraph Graph { get; }
+
     /// <summary>Loads a supported Qwen2 Q8_0 GGUF file through a read-only memory map.</summary>
-    public static Qwen2Model Load(string modelPath, int contextSize = 512)
+    public static Qwen2Model Load(string modelPath, int contextSize = 512) =>
+        Load(modelPath, contextSize, Environment.ProcessorCount);
+
+    /// <summary>Loads a supported Qwen2 Q8_0 GGUF with an explicit CPU parallelism limit.</summary>
+    public static Qwen2Model Load(string modelPath, int contextSize, int maximumParallelism)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(contextSize);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumParallelism);
 
         var file = GgufFile.Open(modelPath);
         try
         {
-            return new Qwen2Model(file, contextSize);
+            return new Qwen2Model(file, contextSize, maximumParallelism);
         }
         catch
         {
@@ -85,8 +113,11 @@ public sealed class Qwen2Model : IDisposable
         }
     }
 
+    internal static Qwen2Model Load(GgufFile file, int contextSize, int maximumParallelism) =>
+        new(file, contextSize, maximumParallelism);
+
     /// <summary>Runs greedy generation from already-tokenized input IDs.</summary>
-    public Qwen2GenerationResult Generate(IReadOnlyList<int> promptTokens, int maximumNewTokens)
+    public TextGenerationResult Generate(IReadOnlyList<int> promptTokens, int maximumNewTokens)
     {
         ArgumentNullException.ThrowIfNull(promptTokens);
         if (promptTokens.Count == 0 || maximumNewTokens <= 0 ||
@@ -103,10 +134,16 @@ public sealed class Qwen2Model : IDisposable
 
         var logits = Forward(promptTokens[promptTokens.Count - 1], promptTokens.Count - 1, computeLogits: true);
         var generated = new List<int>(maximumNewTokens);
+        var timeToFirstToken = TimeSpan.Zero;
         for (var index = 0; index < maximumNewTokens; index++)
         {
             var token = Q8Operators.ArgMax(logits);
             generated.Add(token);
+            if (index == 0)
+            {
+                timeToFirstToken = timer.Elapsed;
+            }
+
             if (token == EndOfSequenceToken || index + 1 == maximumNewTokens)
             {
                 break;
@@ -116,7 +153,7 @@ public sealed class Qwen2Model : IDisposable
         }
 
         timer.Stop();
-        return new Qwen2GenerationResult([.. promptTokens], generated, timer.Elapsed);
+        return new TextGenerationResult([.. promptTokens], generated, timeToFirstToken, timer.Elapsed);
     }
 
     /// <inheritdoc />
@@ -145,7 +182,7 @@ public sealed class Qwen2Model : IDisposable
             _weights.OutputNorm,
             RmsNormEpsilon,
             _scratch.Normalized);
-        Q8Operators.Multiply(_file, _weights.Output, _scratch.Normalized, _scratch.Logits);
+        Q8Operators.Multiply(_file, _weights.Output, _scratch.Normalized, _scratch.Logits, _parallelOptions);
         return _scratch.Logits;
     }
 
@@ -157,9 +194,9 @@ public sealed class Qwen2Model : IDisposable
             weights.AttentionNorm,
             RmsNormEpsilon,
             _scratch.Normalized);
-        Q8Operators.Multiply(_file, weights.Query, _scratch.Normalized, _scratch.Query);
-        Q8Operators.Multiply(_file, weights.Key, _scratch.Normalized, _scratch.Key);
-        Q8Operators.Multiply(_file, weights.Value, _scratch.Normalized, _scratch.Value);
+        Q8Operators.Multiply(_file, weights.Query, _scratch.Normalized, _scratch.Query, _parallelOptions);
+        Q8Operators.Multiply(_file, weights.Key, _scratch.Normalized, _scratch.Key, _parallelOptions);
+        Q8Operators.Multiply(_file, weights.Value, _scratch.Normalized, _scratch.Value, _parallelOptions);
         Q8Operators.AddBiasInPlace(_scratch.Query, weights.QueryBias);
         Q8Operators.AddBiasInPlace(_scratch.Key, weights.KeyBias);
         Q8Operators.AddBiasInPlace(_scratch.Value, weights.ValueBias);
@@ -178,7 +215,8 @@ public sealed class Qwen2Model : IDisposable
             _file,
             weights.AttentionOutput,
             _scratch.Attention,
-            _scratch.Projection);
+            _scratch.Projection,
+            _parallelOptions);
         _scratch.Residual.CopyTo(_scratch.Hidden, 0);
         Q8Operators.AddInPlace(_scratch.Hidden, _scratch.Projection);
 
@@ -188,39 +226,12 @@ public sealed class Qwen2Model : IDisposable
             weights.FeedForwardNorm,
             RmsNormEpsilon,
             _scratch.Normalized);
-        Q8Operators.Multiply(_file, weights.FeedForwardGate, _scratch.Normalized, _scratch.Gate);
-        Q8Operators.Multiply(_file, weights.FeedForwardUp, _scratch.Normalized, _scratch.Up);
+        Q8Operators.Multiply(_file, weights.FeedForwardGate, _scratch.Normalized, _scratch.Gate, _parallelOptions);
+        Q8Operators.Multiply(_file, weights.FeedForwardUp, _scratch.Normalized, _scratch.Up, _parallelOptions);
         Q8Operators.SwiGluInPlace(_scratch.Gate, _scratch.Up);
-        Q8Operators.Multiply(_file, weights.FeedForwardDown, _scratch.Gate, _scratch.Projection);
+        Q8Operators.Multiply(_file, weights.FeedForwardDown, _scratch.Gate, _scratch.Projection, _parallelOptions);
         _scratch.Residual.CopyTo(_scratch.Hidden, 0);
         Q8Operators.AddInPlace(_scratch.Hidden, _scratch.Projection);
     }
 
-    private static Qwen2Weights LoadWeights(GgufFile file, int layerCount)
-    {
-        var layers = new Qwen2LayerWeights[layerCount];
-        for (var layer = 0; layer < layerCount; layer++)
-        {
-            var prefix = $"blk.{layer}";
-            layers[layer] = new Qwen2LayerWeights(
-                file.ReadFloat32Tensor($"{prefix}.attn_norm.weight"),
-                file.GetRequiredTensor($"{prefix}.attn_q.weight"),
-                file.GetRequiredTensor($"{prefix}.attn_k.weight"),
-                file.GetRequiredTensor($"{prefix}.attn_v.weight"),
-                file.ReadFloat32Tensor($"{prefix}.attn_q.bias"),
-                file.ReadFloat32Tensor($"{prefix}.attn_k.bias"),
-                file.ReadFloat32Tensor($"{prefix}.attn_v.bias"),
-                file.GetRequiredTensor($"{prefix}.attn_output.weight"),
-                file.ReadFloat32Tensor($"{prefix}.ffn_norm.weight"),
-                file.GetRequiredTensor($"{prefix}.ffn_gate.weight"),
-                file.GetRequiredTensor($"{prefix}.ffn_up.weight"),
-                file.GetRequiredTensor($"{prefix}.ffn_down.weight"));
-        }
-
-        return new Qwen2Weights(
-            file.GetRequiredTensor("token_embd.weight"),
-            layers,
-            file.ReadFloat32Tensor("output_norm.weight"),
-            file.GetRequiredTensor("output.weight"));
-    }
 }

@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "id": "travel-planner-10-turns",
+  "kind": "chat",
+  "system": "You are a concise travel planner. Preserve every confirmed constraint and explicitly call out conflicts.",
+  "turns": [
+    {
+      "user": "Plan a 24-day trip for two adults starting 4 May. We leave from Paris, use trains when a leg is under six hours, and keep the total ground budget under EUR 9,000.",
+      "lockedAssistant": "I will keep 4-27 May, two adults, Paris as the origin, trains for sub-six-hour legs, and a EUR 9,000 ground budget as fixed constraints. I will separate transport, lodging, food, and activities as the route develops."
+    },
+    {
+      "user": "Spend the first three nights in Paris. One traveler cannot climb many stairs and both prefer art museums over nightlife.",
+      "lockedAssistant": "Paris is fixed for 4-7 May with step-light routing, lift-accessible lodging, and art-focused days. I will avoid nightlife-heavy recommendations and mark any attraction whose accessibility needs confirmation."
+    },
+    {
+      "user": "Continue to Berlin for four nights and keep one half-day completely free.",
+      "lockedAssistant": "I will use a train from Paris to Berlin, reserve four Berlin nights, and protect one unscheduled half-day. Museum Island and accessible public transport fit the existing preferences; the exact train and hotel remain unbooked."
+    },
+    {
+      "user": "After Berlin add Spain: compare Barcelona and Madrid, then choose the better city for architecture and easy walking.",
+      "lockedAssistant": "Barcelona is the provisional choice for architecture, but some major sites involve slopes and timed access. Because Berlin to either Spanish city exceeds six hours by rail, a flight is allowed under the original rule. I will allocate four nights and keep accessible transfers."
+    },
+    {
+      "user": "Now add a United States section with New York, Chicago, and San Francisco. We can fly between countries but want rail where practical inside the US.",
+      "lockedAssistant": "The US sequence is New York, Chicago, then San Francisco. New York to Chicago can be an overnight train if schedule and accessibility work; Chicago to San Francisco is too long for the six-hour rail preference, so I will budget a flight."
+    },
+    {
+      "user": "Check the calendar. Keep at least three nights in New York and two in each other US city without exceeding 24 days.",
+      "lockedAssistant": "The minimum allocation now totals 3 Paris + 4 Berlin + 4 Barcelona + 3 New York + 2 Chicago + 2 San Francisco = 18 nights, leaving six nights for travel buffers or extensions. The 24-day limit still works."
+    },
+    {
+      "user": "Cap hotels at EUR 220 per night on average and reserve EUR 1,800 for intercity transport.",
+      "lockedAssistant": "At 23 hotel nights, the lodging ceiling is EUR 5,060. Adding the EUR 1,800 transport reserve leaves EUR 2,140 of the EUR 9,000 ground budget for food, local transit, and activities, so the plan is feasible but tight."
+    },
+    {
+      "user": "One traveler is vegetarian and allergic to peanuts. Add that without changing the route.",
+      "lockedAssistant": "The route stays Paris-Berlin-Barcelona-New York-Chicago-San Francisco. Every city plan now requires vegetarian options and explicit peanut-allergy communication; restaurants without reliable allergen handling should be excluded."
+    },
+    {
+      "user": "Assume the Berlin-to-Barcelona flight is cancelled. Give one fallback that respects our earlier train rule and calendar.",
+      "lockedAssistant": "A valid fallback is Berlin to Paris by train, then Paris to Barcelona by train, with an overnight in Paris if same-day accessible connections are poor. Each rail leg can be evaluated independently against the six-hour preference, and one of the six spare nights absorbs the disruption."
+    },
+    {
+      "user": "Summarize the final route, all hard constraints, the protected free time, and the remaining budget risk. Do not invent bookings.",
+      "lockedAssistant": "Final route: Paris 3 nights, Berlin 4 with one free half-day, Barcelona 4, New York at least 3, Chicago at least 2, and San Francisco at least 2, using remaining nights as buffers. Hard constraints are 4-27 May, two adults, 24 days, EUR 9,000 ground budget, average lodging at most EUR 220, EUR 1,800 intercity reserve, trains for practical sub-six-hour legs, limited stairs, art over nightlife, vegetarian food, and peanut safety. Nothing is booked; the main risk is the tight EUR 2,140 remainder for food, local transit, and activities."
+    }
+  ]
+}

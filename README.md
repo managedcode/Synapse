@@ -1,80 +1,180 @@
 # Synapse
 
-Synapse is a local-first C#/.NET inference engine with an optional Rust
-acceleration layer. It owns model graph execution, memory and KV state,
-scheduling, quantization, sampling, and
-the worker protocol rather than hiding a third-party inference server.
+Synapse is a local-first inference engine written in C#/.NET, with Rust reserved
+for measured hot paths. The product owns model import, typed graph execution,
+memory and KV state, scheduling, quantization, sampling, direct worker transfer,
+and benchmark evidence. dotLLM, LLamaSharp, and later direct llama.cpp are
+competitors in the harness, never hidden Synapse backends.
 
-Its central direction is FlyBrain-style graph-native inference: bounded
-activation waves select coarse executable regions, while execution planning
-independently chooses device placement and precision. Dense models remain
-dense unless their graph contains a verified predicate or trained routing
-policy; semantic labels never silently skip computation.
+The first executable slice is real: Synapse loads the pinned
+Qwen2.5-0.5B-Instruct Q8_0 GGUF, verifies a 26-region dense Model IR, and runs
+the full 24-layer forward/decode path in managed C#. RMSNorm, Q8_0 matrix/vector
+math, GQA, RoPE, KV state, SwiGLU, logits, and greedy sampling all execute in
+this repository. Its eight-token continuation matches dotLLM and LLamaSharp.
 
-The first managed inference slice is working on Apple Silicon: Synapse reads
-the pinned Qwen2.5 Q8_0 GGUF through a read-only memory map and executes its
-24-layer Qwen2 graph in C#, including RMSNorm, Q8_0 matrix/vector kernels,
-GQA, RoPE, KV state, SwiGLU, and greedy sampling. The first-token result for
-`The capital of France is` matches both required baselines (` Paris`, token
-`12095`). This is correctness evidence, not yet a statistically qualified
-performance claim.
+## Architecture
 
-## Constraints
+```mermaid
+flowchart LR
+    SDK[".NET SDK / CLI"] --> LOCAL["Local execution\n(no Orleans or network)"]
+    SDK --> ORL["Orleans request + control plane\nplanned D3"]
+    ORL --> PLAN["leases · epochs · placement\nregion and weight-group coordination"]
+    PLAN -. "control only" .-> W1["Worker A\ncoarse graph regions"]
+    PLAN -. "control only" .-> W2["Worker B\ncoarse graph regions"]
+    W1 <-->|"direct bounded tensor transfer"| W2
+    LOCAL --> EXEC["Typed Model IR → Execution IR"]
+    W1 --> EXEC
+    W2 --> EXEC
+    EXEC --> CS["C# portable/reference kernels"]
+    EXEC --> RS["Rust / native kernels\nonly after profiling"]
+    EXEC --> KV["hot KV + bounded residency"]
+    KV --> ZT["ZoneTree\nmetadata · prefix index · journal · evidence"]
+    EXEC --> PKG["verified local model packages"]
+```
 
-- No Python or Node.js dependency anywhere in build, runtime, model tooling,
-  tests, or benchmarks.
-- ZoneTree is the embedded durable store for cache metadata and related state.
-- dotLLM and LLamaSharp are required out-of-process comparison baselines.
-- All performance claims require shared model inputs and raw paired evidence.
+The four independent decisions are: what graph regions are mathematically
+eligible, which weights are resident, where a region runs, and at what legal
+precision. Dense checkpoints stay dense. A semantic label such as `CSharp` or
+`Reasoning` never authorizes skipping work. Orleans accepts and coordinates
+distributed requests, leases, region placement, and weight-group ownership;
+large tensors and KV payloads do not pass through grains.
 
-## Build
+C# remains the portable oracle and first implementation. Rust becomes the
+optimized owner of a kernel, allocator, hot-KV operation, or transfer path only
+after a paired profile shows that the managed path is the bottleneck. See
+[`docs/Architecture.md`](docs/Architecture.md) and the reviewed FlyBrain plan
+in [`flybrain.plan.md`](flybrain.plan.md).
 
-Prerequisites are .NET SDK 10.0.401 and Rust 1.98.1. On Apple Homebrew
-installations, put `/opt/homebrew/opt/rustup/bin` first on `PATH`.
+## Model packages, not model blobs in Git
+
+`models/catalog.json` pins immutable upstream revisions, every required file,
+exact byte lengths, SHA-256 digests, architecture, precision, license, and
+download sets. `synapse model fetch` permits only bounded HTTPS redirects to
+trusted source/storage hosts, stops oversized payloads before writing beyond
+the declared length, verifies hashes, and atomically publishes each file.
+Downloaded weights live under ignored `artifacts/models/`; Git and Git LFS do
+not carry model payloads.
 
 ```text
-dotnet restore Synapse.slnx --use-lock-file
-dotnet build Synapse.slnx --configuration Release --locked-mode
+dotnet run --project src/Synapse.Cli -- model list
+dotnet run --project src/Synapse.Cli -- model fetch --set family-small
+dotnet run --project src/Synapse.Cli -- model fetch --set embedding-small
+dotnet run --project src/Synapse.Cli -- model fetch --set architecture-small
+dotnet run --project src/Synapse.Cli -- model fetch --set medium
+```
+
+| Catalog set | Pinned models | Architecture coverage | Current Synapse support |
+|---|---|---|---|
+| `smoke` | [Qwen2.5 0.5B Q8_0](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF) (676 MB) | Qwen2 dense Transformer | Full managed GGUF inference |
+| `family-small` | Qwen2.5 0.5B, [SmolLM2 135M BF16](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct) | Qwen2, Llama | Qwen2 executes; SmolLM SafeTensors index is verified |
+| `architecture-small` | [Qwen3 0.6B Q8_0](https://huggingface.co/Qwen/Qwen3-0.6B-GGUF), [Mamba 130M F32](https://huggingface.co/state-spaces/mamba-130m-hf) | Qwen3 Transformer, attention-free SSM | Reproducible packages; executors planned |
+| `embedding-small` | [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2), [BGE-small-en-v1.5](https://huggingface.co/BAAI/bge-small-en-v1.5) | BERT encoders | Real SafeTensors indexes verified; embedding execution planned |
+| `medium` | [Phi-3 Mini 3.8B Q4](https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf), [DeepSeek-R1-Distill-Qwen 1.5B BF16](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B), [Ministral 3 3B Q4](https://huggingface.co/mistralai/Ministral-3-3B-Instruct-2512-GGUF) | Phi3, Qwen2 distill, Mistral3 | Complete pinned packages; medium execution/performance gate planned |
+
+The DeepSeek distill model is architecturally Qwen2; it is not evidence for
+native DeepSeek-V2/V3 MLA+MoE support. MiniMax remains an architecture target,
+not a local fixture: current MiniMax text models are large hybrid/MoE models,
+so presenting one as a small 32 GB smoke model would be misleading. Gemma
+fixtures are also excluded from unattended CI until their gated license is
+accepted. Mamba gives the small suite a genuinely different state-space model,
+not another renamed dense Transformer.
+
+## Measured Mac benchmark
+
+Machine: MacBook Pro, Apple M2 Pro (12 CPU cores: 8 performance + 4
+efficiency; 19-core GPU), 32 GB unified memory, macOS 27.0 arm64. The run used
+AC power with Low Power Mode off; GPU acceleration was not used.
+
+Workload: pinned Qwen2.5-0.5B-Instruct Q8_0, prompt `The capital of France is`
+(`785,6722,315,9625,374`), greedy generation, 8 new tokens, 512-token context,
+and the same 12-thread cap. Every sample starts a new process. Results are the
+median of 5 measured runs after 3 warm-ups, with subject order rotated each
+round.
+
+| Subject | Load ms | TTFT ms | Generation ms | Decode tok/s | Process wall ms | Avg CPU cores | Max observed RSS |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Synapse managed CPU | **56.1** | 328.3 | 633.3 | **24.30** | **691.3** | 10.23 | **559.8 MiB** |
+| dotLLM `d880404` CPU | 345.5 | 439.6 | 875.6 | 18.22 | 1,352.5 | 5.66 | 1,190.5 MiB |
+| LLamaSharp 0.27.0 CPU | 691.2 | **17.2** | **69.0** | **136.16** | 780.9 | 1.76 | 1,137.2 MiB |
+
+All five runs generated eight tokens. Synapse produced token IDs
+`12095, 13, 1084, 374, 279, 7772, 3283, 304`; both tokenizing baselines decoded
+the same continuation as ` Paris. It is the largest city in`.
+
+These numbers are diagnostic evidence, not a release victory claim. Synapse
+currently loads fastest, uses less than half the maximum observed working set,
+and beats dotLLM decode throughput at the equal 12-thread setting; LLamaSharp/
+llama.cpp remains far ahead in TTFT and decode. Synapse TTFT varied from 304.8
+to 574.2 ms, so scheduling stability is an explicit optimization target. The
+formal benchmark gate still requires 30 paired measurements, a thread-scaling
+sweep, the locked 10-turn growing-context dialogue, cache hit/miss workloads,
+embeddings, and direct llama.cpp. Energy is
+`not_run_missing_privilege`: `/usr/bin/powermetrics` requires superuser access,
+and missing energy data is never reported as zero.
+
+Raw measured samples and binary/model fingerprints are stored in
+[`benchmarks/results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-smoke.json`](benchmarks/results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-smoke.json).
+The locked dialogue and embedding workloads are in `benchmarks/scenarios/`.
+
+## Build, test, and run
+
+Prerequisites are the pinned .NET SDK 10.0.401 and Rust 1.98.1. No repository
+command uses Python or Node.js.
+
+```text
+dotnet restore Synapse.slnx --locked-mode
+dotnet build Synapse.slnx --configuration Release --no-restore
 dotnet test Synapse.slnx --configuration Release --no-build
+
+cargo fmt --manifest-path native/Cargo.toml --all --check
+cargo clippy --manifest-path native/Cargo.toml --workspace --all-targets -- -D warnings
 cargo test --manifest-path native/Cargo.toml --locked
 ```
 
-See `docs/Development/Commands.md` for the full verified command set and
-`synapse.plan.md` for factual delivery status.
-
-## Run the managed Qwen2 slice
-
-The current CLI accepts token IDs while the repo-owned tokenizer is still on
-the critical path. The five IDs below are the pinned model's encoding of
-`The capital of France is`.
+After `model fetch --set smoke`:
 
 ```text
 dotnet run --project src/Synapse.Cli --configuration Release -- generate \
-  --model tests/Fixtures/Models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf \
-  --tokens 785,6722,315,9625,374 \
-  --max-tokens 1 \
-  --context-size 512
+  --model artifacts/models/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.gguf \
+  --tokens 785,6722,315,9625,374 --max-tokens 8 --context-size 512 --threads 12
 ```
 
-## Projects, dependencies, and attribution
+GitHub Actions runs the real model download, digest checks, managed Synapse,
+dotLLM, and LLamaSharp smoke tests on macOS ARM64 and Ubuntu x64, followed by
+the Rust format/lint/test gates.
 
-Synapse keeps an explicit ledger of external work used to guide or exercise
-the project.
+## Repository map
 
-| Project | How Synapse uses it | License / integration |
+```text
+src/Synapse.Contracts/       typed graph, execution, session, and protocol contracts
+src/Synapse.Runtime/         model readers, graph verifier, managed kernels, inference
+src/Synapse.Cli/             doctor, model catalog/fetch, and generation commands
+native/                      Rust workspace for profiled acceleration boundaries
+experiments/                 isolated external benchmark runners
+tests/                       real-process and real-model behavior tests
+models/catalog.json          pinned model sources; no weights
+benchmarks/scenarios/        locked dialogue and embedding workloads
+benchmarks/results/          raw reproducible benchmark evidence
+docs/                        architecture, ADRs, features, commands, task registry
+```
+
+## References and dependencies
+
+| Project / paper | What Synapse takes from it | Boundary |
 |---|---|---|
-| [dotLLM](https://github.com/kkokosa/dotLLM) | Required pure-.NET CPU benchmark and architecture reference; pinned at `d88040451d7db56e5dfef9d5754ad0955b0f7fe5` | GPL-3.0; built and launched as a separate process. |
-| [LLamaSharp](https://github.com/SciSharp/LLamaSharp) | Required llama.cpp-backed CPU/Metal benchmark through package `0.27.0` | MIT; package dependency of the benchmark process. |
-| [llama.cpp](https://github.com/ggml-org/llama.cpp) | Native baseline reached through LLamaSharp and format/kernel literature reference | MIT; transitively used by the LLamaSharp benchmark. |
-| [Qwen2.5-0.5B-Instruct-GGUF](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF) | Shared Q8_0 fixture for dotLLM, LLamaSharp, and Synapse smoke/benchmark runs; SHA-256 `ca59ca7f13d0e15a8cfa77bd17e65d24f6844b554a7b6c12e07a5f89ff76844e` | Apache-2.0 model artifact stored with Git LFS. |
-| [ML.NET](https://github.com/dotnet/machinelearning) | GenAI pipeline, tokenizer, tensor, and `IChatClient` API reference | MIT; no runtime dependency yet. |
-| [ZoneTree](https://github.com/ZoneTree/ZoneTree) | Required embedded durable store for cache metadata, prefix indexes, journals, and evidence indexes | Package dependency `1.9.8`. |
-| [Aspire](https://github.com/dotnet/aspire) | Local orchestration, health, telemetry, and later real multi-process tests | Package/tool dependency when the AppHost slice begins. |
-| [Microsoft Orleans](https://github.com/dotnet/orleans) | Later D3 cluster control plane for leases, placement, and recovery | Package dependency when the cluster slice begins. |
-| [TUnit](https://github.com/thomhurst/TUnit) | .NET behavior test framework on Microsoft.Testing.Platform | Package dependency `1.70.1`. |
-| [Rust](https://github.com/rust-lang/rust) | Optional native acceleration for measured C# hotspots | Toolchain dependency. |
-| [FlyWire adult Drosophila connectome](https://doi.org/10.1038/s41586-024-07558-y) | Biological graph/region inspiration for FlyBrain activation waves; the paper reports 139,255 neurons and 54.5 million synapses | Research reference. |
-| [Mixture-of-Depths](https://arxiv.org/abs/2404.02258) | Bounded token-level conditional-compute and routing reference | Research reference; no runtime dependency. |
-| [Router-Tuning / MindSkip](https://github.com/CASE-Lab-UMD/Router-Tuning-Mixture-of-Depths) | Trained dynamic-depth routing and equal-quality evaluation reference | Research reference; paper `arXiv:2410.13184`. |
-| [LayerSkip](https://github.com/facebookresearch/LayerSkip) | Early-exit and self-speculative decoding research reference | Research reference; paper `arXiv:2404.16710`. |
-| [I-JEPA](https://arxiv.org/abs/2301.08243) | Typed latent-edge and representation-prediction research direction | Research reference; not evidence of language-model support. |
+| [dotLLM](https://github.com/kkokosa/dotLLM) | Pure-.NET correctness/performance competitor and architecture study | GPL-3.0; pinned checkout and separate process only |
+| [LLamaSharp](https://github.com/SciSharp/LLamaSharp) | Required llama.cpp-backed CPU benchmark | MIT; benchmark-project package 0.27.0 |
+| [llama.cpp](https://github.com/ggml-org/llama.cpp) | GGUF/quantization reference and required direct native baseline | MIT; direct runner is still pending |
+| [ZoneTree](https://github.com/ZoneTree/ZoneTree) | Durable cache metadata, prefix indexes, journals, evidence indexes | MIT; runtime package 1.9.8 |
+| [Microsoft Orleans](https://github.com/dotnet/orleans) | Request/control plane, leases, epochs, placement, recovery | Planned D3 dependency; never tensor/KV transport |
+| [Aspire](https://github.com/dotnet/aspire) | Multi-process topology, health, telemetry, test orchestration | Added only with the first real distributed topology |
+| [ML.NET](https://github.com/dotnet/machinelearning) and [Microsoft.Extensions.AI](https://learn.microsoft.com/dotnet/ai/ichatclient) | `CausalLMPipelineChatClient`, tokenizers, and `IChatClient` pipeline/API design references | Not an inference backend or dependency today |
+| [TUnit](https://github.com/thomhurst/TUnit) | Behavior tests on Microsoft.Testing.Platform | Test dependency 1.70.1 |
+| [Rust](https://github.com/rust-lang/rust) | Native acceleration language for measured hot paths | Pinned toolchain 1.98.1 |
+| [Qwen2.5 GGUF](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF), [SmolLM2](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct), [Mamba](https://huggingface.co/state-spaces/mamba-130m-hf) | Pinned correctness and architecture fixtures | Model licenses recorded per catalog entry; downloaded outside Git |
+| [FlyWire connectome](https://doi.org/10.1038/s41586-024-07558-y) | Coarse graph/region inspiration for FlyBrain activation waves | Research inspiration, not implementation code |
+| [Mixture-of-Depths](https://arxiv.org/abs/2404.02258), [Router-Tuning](https://github.com/CASE-Lab-UMD/Router-Tuning-Mixture-of-Depths), [LayerSkip](https://github.com/facebookresearch/LayerSkip) | Conditional-depth, trained-routing, and self-speculative research directions | No dense-layer skipping without model/evidence support |
+
+Delivery state and remaining work are tracked factually in
+[`synapse.plan.md`](synapse.plan.md); accepted public region semantics are in
+[`ADR-003`](docs/ADR/ADR-003-flybrain-region-execution-semantics.md).

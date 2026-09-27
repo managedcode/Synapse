@@ -171,6 +171,13 @@
           "ZoneTree": "[1.9.8, )"
         }
       },
+      "synapse": {
+        "type": "Project",
+        "dependencies": {
+          "ManagedCode.Synapse.Contracts": "[1.0.0, )",
+          "ManagedCode.Synapse.Runtime": "[1.0.0, )"
+        }
+      },
       "synapse.referencebenchmarks": {
         "type": "Project",
         "dependencies": {

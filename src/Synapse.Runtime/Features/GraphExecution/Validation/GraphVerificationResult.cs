@@ -51,7 +51,7 @@ public sealed class GraphVerificationResult
 {
     internal GraphVerificationResult(IEnumerable<GraphDiagnostic> diagnostics)
     {
-        Diagnostics = Array.AsReadOnly<GraphDiagnostic>([.. diagnostics]);
+        Diagnostics = Array.AsReadOnly([.. diagnostics]);
     }
 
     /// <summary>Whether no verifier errors were found.</summary>
