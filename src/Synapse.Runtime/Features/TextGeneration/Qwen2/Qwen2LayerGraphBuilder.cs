@@ -19,7 +19,7 @@ internal static class Qwen2LayerGraphBuilder
         int hiddenSize,
         int feedForwardSize,
         int keyValueWidth,
-        int contextSize,
+        int maximumContextSize,
         int attentionHeads,
         int keyValueHeads,
         int headDimension,
@@ -37,7 +37,7 @@ internal static class Qwen2LayerGraphBuilder
             position,
             hiddenSize,
             keyValueWidth,
-            contextSize,
+            maximumContextSize,
             attentionHeads,
             keyValueHeads,
             headDimension,
@@ -78,7 +78,7 @@ internal static class Qwen2LayerGraphBuilder
         GraphValue position,
         int hiddenSize,
         int keyValueWidth,
-        int contextSize,
+        int maximumContextSize,
         int attentionHeads,
         int keyValueHeads,
         int headDimension,
@@ -112,8 +112,8 @@ internal static class Qwen2LayerGraphBuilder
             Float,
             nodes,
             attributes: rope);
-        keyState = context.AddState(Matrix(contextSize, keyValueWidth));
-        valueState = context.AddState(Matrix(contextSize, keyValueWidth));
+        keyState = context.AddState(ContextMatrix(maximumContextSize, keyValueWidth));
+        valueState = context.AddState(ContextMatrix(maximumContextSize, keyValueWidth));
         var stateEffect = context.AddEffect();
         context.EmitStateAppend(
             [rotatedKey.Id, value.Id, position.Id],
@@ -234,7 +234,7 @@ internal static class Qwen2LayerGraphBuilder
 
     private static TensorShape Vector(long size) => new(ShapeDimension.Fixed(size));
 
-    private static TensorShape Matrix(long rows, long columns) => new(
-        ShapeDimension.Fixed(rows),
+    private static TensorShape ContextMatrix(long maximumRows, long columns) => new(
+        ShapeDimension.Bounded("Context", 1, maximumRows),
         ShapeDimension.Fixed(columns));
 }

@@ -11,6 +11,9 @@ SwiGLU feed-forward layers, final RMS normalization, and greedy argmax.
 The verified Model IR carries normalization epsilon, RoPE theta/layout/head
 dimension, attention heads/scale/mask, and scalar decode position explicitly;
 RoPE, KV append, and attention all consume the same position entry input.
+KV slot shapes use the GGUF model limit as symbolic
+`Context[1..model_max_context]`; the concrete per-instance KV and scratch
+buffers still use the caller's bounded session context.
 
 The pinned correctness probe uses prompt tokens
 `785,6722,315,9625,374`. Synapse, dotLLM at commit

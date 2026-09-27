@@ -30,6 +30,13 @@ are entry-point plumbing outside that partition. Each `Constant` is bound to a
 unique `TensorId`. Semantic overlap is represented by annotations rather than
 duplicate execution ownership.
 
+`ModelGraphFingerprint.Compute` writes every semantic Model IR field through a
+versioned, explicitly little-endian, length-prefixed encoding and returns its
+lower-case SHA-256 digest. Top-level declarations and set-like region fields
+are ordered by their stable IDs; operation input order and entry-point argument
+order remain significant. Unknown attribute or eligibility variants fail
+instead of silently colliding with a known encoding.
+
 ## FlyBrain regions
 
 Regions are coarse execution units with nodes, boundary values, required
@@ -50,11 +57,13 @@ transformer block, KV state/effect dependencies, and logits region as Model IR.
 The real GGUF-backed graph must verify before scratch or KV allocation, and all
 regions are `AlwaysRequired`. Its GGUF epsilon, RoPE theta, head counts, head
 dimension, attention scale/mask, and current decode position are explicit in
-the graph. The optimized executor still invokes its managed C# kernels directly;
-a general DAG executor and Execution IR are the next boundary. Conditional
-routing, demand paging, latent region edges, and Orleans placement are not
-claimed until the corresponding trained/evaluated graph and execution/
-deployment plans exist.
+the graph. KV state capacity is `Context[1..model_max_context]`; the smaller
+session allocation remains outside Model IR, so loading the same checkpoint at
+256 and 512 tokens produces the same fingerprint. The optimized executor still
+invokes its managed C# kernels directly; a general DAG executor and Execution
+IR are the next boundary. Conditional routing, demand paging, latent region
+edges, and Orleans placement are not claimed until the corresponding trained/
+evaluated graph and execution/deployment plans exist.
 
 ## Acceptance mapping
 
@@ -64,5 +73,8 @@ predicate, caller-owned collection mutation, entry-plumbing exclusion, lying
 region boundaries, missing constant tensor identity, and overlapping execution
 ownership. `OperationAttributesRequired` rejects hidden operator parameters;
 `PositionIsExplicitRegionInput` checks the real model's position wiring and
-typed GGUF-derived attributes. The shared Qwen smoke test verifies its real
+typed GGUF-derived attributes. `CanonicalFingerprintStableAndSensitive` checks
+canonical set ordering and semantic sensitivity;
+`ContextBoundInExecutionPlanOnly` loads the real GGUF at two session capacities
+and proves one model fingerprint. The shared Qwen smoke test verifies its real
 26-region graph before checking generation against dotLLM and LLamaSharp.

@@ -312,6 +312,54 @@ public sealed class TypedGraphIrTests
             item.NodeId == linear.Id)).IsTrue();
     }
 
+    [Test]
+    public async Task CanonicalFingerprintStableAndSensitive()
+    {
+        var graph = CreateLinearGraph(new TensorShape(ShapeDimension.Fixed(3)));
+        var region = graph.Regions.Single();
+        var reorderedRegion = new RegionDescriptor(
+            region.Id,
+            region.Nodes.Reverse(),
+            region.Inputs.Reverse(),
+            region.Outputs.Reverse(),
+            region.RequiredWeights.Reverse(),
+            region.StateReads.Reverse(),
+            region.StateWrites.Reverse(),
+            region.Eligibility,
+            region.SemanticAnnotations.Reverse());
+        var reordered = ReplaceRegion(graph, reorderedRegion);
+        var linear = graph.Nodes.Single(node => node.Operation == GraphOperationKind.Linear);
+        var changedNode = new GraphNode(
+            linear.Id,
+            GraphOperationKind.QuantizedLinear,
+            linear.Inputs,
+            linear.Outputs,
+            linear.StateReads,
+            linear.StateWrites,
+            linear.EffectInputs,
+            linear.EffectOutputs,
+            linear.MergeMode,
+            linear.Loop,
+            linear.Tensor,
+            linear.Attributes);
+        var changed = new ModelGraph(
+            graph.GraphVersion,
+            graph.OpSetVersion,
+            graph.Values,
+            graph.Nodes.Select(node => node.Id == linear.Id ? changedNode : node),
+            graph.StateSlots,
+            graph.EntryPoints,
+            graph.Regions);
+
+        var fingerprint = ModelGraphFingerprint.Compute(graph);
+
+        await Assert.That(fingerprint).IsEqualTo(ModelGraphFingerprint.Compute(reordered));
+        await Assert.That(fingerprint).IsNotEqualTo(ModelGraphFingerprint.Compute(changed));
+        await Assert.That(fingerprint.Value.Length).IsEqualTo(64);
+        await Assert.That(fingerprint.Value.All(character =>
+            character is (>= '0' and <= '9') or (>= 'a' and <= 'f'))).IsTrue();
+    }
+
     private static ModelGraph CreateLinearGraph(
         TensorShape outputShape,
         ValueId? conditionalPredicate = null)

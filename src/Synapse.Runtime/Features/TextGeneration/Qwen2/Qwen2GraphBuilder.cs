@@ -20,7 +20,7 @@ internal static class Qwen2GraphBuilder
         int hiddenSize,
         int feedForwardSize,
         int keyValueWidth,
-        int contextSize)
+        int maximumContextSize)
     {
         var context = new Qwen2GraphBuildContext();
         var hidden = AddInputRegion(context, file, hiddenSize, out var token);
@@ -48,7 +48,7 @@ internal static class Qwen2GraphBuilder
                 hiddenSize,
                 feedForwardSize,
                 keyValueWidth,
-                contextSize,
+                maximumContextSize,
                 attentionHeads,
                 keyValueHeads,
                 headDimension,

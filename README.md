@@ -16,8 +16,10 @@ this repository. The verifier derives every region boundary from real
 producer/consumer, tensor, and state dependencies instead of trusting the model
 adapter's declaration. RMS epsilon, RoPE layout/theta/head width, attention
 heads/scale/mask, and decode position are explicit typed IR inputs rather than
-model-side hidden state. Its eight-token continuation matches dotLLM and
-LLamaSharp.
+model-side hidden state. KV slots use a model-bounded `Context` symbol, and a
+versioned canonical SHA-256 fingerprint identifies the Model IR independently
+of a session's requested context capacity. Its eight-token continuation matches
+dotLLM and LLamaSharp.
 
 ## Architecture
 
@@ -150,7 +152,7 @@ GitHub Actions runs the real model download, digest checks, managed Synapse,
 dotLLM, and LLamaSharp smoke tests on macOS ARM64 and Ubuntu x64, followed by
 the Rust format/lint/test gates.
 
-The current executable-IR contract checkpoint passes 37/37 local Release
+The current Model IR contract checkpoint passes 39/39 local Release
 tests. A post-change eight-token parity smoke produced the same Synapse token
 IDs and baseline text shown in the measured table; its one-shot timings are
 not mixed into the recorded 3-warm-up/5-measurement evidence.

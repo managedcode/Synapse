@@ -108,6 +108,30 @@ public sealed class ReferenceSubjectsSmokeTests
             })).IsTrue();
     }
 
+    [Test]
+    public async Task ContextBoundInExecutionPlanOnly()
+    {
+        var modelPath = GetModelPath();
+        var (Fingerprint, StateContexts) = LoadGraphIdentity(modelPath, 256);
+        var context512 = LoadGraphIdentity(modelPath, 512);
+
+        await Assert.That(Fingerprint).IsEqualTo(context512.Fingerprint);
+        await Assert.That(StateContexts).IsEquivalentTo(context512.StateContexts);
+        await Assert.That(StateContexts.Length).IsGreaterThan(0);
+        await Assert.That(StateContexts.All(dimension =>
+            dimension == ShapeDimension.Bounded("Context", 1, 32768))).IsTrue();
+    }
+
+    private static (ModelGraphFingerprint Fingerprint, ShapeDimension[] StateContexts) LoadGraphIdentity(
+        string modelPath,
+        int contextSize)
+    {
+        using var model = ModelLoader.Load(modelPath, contextSize);
+        return (
+            ModelGraphFingerprint.Compute(model.Graph),
+            model.Graph.StateSlots.Select(slot => slot.Shape.Dimensions[0]).ToArray());
+    }
+
     private static async Task<JsonDocument> RunSubjectAsync(
         string subject,
         params string[] additionalArguments)

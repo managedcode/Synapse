@@ -32,14 +32,15 @@ public sealed class Qwen2Model : ITextGenerationModel
         RmsNormEpsilon = file.GetRequiredSingle("qwen2.attention.layer_norm_rms_epsilon");
         _headDimension = HiddenSize / AttentionHeads;
         _kvWidth = KeyValueHeads * _headDimension;
-        ContextSize = Math.Min(contextSize, file.GetRequiredInt32("qwen2.context_length"));
+        var maximumContextSize = file.GetRequiredInt32("qwen2.context_length");
+        ContextSize = Math.Min(contextSize, maximumContextSize);
         Graph = Qwen2GraphBuilder.Build(
             file,
             LayerCount,
             HiddenSize,
             FeedForwardSize,
             _kvWidth,
-            ContextSize);
+            maximumContextSize);
         var verification = ModelGraphVerifier.Verify(Graph);
         if (!verification.IsValid)
         {
