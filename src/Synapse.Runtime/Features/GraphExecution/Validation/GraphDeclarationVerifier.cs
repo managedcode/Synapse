@@ -8,7 +8,23 @@ internal static class GraphDeclarationVerifier
     {
         IndexValues(context);
         IndexStateSlots(context);
+        IndexWeights(context);
         IndexNodes(context);
+    }
+
+    private static void IndexWeights(GraphVerificationContext context)
+    {
+        foreach (var weight in context.Graph.Weights)
+        {
+            if (!context.WeightDescriptors.TryAdd(weight.Id, weight))
+            {
+                context.Add(
+                    GraphDiagnosticCode.DuplicateId,
+                    $"Weight descriptor {weight.Id} is declared more than once.");
+            }
+
+            ValidateShape(context, weight.LogicalShape, $"Weight descriptor {weight.Id}");
+        }
     }
 
     private static void IndexValues(GraphVerificationContext context)

@@ -30,7 +30,8 @@ normative product scope.
 - [x] Typed Model IR core, bounded shapes, explicit numerical types, FlyBrain
   regions/eligibility, typed operation attributes and decode position, and
   verifier for SSA/order/cycles/state/entry points. Model-bounded symbolic KV
-  context and canonical graph fingerprinting keep identity session-independent.
+  context and canonical graph fingerprinting keep identity session-independent;
+  weight descriptors bind tensors to verified source ranges and encodings.
 - [x] Materialize and verify the managed Qwen2 dense topology as Model IR before
   runtime scratch/KV allocation. Entry plumbing is outside regions; the
   verifier independently derives exact value, tensor, and state boundaries.

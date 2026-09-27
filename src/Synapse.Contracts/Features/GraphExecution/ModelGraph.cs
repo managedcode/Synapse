@@ -211,7 +211,8 @@ public sealed class ModelGraph
         IEnumerable<GraphNode> nodes,
         IEnumerable<StateSlotDescriptor>? stateSlots,
         IEnumerable<GraphEntryPoint> entryPoints,
-        IEnumerable<RegionDescriptor>? regions = null)
+        IEnumerable<RegionDescriptor>? regions = null,
+        IEnumerable<WeightDescriptor>? weights = null)
     {
         ArgumentNullException.ThrowIfNull(values);
         ArgumentNullException.ThrowIfNull(nodes);
@@ -223,6 +224,7 @@ public sealed class ModelGraph
         StateSlots = Copy(stateSlots);
         EntryPoints = Copy(entryPoints);
         Regions = Copy(regions);
+        Weights = Copy(weights);
     }
 
     /// <summary>Portable graph schema version.</summary>
@@ -239,6 +241,8 @@ public sealed class ModelGraph
     public IReadOnlyList<GraphEntryPoint> EntryPoints { get; }
     /// <summary>Coarse, potentially conditional execution regions.</summary>
     public IReadOnlyList<RegionDescriptor> Regions { get; }
+    /// <summary>Immutable tensors and their exact encoded source ranges.</summary>
+    public IReadOnlyList<WeightDescriptor> Weights { get; }
 
     private static System.Collections.ObjectModel.ReadOnlyCollection<T> Copy<T>(IEnumerable<T>? source) =>
         Array.AsReadOnly<T>(source is null ? [] : [.. source]);

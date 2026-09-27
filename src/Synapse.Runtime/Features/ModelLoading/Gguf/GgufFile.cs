@@ -11,18 +11,22 @@ internal sealed unsafe class GgufFile : IDisposable
     private bool _disposed;
 
     private GgufFile(
+        string sourceFile,
         IReadOnlyDictionary<string, object> metadata,
         IReadOnlyDictionary<string, GgufTensorInfo> tensors,
         MemoryMappedFile mapping,
         MemoryMappedViewAccessor view,
         byte* pointer)
     {
+        SourceFile = sourceFile;
         Metadata = metadata;
         Tensors = tensors;
         _mapping = mapping;
         _view = view;
         _pointer = pointer;
     }
+
+    public string SourceFile { get; }
 
     public IReadOnlyDictionary<string, object> Metadata { get; }
 
@@ -42,7 +46,13 @@ internal sealed unsafe class GgufFile : IDisposable
         byte* pointer = null;
         view.SafeMemoryMappedViewHandle.AcquirePointer(ref pointer);
         pointer += view.PointerOffset;
-        return new GgufFile(descriptor.Metadata, descriptor.Tensors, mapping, view, pointer);
+        return new GgufFile(
+            Path.GetFileName(fullPath),
+            descriptor.Metadata,
+            descriptor.Tensors,
+            mapping,
+            view,
+            pointer);
     }
 
     public string GetRequiredString(string key) => Metadata.TryGetValue(key, out var value) && value is string text

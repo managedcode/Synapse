@@ -2,7 +2,7 @@ namespace ManagedCode.Synapse.Contracts.Features.GraphExecution;
 
 internal sealed class ModelGraphCanonicalEncoder(CanonicalHashWriter writer)
 {
-    private const uint EncodingVersion = 1;
+    private const uint EncodingVersion = 2;
 
     public void Write(ModelGraph graph)
     {
@@ -13,10 +13,26 @@ internal sealed class ModelGraphCanonicalEncoder(CanonicalHashWriter writer)
         writer.WriteUInt16(graph.OpSetVersion.Major);
         writer.WriteUInt16(graph.OpSetVersion.Minor);
         WriteValues([.. graph.Values.OrderBy(value => value.Id.Value)]);
+        WriteWeights([.. graph.Weights.OrderBy(weight => weight.Id.Value)]);
         WriteNodes([.. graph.Nodes.OrderBy(node => node.Id.Value)]);
         WriteStateSlots([.. graph.StateSlots.OrderBy(slot => slot.Id.Value)]);
         WriteEntryPoints([.. graph.EntryPoints.OrderBy(entry => entry.Id.Value)]);
         WriteRegions([.. graph.Regions.OrderBy(region => region.Id.Value)]);
+    }
+
+    private void WriteWeights(IReadOnlyList<WeightDescriptor> weights)
+    {
+        writer.WriteCount(weights.Count);
+        foreach (var weight in weights)
+        {
+            writer.WriteUInt32(weight.Id.Value);
+            writer.WriteString(weight.Source.File);
+            writer.WriteInt64(weight.Source.Offset);
+            writer.WriteInt64(weight.Source.Length);
+            writer.WriteInt32((int)weight.Encoding);
+            WriteShape(weight.LogicalShape);
+            writer.WriteNullableString(weight.ContentHash?.Value);
+        }
     }
 
     private void WriteValues(IReadOnlyList<GraphValue> values)

@@ -191,7 +191,7 @@ internal static class Qwen2LayerGraphBuilder
         ICollection<NodeId> nodes,
         ICollection<TensorId> weights)
     {
-        var weight = context.AddWeight(file.GetRequiredTensor(weightName), nodes, weights);
+        var weight = context.AddWeight(file.SourceFile, file.GetRequiredTensor(weightName), nodes, weights);
         return context.Emit(
             GraphOperationKind.QuantizedLinear,
             [input.Id, weight.Value.Id],
@@ -208,7 +208,7 @@ internal static class Qwen2LayerGraphBuilder
         ICollection<NodeId> nodes,
         ICollection<TensorId> weights)
     {
-        var bias = context.AddWeight(file.GetRequiredTensor(biasName), nodes, weights);
+        var bias = context.AddWeight(file.SourceFile, file.GetRequiredTensor(biasName), nodes, weights);
         return context.Emit(GraphOperationKind.Add, [input.Id, bias.Value.Id], input.Shape, Float, nodes);
     }
 
@@ -217,7 +217,11 @@ internal static class Qwen2LayerGraphBuilder
         GgufFile file,
         string name,
         ICollection<NodeId> nodes,
-        ICollection<TensorId> weights) => context.AddWeight(file.GetRequiredTensor(name), nodes, weights).Value;
+        ICollection<TensorId> weights) => context.AddWeight(
+            file.SourceFile,
+            file.GetRequiredTensor(name),
+            nodes,
+            weights).Value;
 
     private static GraphValue EmitNormalization(
         Qwen2GraphBuildContext context,

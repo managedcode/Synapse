@@ -69,7 +69,8 @@ internal static class Qwen2GraphBuilder
             context.Nodes,
             context.StateSlots,
             [entryPoint],
-            context.Regions);
+            context.Regions,
+            context.Weights);
     }
 
     private static GraphValue AddInputRegion(
@@ -81,7 +82,11 @@ internal static class Qwen2GraphBuilder
         var nodes = new List<NodeId>();
         var weights = new List<TensorId>();
         token = context.AddInput(Vector(1), Integer);
-        var embedding = context.AddWeight(file.GetRequiredTensor("token_embd.weight"), nodes, weights);
+        var embedding = context.AddWeight(
+            file.SourceFile,
+            file.GetRequiredTensor("token_embd.weight"),
+            nodes,
+            weights);
         var hidden = context.Emit(
             GraphOperationKind.Embedding,
             [token.Id, embedding.Value.Id],
@@ -110,7 +115,11 @@ internal static class Qwen2GraphBuilder
         var weights = new List<TensorId>();
         var normWeight = AddWeight(context, file, "output_norm.weight", nodes, weights);
         var normalized = EmitNormalization(context, hidden, normWeight, normalizationEpsilon, nodes);
-        var outputWeight = context.AddWeight(file.GetRequiredTensor("output.weight"), nodes, weights);
+        var outputWeight = context.AddWeight(
+            file.SourceFile,
+            file.GetRequiredTensor("output.weight"),
+            nodes,
+            weights);
         var vocabularySize = outputWeight.Value.Shape.Dimensions[0].Maximum;
         var logits = context.Emit(
             GraphOperationKind.QuantizedLinear,
@@ -136,7 +145,11 @@ internal static class Qwen2GraphBuilder
         GgufFile file,
         string name,
         ICollection<NodeId> nodes,
-        ICollection<TensorId> weights) => context.AddWeight(file.GetRequiredTensor(name), nodes, weights).Value;
+        ICollection<TensorId> weights) => context.AddWeight(
+            file.SourceFile,
+            file.GetRequiredTensor(name),
+            nodes,
+            weights).Value;
 
     private static GraphValue EmitNormalization(
         Qwen2GraphBuildContext context,

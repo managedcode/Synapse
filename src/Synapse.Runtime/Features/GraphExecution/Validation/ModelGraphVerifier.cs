@@ -18,6 +18,7 @@ public static class ModelGraphVerifier
         GraphStructureVerifier.Verify(context);
         GraphOperationAttributeVerifier.Verify(context);
         GraphShapeVerifier.Verify(context);
+        GraphWeightVerifier.Verify(context);
         GraphStateVerifier.Verify(context);
         GraphEntryPointVerifier.Verify(context);
         GraphRegionVerifier.Verify(context);

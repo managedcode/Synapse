@@ -65,7 +65,7 @@ step that touches the same code.
 | RV-4 | High | `GraphRegions.cs` | `TrainedRoute` has no decision value. There are no skip semantics for outputs or state. | F0.7 (ADR-003) |
 | RV-5 | Resolved 2026-09-28 | operation attribute contracts/verifier and Qwen2 graph builders | Normalization, RoPE, and causal-attention parameters are typed and verified. `position` is the second entry input and is consumed by RoPE, state append, and attention; real-model wiring/attribute tests pass. |
 | RV-6 | Resolved 2026-09-28 | `Qwen2LayerGraphBuilder`, `ModelGraphFingerprint` | KV slots use `Context[1..model_max_context]`; session allocation stays outside Model IR. A versioned canonical SHA-256 encoding gives the real Qwen graph the same identity at 256- and 512-token session capacities. |
-| RV-7 | Medium | `Qwen2GraphBuildContext.AddWeight` | `TensorId` is a counter with no source range, encoding, or content identity. Residency and overlays need one. | F0.6 |
+| RV-7 | Resolved 2026-09-28 | `WeightDescriptor`, `Qwen2GraphBuildContext.AddWeight`, `GraphWeightVerifier` | Every `TensorId` resolves to a package-relative GGUF offset/length, F32 or Q8_0 encoding, and logical shape. Encoded-range content hashes remain optional until the ZoneTree-backed F2 cache. |
 | RV-8 | Medium | `GraphShapeVerifier.ValidateEmbedding` | Only a single token index `Fixed(1)` is accepted, so no prefill entry point with a bounded `Tokens[1..chunk]` dimension can exist. | With F1/F3 batched prefill |
 | RV-9 | Resolved 2026-09-28 | `ModelPackageDownloader` | Streaming stops before exceeding declared size, `Content-Length` is checked, redirects are manual and capped at five, and only HTTPS source/Hugging Face storage hosts are trusted. Focused stream/trust tests plus a real redirected Hugging Face download pass. |
 | RV-10 | Resolved 2026-09-28 | `ModelPackageCatalog`, downloader root check | Leading-dot IDs are rejected, and the package root plus every file must remain below the selected output root. Red/green regressions cover `.`, `..`, and `.hidden`. |
@@ -96,10 +96,11 @@ step that touches the same code.
   Evidence: `ContextBoundInExecutionPlanOnly` proves graphs loaded for context
   256 and 512 have the same fingerprint;
   `CanonicalFingerprintStableAndSensitive` covers ordering and semantic change.
-- [ ] F0.6 Add `WeightDescriptor` with a source file range and an encoding for
+- [x] F0.6 Add `WeightDescriptor` with a source file range and an encoding for
   each `TensorId`; region required weights resolve to descriptors. Content
   hashes can come in F2 (cached in ZoneTree).
-  Test: `RequiredWeightsResolveToSourceRanges`.
+  Evidence: `RequiredWeightsResolveToSourceRanges` checks the real Qwen graph;
+  `ConstantRequiresWeightDescriptor` proves missing descriptors fail closed.
 - [ ] F0.7 Implement `RegionActivation` = decision + provenance + skip,
   `StateSlotDescriptor.PositionHolesAllowed`, and `MergeMode.SelectActive`,
   with the ADR-003 verifier rules. Migrate the existing tests.

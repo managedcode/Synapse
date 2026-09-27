@@ -122,6 +122,30 @@ public sealed class ReferenceSubjectsSmokeTests
             dimension == ShapeDimension.Bounded("Context", 1, 32768))).IsTrue();
     }
 
+    [Test]
+    public async Task RequiredWeightsResolveToSourceRanges()
+    {
+        var modelPath = GetModelPath();
+        var modelLength = new FileInfo(modelPath).Length;
+        using var model = ModelLoader.Load(modelPath, contextSize: 512);
+        var descriptors = model.Graph.Weights.ToDictionary(weight => weight.Id);
+        var requiredWeights = model.Graph.Regions
+            .SelectMany(region => region.RequiredWeights)
+            .Distinct()
+            .ToArray();
+
+        await Assert.That(descriptors.Count).IsEqualTo(requiredWeights.Length);
+        await Assert.That(requiredWeights.All(descriptors.ContainsKey)).IsTrue();
+        await Assert.That(descriptors.Values.All(weight =>
+            weight.Source.File == "qwen2.5-0.5b-instruct-q8_0.gguf" &&
+            weight.Source.Offset >= 0 &&
+            weight.Source.Length > 0 &&
+            weight.Source.Length <= modelLength &&
+            weight.Source.Offset <= modelLength - weight.Source.Length)).IsTrue();
+        await Assert.That(descriptors.Values.Select(weight => weight.Encoding).Distinct())
+            .IsEquivalentTo([WeightEncoding.Fp32, WeightEncoding.GgmlQ8Zero]);
+    }
+
     private static (ModelGraphFingerprint Fingerprint, ShapeDimension[] StateContexts) LoadGraphIdentity(
         string modelPath,
         int contextSize)

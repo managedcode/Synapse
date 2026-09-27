@@ -1,5 +1,6 @@
 using ManagedCode.Synapse.Contracts.Features.GraphExecution;
 using ManagedCode.Synapse.Runtime.Features.GraphExecution.Validation;
+using static ManagedCode.Synapse.IntegrationTests.Features.GraphExecution.GraphTestModelFactory;
 
 namespace ManagedCode.Synapse.IntegrationTests.Features.GraphExecution;
 
@@ -165,7 +166,8 @@ public sealed class TypedGraphIrTests
             graph.Nodes,
             graph.StateSlots,
             graph.EntryPoints,
-            graph.Regions.Append(overlappingRegion));
+            graph.Regions.Append(overlappingRegion),
+            graph.Weights);
 
         var result = ModelGraphVerifier.Verify(graphWithOverlap);
 
@@ -242,13 +244,35 @@ public sealed class TypedGraphIrTests
             graph.Nodes.Select(node => node.Id == constant.Id ? unboundConstant : node),
             graph.StateSlots,
             graph.EntryPoints,
-            graph.Regions);
+            graph.Regions,
+            graph.Weights);
 
         var result = ModelGraphVerifier.Verify(invalidGraph);
 
         await Assert.That(result.Diagnostics.Any(item =>
             item.Code == GraphDiagnosticCode.InvalidTensorBinding &&
             item.NodeId == constant.Id)).IsTrue();
+    }
+
+    [Test]
+    public async Task ConstantRequiresWeightDescriptor()
+    {
+        var graph = CreateLinearGraph(new TensorShape(ShapeDimension.Fixed(3)));
+        var invalidGraph = new ModelGraph(
+            graph.GraphVersion,
+            graph.OpSetVersion,
+            graph.Values,
+            graph.Nodes,
+            graph.StateSlots,
+            graph.EntryPoints,
+            graph.Regions,
+            weights: null);
+
+        var result = ModelGraphVerifier.Verify(invalidGraph);
+
+        await Assert.That(result.Diagnostics.Any(item =>
+            item.Code == GraphDiagnosticCode.InvalidWeightDescriptor &&
+            item.NodeId == new NodeId(2))).IsTrue();
     }
 
     [Test]
@@ -303,7 +327,8 @@ public sealed class TypedGraphIrTests
             graph.Nodes.Select(node => node.Id == linear.Id ? attributedLinear : node),
             graph.StateSlots,
             graph.EntryPoints,
-            graph.Regions);
+            graph.Regions,
+            graph.Weights);
 
         var result = ModelGraphVerifier.Verify(invalidGraph);
 
@@ -349,7 +374,8 @@ public sealed class TypedGraphIrTests
             graph.Nodes.Select(node => node.Id == linear.Id ? changedNode : node),
             graph.StateSlots,
             graph.EntryPoints,
-            graph.Regions);
+            graph.Regions,
+            graph.Weights);
 
         var fingerprint = ModelGraphFingerprint.Compute(graph);
 
@@ -360,95 +386,4 @@ public sealed class TypedGraphIrTests
             character is (>= '0' and <= '9') or (>= 'a' and <= 'f'))).IsTrue();
     }
 
-    private static ModelGraph CreateLinearGraph(
-        TensorShape outputShape,
-        ValueId? conditionalPredicate = null)
-    {
-        var input = new GraphValue(
-            new ValueId(1),
-            new TensorShape(ShapeDimension.Fixed(4)),
-            Fp32);
-        var weights = new GraphValue(
-            new ValueId(2),
-            new TensorShape(ShapeDimension.Fixed(3), ShapeDimension.Fixed(4)),
-            Fp32);
-        var output = new GraphValue(new ValueId(3), outputShape, Fp32);
-        var nodes = new[]
-        {
-            new GraphNode(new NodeId(1), GraphOperationKind.Input, outputs: [input.Id]),
-            new GraphNode(
-                new NodeId(2),
-                GraphOperationKind.Constant,
-                outputs: [weights.Id],
-                tensor: new TensorId(1)),
-            new GraphNode(new NodeId(3), GraphOperationKind.Linear, [input.Id, weights.Id], [output.Id]),
-            new GraphNode(new NodeId(4), GraphOperationKind.Output, inputs: [output.Id]),
-        };
-        return CreateGraph(
-            [input, weights, output],
-            nodes,
-            [input.Id],
-            [output.Id],
-            eligibility: conditionalPredicate is { } predicate
-                ? new GraphPredicateEligibility(predicate)
-                : new AlwaysRequiredEligibility());
-    }
-
-    private static ModelGraph CreateGraph(
-        IEnumerable<GraphValue> values,
-        IEnumerable<GraphNode> nodes,
-        IReadOnlyList<ValueId> inputs,
-        IReadOnlyList<ValueId> outputs,
-        IEnumerable<StateSlotDescriptor>? stateSlots = null,
-        ExecutionEligibility? eligibility = null)
-    {
-        var nodeArray = nodes.ToArray();
-        var entryPoint = new GraphEntryPoint(new EntryPointId(1), "forward", inputs, outputs);
-        var memberNodes = nodeArray
-            .Where(node => node.Operation is not (GraphOperationKind.Input or GraphOperationKind.Output))
-            .ToArray();
-        var memberIds = memberNodes.Select(node => node.Id).ToHashSet();
-        var producers = nodeArray
-            .SelectMany(node => node.Outputs.Select(output => (output, node.Id)))
-            .ToDictionary(pair => pair.output, pair => pair.Id);
-        var regionInputs = memberNodes
-            .SelectMany(node => node.Inputs)
-            .Where(input => !producers.TryGetValue(input, out var producer) || !memberIds.Contains(producer))
-            .Distinct()
-            .ToArray();
-        var regionOutputs = memberNodes
-            .SelectMany(node => node.Outputs)
-            .Where(output => outputs.Contains(output) || nodeArray.Any(node =>
-                !memberIds.Contains(node.Id) && node.Inputs.Contains(output)))
-            .Distinct()
-            .ToArray();
-        var region = new RegionDescriptor(
-            new RegionId(1),
-            memberNodes.Select(node => node.Id),
-            regionInputs,
-            regionOutputs,
-            memberNodes.Where(node => node.Operation == GraphOperationKind.Constant)
-                .Select(node => node.Tensor!.Value),
-            memberNodes.SelectMany(node => node.StateReads).Distinct(),
-            memberNodes.SelectMany(node => node.StateWrites).Distinct(),
-            eligibility ?? new AlwaysRequiredEligibility(),
-            semanticAnnotations: ["test"]);
-        return new ModelGraph(
-            new GraphVersion(1, 0),
-            new OpSetVersion(1, 0),
-            values,
-            nodeArray,
-            stateSlots,
-            [entryPoint],
-            [region]);
-    }
-
-    private static ModelGraph ReplaceRegion(ModelGraph graph, RegionDescriptor region) => new(
-        graph.GraphVersion,
-        graph.OpSetVersion,
-        graph.Values,
-        graph.Nodes,
-        graph.StateSlots,
-        graph.EntryPoints,
-        [region]);
 }

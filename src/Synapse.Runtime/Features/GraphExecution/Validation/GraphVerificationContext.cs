@@ -20,6 +20,8 @@ internal sealed class GraphVerificationContext(ModelGraph graph)
 
     public Dictionary<TensorId, NodeId> TensorNodes { get; } = [];
 
+    public Dictionary<TensorId, WeightDescriptor> WeightDescriptors { get; } = [];
+
     public Dictionary<EffectToken, NodeId> EffectProducers { get; } = [];
 
     public Dictionary<NodeId, HashSet<NodeId>> Edges { get; } = [];

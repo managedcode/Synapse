@@ -14,6 +14,8 @@ RoPE, KV append, and attention all consume the same position entry input.
 KV slot shapes use the GGUF model limit as symbolic
 `Context[1..model_max_context]`; the concrete per-instance KV and scratch
 buffers still use the caller's bounded session context.
+Every F32 or Q8_0 GGUF tensor used by the graph carries its exact encoded byte
+range and package-relative source filename in the verified Model IR.
 
 The pinned correctness probe uses prompt tokens
 `785,6722,315,9625,374`. Synapse, dotLLM at commit

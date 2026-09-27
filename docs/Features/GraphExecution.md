@@ -30,6 +30,12 @@ are entry-point plumbing outside that partition. Each `Constant` is bound to a
 unique `TensorId`. Semantic overlap is represented by annotations rather than
 duplicate execution ownership.
 
+Each `TensorId` also resolves to one `WeightDescriptor`: a package-relative
+source file, overflow-checked offset/length, explicit physical encoding, and
+logical shape. The verifier rejects missing, extra, duplicated, unsafe, or
+shape/encoding-incompatible descriptors. Encoded-range content hashes remain
+optional until the ZoneTree-backed F2 hash cache lands.
+
 `ModelGraphFingerprint.Compute` writes every semantic Model IR field through a
 versioned, explicitly little-endian, length-prefixed encoding and returns its
 lower-case SHA-256 digest. Top-level declarations and set-like region fields
@@ -76,5 +82,8 @@ ownership. `OperationAttributesRequired` rejects hidden operator parameters;
 typed GGUF-derived attributes. `CanonicalFingerprintStableAndSensitive` checks
 canonical set ordering and semantic sensitivity;
 `ContextBoundInExecutionPlanOnly` loads the real GGUF at two session capacities
-and proves one model fingerprint. The shared Qwen smoke test verifies its real
-26-region graph before checking generation against dotLLM and LLamaSharp.
+and proves one model fingerprint. `RequiredWeightsResolveToSourceRanges`
+checks every required tensor in the real Qwen graph; the missing-descriptor
+regression proves the verifier fails closed. The shared Qwen smoke test verifies
+its real 26-region graph before checking generation against dotLLM and
+LLamaSharp.

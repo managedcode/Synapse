@@ -24,6 +24,8 @@ internal sealed class Qwen2GraphBuildContext
 
     public List<RegionDescriptor> Regions { get; } = [];
 
+    public List<WeightDescriptor> Weights { get; } = [];
+
     public GraphValue AddInput(TensorShape shape, NumericType numericType)
     {
         var value = AddValue(shape, numericType);
@@ -69,12 +71,19 @@ internal sealed class Qwen2GraphBuildContext
     }
 
     public WeightValue AddWeight(
+        string sourceFile,
         GgufTensorInfo tensor,
         ICollection<NodeId> regionNodes,
         ICollection<TensorId> regionWeights)
     {
-        var value = AddValue(ToLogicalShape(tensor), ToNumericType(tensor));
+        var logicalShape = ToLogicalShape(tensor);
+        var value = AddValue(logicalShape, ToNumericType(tensor));
         var tensorId = new TensorId(_nextTensor++);
+        Weights.Add(new WeightDescriptor(
+            tensorId,
+            new WeightSourceRange(sourceFile, tensor.Offset, tensor.ByteLength),
+            ToEncoding(tensor),
+            logicalShape));
         var node = AddNode(GraphOperationKind.Constant, inputs: null, [value.Id], tensor: tensorId);
         regionNodes.Add(node);
         regionWeights.Add(tensorId);
@@ -157,6 +166,13 @@ internal sealed class Qwen2GraphBuildContext
     {
         0 => Float,
         8 => new NumericType(StorageDataType.BlockQ8, ComputeDataType.Fp32, AccumulatorDataType.Fp32),
+        _ => throw new NotSupportedException($"Tensor '{tensor.Name}' uses unsupported GGUF type {tensor.Type}."),
+    };
+
+    private static WeightEncoding ToEncoding(GgufTensorInfo tensor) => tensor.Type switch
+    {
+        0 => WeightEncoding.Fp32,
+        8 => WeightEncoding.GgmlQ8Zero,
         _ => throw new NotSupportedException($"Tensor '{tensor.Name}' uses unsupported GGUF type {tensor.Type}."),
     };
 
