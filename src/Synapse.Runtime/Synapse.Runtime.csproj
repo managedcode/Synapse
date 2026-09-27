@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>ManagedCode.Synapse.Runtime</RootNamespace>
+    <AssemblyName>ManagedCode.Synapse.Runtime</AssemblyName>
+    <Description>Local Synapse runtime composition and native process boundary.</Description>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Synapse.Contracts/Synapse.Contracts.csproj" />
+    <PackageReference Include="ZoneTree" />
+  </ItemGroup>
+</Project>

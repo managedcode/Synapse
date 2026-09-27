@@ -1,0 +1,90 @@
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS 15 ARM64 primary
+            os: macos-15
+            runtime_identifier: osx-arm64
+          - name: Ubuntu 24.04 x64 portable
+            os: ubuntu-24.04
+            runtime_identifier: linux-x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+      SYNAPSE_REQUIRED_RUNTIME_IDENTIFIER: ${{ matrix.runtime_identifier }}
+      SYNAPSE_DOTLLM_VERSION: d88040451d7db56e5dfef9d5754ad0955b0f7fe5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          lfs: true
+
+      - name: Checkout pinned dotLLM benchmark subject
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: kkokosa/dotLLM
+          ref: d88040451d7db56e5dfef9d5754ad0955b0f7fe5
+          path: _external/dotLLM
+          persist-credentials: false
+
+      - name: Install pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.1 --profile minimal --component clippy,rustfmt
+
+      - name: Restore locked dependencies
+        run: dotnet restore Synapse.slnx --locked-mode
+
+      - name: Build .NET
+        run: dotnet build Synapse.slnx --configuration Release --no-restore
+
+      - name: Build pinned dotLLM benchmark subject
+        run: dotnet build _external/dotLLM/src/DotLLM.Cli/DotLLM.Cli.csproj --configuration Release
+
+      - name: Register dotLLM smoke-test executable
+        shell: bash
+        run: echo "SYNAPSE_DOTLLM_EXECUTABLE=${GITHUB_WORKSPACE}/_external/dotLLM/src/DotLLM.Cli/bin/Release/net10.0/DotLLM.Cli" >> "${GITHUB_ENV}"
+
+      - name: Test .NET
+        run: dotnet test Synapse.slnx --configuration Release --no-build
+
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path native/Cargo.toml --all --check
+
+      - name: Lint Rust
+        run: cargo clippy --manifest-path native/Cargo.toml --workspace --all-targets -- -D warnings
+
+      - name: Test Rust
+        run: cargo test --manifest-path native/Cargo.toml --locked
+
+      - name: Exercise both doctor entry points
+        shell: bash
+        run: |
+          state_dir="${RUNNER_TEMP}/synapse-doctor-state"
+          dotnet run --project src/Synapse.Cli --configuration Release --no-build -- \
+            doctor --memory-budget-bytes 1073741824 --state-directory "${state_dir}"
+          cargo run --manifest-path native/Cargo.toml --locked --quiet \
+            -p synapse-runtime -- doctor --memory-budget-bytes 1073741824

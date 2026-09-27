@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Synapse.Contracts/Synapse.Contracts.csproj" />
+    <Project Path="src/Synapse.Runtime/Synapse.Runtime.csproj" />
+    <Project Path="src/Synapse.Cli/Synapse.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Synapse.IntegrationTests/Synapse.IntegrationTests.csproj" />
+  </Folder>
+  <Folder Name="/experiments/">
+    <Project Path="experiments/Synapse.ReferenceBenchmarks/Synapse.ReferenceBenchmarks.csproj" />
+  </Folder>
+</Solution>

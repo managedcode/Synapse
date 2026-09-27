@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>ManagedCode.Synapse.Contracts</RootNamespace>
+    <AssemblyName>ManagedCode.Synapse.Contracts</AssemblyName>
+    <Description>Stable public contracts for the Synapse inference engine.</Description>
+  </PropertyGroup>
+</Project>

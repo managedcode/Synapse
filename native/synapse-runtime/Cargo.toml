@@ -1,0 +1,17 @@
+[package]
+name = "synapse-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "synapse-runtime"
+path = "src/main.rs"
+
+[dependencies]
+synapse-core = { path = "../synapse-core" }
+
+[lints]
+workspace = true

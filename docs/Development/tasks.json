@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "tasks": [
+    {
+      "id": "TASK-BST-002",
+      "requirement": "REQ-BST-002",
+      "slice": "Bootstrap",
+      "stage": "D0",
+      "status": "in_progress",
+      "dependsOn": ["TASK-BST-001"],
+      "tests": ["TEST-BST-002-1", "TEST-BST-002-2", "TEST-BST-002-3"]
+    },
+    {
+      "id": "TASK-BST-003",
+      "requirement": "REQ-BST-003",
+      "slice": "Bootstrap",
+      "stage": "D0",
+      "status": "in_progress",
+      "dependsOn": ["TASK-BST-002"],
+      "tests": ["TEST-BST-003-1", "TEST-BST-003-2", "TEST-BST-003-3"]
+    },
+    {
+      "id": "TASK-BST-004",
+      "requirement": "REQ-BST-004",
+      "slice": "Bootstrap",
+      "stage": "D0",
+      "status": "planned",
+      "dependsOn": ["TASK-BST-003"],
+      "tests": ["TEST-BST-004-1", "TEST-BST-004-2", "TEST-BST-004-3"]
+    },
+    {
+      "id": "TASK-BMK-001",
+      "requirement": "REQ-BMK-001",
+      "slice": "Benchmarking",
+      "stage": "D1",
+      "status": "planned",
+      "dependsOn": ["TASK-BST-004"],
+      "tests": ["TEST-BMK-001-1", "TEST-BMK-001-2", "TEST-BMK-001-3"]
+    }
+  ]
+}

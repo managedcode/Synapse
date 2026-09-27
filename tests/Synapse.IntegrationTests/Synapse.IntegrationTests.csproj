@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>ManagedCode.Synapse.IntegrationTests</RootNamespace>
+    <AssemblyName>ManagedCode.Synapse.IntegrationTests</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../experiments/Synapse.ReferenceBenchmarks/Synapse.ReferenceBenchmarks.csproj" />
+    <ProjectReference Include="../../src/Synapse.Contracts/Synapse.Contracts.csproj" />
+    <ProjectReference Include="../../src/Synapse.Runtime/Synapse.Runtime.csproj" />
+    <PackageReference Include="TUnit" />
+  </ItemGroup>
+</Project>

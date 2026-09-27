@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>ManagedCode.Synapse.Cli</RootNamespace>
+    <AssemblyName>synapse</AssemblyName>
+    <Description>Offline command-line entry point for Synapse.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Synapse.Contracts/Synapse.Contracts.csproj" />
+    <ProjectReference Include="../Synapse.Runtime/Synapse.Runtime.csproj" />
+  </ItemGroup>
+</Project>
