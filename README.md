@@ -1,5 +1,7 @@
 # Synapse
 
+[![verify](https://github.com/managedcode/Synapse/actions/workflows/verify.yml/badge.svg)](https://github.com/managedcode/Synapse/actions/workflows/verify.yml)
+
 Synapse is a local-first inference engine written in C#/.NET, with Rust reserved
 for measured hot paths. The product owns model import, typed graph execution,
 memory and KV state, scheduling, quantization, sampling, direct worker transfer,
