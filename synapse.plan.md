@@ -24,11 +24,15 @@ normative product scope.
 - [x] Bounded GGUF v3 header/index plus managed Qwen2 Q8_0 first-token
   execution matching dotLLM and LLamaSharp on the pinned fixture.
 - [ ] General model package validation and bounded allocator.
-- [ ] Typed Graph IR, verifier, scalar operators, and tiny deterministic model.
+- [x] Typed Model IR core, bounded shapes, explicit numerical types, FlyBrain
+  regions/eligibility, and verifier for SSA/order/cycles/state/entry points.
+- [ ] Lower managed Qwen2 through Model IR, add Execution IR/lifetime planning,
+  and complete the scalar numerical oracle.
 - [ ] C# paged KV ownership, rollback, and ZoneTree prefix metadata.
 - [ ] Repo-owned tokenizer plus pinned SmolLM/Qwen import and text generation.
 - [ ] .NET SDK, worker IPC, bounded streaming, and cancellation.
-- [ ] Native benchmark runner against pinned dotLLM and LLamaSharp baselines.
+- [x] Real-process smoke runner against pinned dotLLM and LLamaSharp baselines.
+- [ ] Statistical paired benchmark runner, raw evidence schema, and verdicts.
 - [ ] CPU SIMD, Q4, Metal, and measured quality-preserving optimization; use
   Rust only for a profiled managed hotspot.
 - [ ] Aspire/Orleans control plane, direct worker data plane, fencing, and

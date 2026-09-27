@@ -26,6 +26,13 @@ Orleans (later D3 control plane only)
         +-- leases, placement, epochs, and recovery coordination
 ```
 
+The central FlyBrain execution model is a bounded activation wave over coarse
+regions. Model IR answers **what may execute**; Execution IR decides **how and
+with which precision**; the deployment plan decides **where**. Region labels
+are annotations only. Skipping work requires an explicit graph predicate,
+trained policy hash, or evaluated approximation profile. See
+`docs/ADR/ADR-002-flybrain-activation-waves.md`.
+
 Large tensors and KV payloads never transit Orleans. Local execution never
 requires Orleans, a coordination server, or a network. Unsupported models,
 operators, profiles, or devices fail before generation with structured errors.

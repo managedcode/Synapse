@@ -5,6 +5,12 @@ acceleration layer. It owns model graph execution, memory and KV state,
 scheduling, quantization, sampling, and
 the worker protocol rather than hiding a third-party inference server.
 
+Its central direction is FlyBrain-style graph-native inference: bounded
+activation waves select coarse executable regions, while execution planning
+independently chooses device placement and precision. Dense models remain
+dense unless their graph contains a verified predicate or trained routing
+policy; semantic labels never silently skip computation.
+
 The first managed inference slice is working on Apple Silicon: Synapse reads
 the pinned Qwen2.5 Q8_0 GGUF through a read-only memory map and executes its
 24-layer Qwen2 graph in C#, including RMSNorm, Q8_0 matrix/vector kernels,
@@ -67,3 +73,8 @@ the project.
 | [Microsoft Orleans](https://github.com/dotnet/orleans) | Later D3 cluster control plane for leases, placement, and recovery | Package dependency when the cluster slice begins. |
 | [TUnit](https://github.com/thomhurst/TUnit) | .NET behavior test framework on Microsoft.Testing.Platform | Package dependency `1.70.1`. |
 | [Rust](https://github.com/rust-lang/rust) | Optional native acceleration for measured C# hotspots | Toolchain dependency. |
+| [FlyWire adult Drosophila connectome](https://doi.org/10.1038/s41586-024-07558-y) | Biological graph/region inspiration for FlyBrain activation waves; the paper reports 139,255 neurons and 54.5 million synapses | Research reference. |
+| [Mixture-of-Depths](https://arxiv.org/abs/2404.02258) | Bounded token-level conditional-compute and routing reference | Research reference; no runtime dependency. |
+| [Router-Tuning / MindSkip](https://github.com/CASE-Lab-UMD/Router-Tuning-Mixture-of-Depths) | Trained dynamic-depth routing and equal-quality evaluation reference | Research reference; paper `arXiv:2410.13184`. |
+| [LayerSkip](https://github.com/facebookresearch/LayerSkip) | Early-exit and self-speculative decoding research reference | Research reference; paper `arXiv:2404.16710`. |
+| [I-JEPA](https://arxiv.org/abs/2301.08243) | Typed latent-edge and representation-prediction research direction | Research reference; not evidence of language-model support. |

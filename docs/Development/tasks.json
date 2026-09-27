@@ -36,6 +36,15 @@
       "status": "planned",
       "dependsOn": ["TASK-BST-004"],
       "tests": ["TEST-BMK-001-1", "TEST-BMK-001-2", "TEST-BMK-001-3"]
+    },
+    {
+      "id": "TASK-GRF-001",
+      "requirement": "REQ-GRF-001",
+      "slice": "GraphExecution",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-BST-003"],
+      "tests": ["TEST-GRF-001-1", "TEST-GRF-001-2", "TEST-GRF-001-3"]
     }
   ]
 }
