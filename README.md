@@ -14,7 +14,9 @@ the full 24-layer forward/decode path in managed C#. RMSNorm, Q8_0 matrix/vector
 math, GQA, RoPE, KV state, SwiGLU, logits, and greedy sampling all execute in
 this repository. The verifier derives every region boundary from real
 producer/consumer, tensor, and state dependencies instead of trusting the model
-adapter's declaration. Its eight-token continuation matches dotLLM and
+adapter's declaration. RMS epsilon, RoPE layout/theta/head width, attention
+heads/scale/mask, and decode position are explicit typed IR inputs rather than
+model-side hidden state. Its eight-token continuation matches dotLLM and
 LLamaSharp.
 
 ## Architecture
@@ -148,10 +150,10 @@ GitHub Actions runs the real model download, digest checks, managed Synapse,
 dotLLM, and LLamaSharp smoke tests on macOS ARM64 and Ubuntu x64, followed by
 the Rust format/lint/test gates.
 
-The current region-boundary checkpoint passes 34/34 local Release tests. A
-post-change eight-token parity smoke produced the same Synapse token IDs and
-baseline text shown in the measured table; its one-shot timings are not mixed
-into the recorded 3-warm-up/5-measurement evidence.
+The current executable-IR contract checkpoint passes 37/37 local Release
+tests. A post-change eight-token parity smoke produced the same Synapse token
+IDs and baseline text shown in the measured table; its one-shot timings are
+not mixed into the recorded 3-warm-up/5-measurement evidence.
 
 ## Repository map
 

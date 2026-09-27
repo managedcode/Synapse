@@ -24,6 +24,18 @@ internal static class Qwen2GraphBuilder
     {
         var context = new Qwen2GraphBuildContext();
         var hidden = AddInputRegion(context, file, hiddenSize, out var token);
+        var position = context.AddInput(Vector(1), Integer);
+        var attentionHeads = file.GetRequiredInt32("qwen2.attention.head_count");
+        var keyValueHeads = file.GetRequiredInt32("qwen2.attention.head_count_kv");
+        if (attentionHeads <= 0 || keyValueHeads <= 0 ||
+            attentionHeads % keyValueHeads != 0 || hiddenSize % attentionHeads != 0)
+        {
+            throw new InvalidDataException("Qwen2 attention-head metadata is incompatible with its hidden size.");
+        }
+
+        var headDimension = hiddenSize / attentionHeads;
+        var ropeTheta = file.GetRequiredSingle("qwen2.rope.freq_base");
+        var normalizationEpsilon = file.GetRequiredSingle("qwen2.attention.layer_norm_rms_epsilon");
 
         for (var layer = 0; layer < layerCount; layer++)
         {
@@ -32,14 +44,24 @@ internal static class Qwen2GraphBuilder
                 file,
                 layer,
                 hidden,
+                position,
                 hiddenSize,
                 feedForwardSize,
                 keyValueWidth,
-                contextSize);
+                contextSize,
+                attentionHeads,
+                keyValueHeads,
+                headDimension,
+                ropeTheta,
+                normalizationEpsilon);
         }
 
-        var logits = AddOutputRegion(context, file, hidden);
-        var entryPoint = new GraphEntryPoint(new EntryPointId(1), "forward-token", [token.Id], [logits.Id]);
+        var logits = AddOutputRegion(context, file, hidden, normalizationEpsilon);
+        var entryPoint = new GraphEntryPoint(
+            new EntryPointId(1),
+            "forward-token",
+            [token.Id, position.Id],
+            [logits.Id]);
         return new ModelGraph(
             new GraphVersion(1, 0),
             new OpSetVersion(1, 0),
@@ -81,12 +103,13 @@ internal static class Qwen2GraphBuilder
     private static GraphValue AddOutputRegion(
         Qwen2GraphBuildContext context,
         GgufFile file,
-        GraphValue hidden)
+        GraphValue hidden,
+        float normalizationEpsilon)
     {
         var nodes = new List<NodeId>();
         var weights = new List<TensorId>();
         var normWeight = AddWeight(context, file, "output_norm.weight", nodes, weights);
-        var normalized = EmitUnary(context, GraphOperationKind.RmsNorm, hidden, normWeight, nodes);
+        var normalized = EmitNormalization(context, hidden, normWeight, normalizationEpsilon, nodes);
         var outputWeight = context.AddWeight(file.GetRequiredTensor("output.weight"), nodes, weights);
         var vocabularySize = outputWeight.Value.Shape.Dimensions[0].Maximum;
         var logits = context.Emit(
@@ -115,17 +138,18 @@ internal static class Qwen2GraphBuilder
         ICollection<NodeId> nodes,
         ICollection<TensorId> weights) => context.AddWeight(file.GetRequiredTensor(name), nodes, weights).Value;
 
-    private static GraphValue EmitUnary(
+    private static GraphValue EmitNormalization(
         Qwen2GraphBuildContext context,
-        GraphOperationKind operation,
         GraphValue input,
         GraphValue parameter,
+        float epsilon,
         ICollection<NodeId> nodes) => context.Emit(
-            operation,
+            GraphOperationKind.RmsNorm,
             [input.Id, parameter.Id],
             input.Shape,
             Float,
-            nodes);
+            nodes,
+            attributes: new NormalizationAttributes(epsilon));
 
     private static TensorShape Vector(long size) => new(ShapeDimension.Fixed(size));
 

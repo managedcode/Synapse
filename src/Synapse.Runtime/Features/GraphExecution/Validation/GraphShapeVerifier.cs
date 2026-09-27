@@ -73,8 +73,17 @@ internal static class GraphShapeVerifier
                 ValidateNormalization(context, node, biasAllowed: true);
                 break;
             case GraphOperationKind.Silu or GraphOperationKind.Gelu or
-                GraphOperationKind.Softmax or GraphOperationKind.Rope:
+                GraphOperationKind.Softmax:
                 ValidateShapePreservingUnary(context, node);
+                break;
+            case GraphOperationKind.Rope:
+                ValidateRope(context, node);
+                break;
+            case GraphOperationKind.CausalAttention:
+                ValidateCausalAttention(context, node);
+                break;
+            case GraphOperationKind.StateAppend:
+                ValidateStateAppend(context, node);
                 break;
             case GraphOperationKind.Reshape:
                 ValidateReshape(context, node);
@@ -87,30 +96,102 @@ internal static class GraphShapeVerifier
                 break;
             case GraphOperationKind.Transpose or GraphOperationKind.Slice or
                 GraphOperationKind.Concat or GraphOperationKind.Gather or
-                GraphOperationKind.Scatter or GraphOperationKind.CausalAttention or
-                GraphOperationKind.StateRead or GraphOperationKind.StateAppend or
+                GraphOperationKind.Scatter or GraphOperationKind.StateRead or
                 GraphOperationKind.StateCommit or GraphOperationKind.StateRollback or
                 GraphOperationKind.TopKRoute or GraphOperationKind.Branch or
                 GraphOperationKind.Loop or GraphOperationKind.SelectLogits or
                 GraphOperationKind.Sample:
-                ValidateExtendedOperation(context, node);
                 break;
             default:
                 break;
         }
     }
 
-    private static void ValidateExtendedOperation(GraphVerificationContext context, GraphNode node)
+    private static void ValidateRope(GraphVerificationContext context, GraphNode node)
     {
-        if (node.Operation == GraphOperationKind.CausalAttention)
+        if (!RequireCounts(context, node, 2, 2, 1) ||
+            !TryResolve(context, node, out var inputs, out var output))
         {
-            ValidateShapePreservingUnary(context, node);
+            return;
         }
-        else if (node.Operation == GraphOperationKind.StateAppend)
+
+        if (!SameShape(inputs[0].Shape, output.Shape) || !IsPosition(inputs[1]) ||
+            node.Attributes is not RopeAttributes attributes || inputs[0].Shape.Rank != 1 ||
+            inputs[0].Shape.Dimensions[0].Minimum != inputs[0].Shape.Dimensions[0].Maximum ||
+            inputs[0].Shape.Dimensions[0].Maximum % Math.Max(1, attributes.HeadDimension) != 0)
         {
-            _ = RequireCounts(context, node, 1, int.MaxValue, 0);
+            AddShapeMismatch(
+                context,
+                node,
+                "RoPE expects data [heads*head_dimension], scalar I32 position, and matching output");
         }
     }
+
+    private static void ValidateCausalAttention(GraphVerificationContext context, GraphNode node)
+    {
+        if (!RequireCounts(context, node, 2, 2, 1) ||
+            !TryResolve(context, node, out var inputs, out var output))
+        {
+            return;
+        }
+
+        var attributes = node.Attributes as CausalAttentionAttributes;
+        var queryWidth = attributes is null
+            ? 0L
+            : checked((long)attributes.QueryHeads * attributes.HeadDimension);
+        var stateWidth = attributes is null
+            ? 0L
+            : checked((long)attributes.KeyValueHeads * attributes.HeadDimension);
+        var stateShapeValid = node.StateReads.Count == 2 && node.StateReads.All(slotId =>
+            context.StateSlots.TryGetValue(slotId, out var slot) && slot.Shape.Rank == 2 &&
+            slot.Shape.Dimensions[1] == ShapeDimension.Fixed(stateWidth));
+        if (attributes is null || inputs[0].Shape.Rank != 1 ||
+            inputs[0].Shape.Dimensions[0] != ShapeDimension.Fixed(queryWidth) ||
+            !SameShape(inputs[0].Shape, output.Shape) || !IsPosition(inputs[1]) || !stateShapeValid)
+        {
+            AddShapeMismatch(
+                context,
+                node,
+                "causal attention expects query [query_heads*head_dimension], scalar I32 position, two compatible KV states, and matching output");
+        }
+    }
+
+    private static void ValidateStateAppend(GraphVerificationContext context, GraphNode node)
+    {
+        var expectedInputs = checked(node.StateWrites.Count + 1);
+        if (node.StateWrites.Count == 0 ||
+            !RequireCounts(context, node, expectedInputs, expectedInputs, 0))
+        {
+            return;
+        }
+
+        var inputs = node.Inputs
+            .Select(input => context.Values.GetValueOrDefault(input))
+            .ToArray();
+        if (inputs.Any(input => input is null) || !IsPosition(inputs[^1]!))
+        {
+            AddShapeMismatch(context, node, "state append requires one value per state slot and a final scalar I32 position");
+            return;
+        }
+
+        for (var index = 0; index < node.StateWrites.Count; index++)
+        {
+            if (!context.StateSlots.TryGetValue(node.StateWrites[index], out var slot) ||
+                !MatchesStateEntry(inputs[index]!.Shape, slot.Shape))
+            {
+                AddShapeMismatch(context, node, "state append value shapes must match their state entry shapes");
+                return;
+            }
+        }
+    }
+
+    private static bool MatchesStateEntry(TensorShape value, TensorShape state) =>
+        state.Rank == value.Rank + 1 && state.Dimensions.Skip(1).SequenceEqual(value.Dimensions);
+
+    private static bool IsPosition(GraphValue value) =>
+        value.NumericType.Storage == StorageDataType.I32 &&
+        value.NumericType.Compute == ComputeDataType.I32 &&
+        value.Shape.Rank == 1 && value.Shape.Dimensions[0] == ShapeDimension.Fixed(1);
 
     private static void ValidateElementwiseBinary(GraphVerificationContext context, GraphNode node)
     {

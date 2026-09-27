@@ -63,7 +63,7 @@ step that touches the same code.
 | RV-2 | High | `Qwen2Model.cs` `Forward`/`ExecuteLayer` | Shadow IR: the graph is built and verified, but execution ignores it. The smoke test checks only the region count. | F1: execute through regions, then delete the hand-written layer loop. |
 | RV-3 | Resolved 2026-09-28 | `GraphRegionVerifier`, `GraphRegionBoundaryVerifier`, Qwen2 graph builder | `Input`/`Output` are excluded from regions; every executable node is covered once. Inputs, outputs, state effects, and `TensorId`-bound constants are independently derived and compared with every descriptor. The real Qwen graph and explicit lying-descriptor regressions pass. |
 | RV-4 | High | `GraphRegions.cs` | `TrainedRoute` has no decision value. There are no skip semantics for outputs or state. | F0.7 (ADR-003) |
-| RV-5 | Medium | `Qwen2LayerGraphBuilder.AddAttention` | No operation attributes (epsilon, theta, heads, scale, mask) and no position value; `Rope([q])` and `CausalAttention([q])` are not executable from the IR. | F0.4 |
+| RV-5 | Resolved 2026-09-28 | operation attribute contracts/verifier and Qwen2 graph builders | Normalization, RoPE, and causal-attention parameters are typed and verified. `position` is the second entry input and is consumed by RoPE, state append, and attention; real-model wiring/attribute tests pass. |
 | RV-6 | Medium | `Qwen2LayerGraphBuilder` `Matrix(contextSize, …)` | The session context size is baked into Model IR state shapes, so graph identity depends on a session option. | F0.5 |
 | RV-7 | Medium | `Qwen2GraphBuildContext.AddWeight` | `TensorId` is a counter with no source range, encoding, or content identity. Residency and overlays need one. | F0.6 |
 | RV-8 | Medium | `GraphShapeVerifier.ValidateEmbedding` | Only a single token index `Fixed(1)` is accepted, so no prefill entry point with a bounded `Tokens[1..chunk]` dimension can exist. | With F1/F3 batched prefill |
@@ -86,10 +86,11 @@ step that touches the same code.
   weights from member nodes, and compare them with the descriptor.
   Evidence: `RegionBoundaryDerivedAndCompared` rejects a lying descriptor
   with `RegionBoundaryMismatch`; the real Qwen2 graph passes.
-- [ ] F0.4 Add typed operation attributes and an explicit `position` entry
+- [x] F0.4 Add typed operation attributes and an explicit `position` entry
   input consumed by `Rope`, `StateAppend`, and `CausalAttention`. The Qwen2
   builder reads epsilon, theta, and heads from GGUF metadata.
-  Tests: `OperationAttributesRequired`, `PositionIsExplicitRegionInput`.
+  Evidence: `OperationAttributesRequired`, `PositionIsExplicitRegionInput`,
+  and the Qwen/baseline generation gate.
 - [ ] F0.5 Use a bounded `Context` symbol in the state slot shapes, and add a
   canonical `ModelGraphFingerprint` (SHA-256 over a canonical encoding).
   Test: `ContextBoundInExecutionPlanOnly` (graphs built for context 256 and

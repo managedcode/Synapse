@@ -28,7 +28,8 @@ normative product scope.
   the Synapse manifest/chunk format, tokenizer/template import, and bounded
   allocator do not.
 - [x] Typed Model IR core, bounded shapes, explicit numerical types, FlyBrain
-  regions/eligibility, and verifier for SSA/order/cycles/state/entry points.
+  regions/eligibility, typed operation attributes and decode position, and
+  verifier for SSA/order/cycles/state/entry points.
 - [x] Materialize and verify the managed Qwen2 dense topology as Model IR before
   runtime scratch/KV allocation. Entry plumbing is outside regions; the
   verifier independently derives exact value, tensor, and state boundaries.

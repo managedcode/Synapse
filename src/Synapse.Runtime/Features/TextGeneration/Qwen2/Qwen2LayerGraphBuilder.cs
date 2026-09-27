@@ -15,10 +15,16 @@ internal static class Qwen2LayerGraphBuilder
         GgufFile file,
         int layer,
         GraphValue hidden,
+        GraphValue position,
         int hiddenSize,
         int feedForwardSize,
         int keyValueWidth,
-        int contextSize)
+        int contextSize,
+        int attentionHeads,
+        int keyValueHeads,
+        int headDimension,
+        float ropeTheta,
+        float normalizationEpsilon)
     {
         var nodes = new List<NodeId>();
         var weights = new List<TensorId>();
@@ -28,9 +34,15 @@ internal static class Qwen2LayerGraphBuilder
             file,
             prefix,
             hidden,
+            position,
             hiddenSize,
             keyValueWidth,
             contextSize,
+            attentionHeads,
+            keyValueHeads,
+            headDimension,
+            ropeTheta,
+            normalizationEpsilon,
             nodes,
             weights,
             out var keyState,
@@ -42,11 +54,12 @@ internal static class Qwen2LayerGraphBuilder
             attentionResidual,
             hiddenSize,
             feedForwardSize,
+            normalizationEpsilon,
             nodes,
             weights);
         context.AddRegion(
             nodes,
-            [hidden.Id],
+            [hidden.Id, position.Id],
             [output.Id],
             weights,
             [keyState, valueState],
@@ -62,36 +75,66 @@ internal static class Qwen2LayerGraphBuilder
         GgufFile file,
         string prefix,
         GraphValue hidden,
+        GraphValue position,
         int hiddenSize,
         int keyValueWidth,
         int contextSize,
+        int attentionHeads,
+        int keyValueHeads,
+        int headDimension,
+        float ropeTheta,
+        float normalizationEpsilon,
         ICollection<NodeId> nodes,
         ICollection<TensorId> weights,
         out StateSlotId keyState,
         out StateSlotId valueState)
     {
         var normWeight = AddWeight(context, file, $"{prefix}.attn_norm.weight", nodes, weights);
-        var normalized = EmitUnary(context, GraphOperationKind.RmsNorm, hidden, normWeight, nodes);
+        var normalized = EmitNormalization(context, hidden, normWeight, normalizationEpsilon, nodes);
         var query = EmitLinear(context, file, $"{prefix}.attn_q.weight", normalized, hiddenSize, nodes, weights);
         var key = EmitLinear(context, file, $"{prefix}.attn_k.weight", normalized, keyValueWidth, nodes, weights);
         var value = EmitLinear(context, file, $"{prefix}.attn_v.weight", normalized, keyValueWidth, nodes, weights);
         query = EmitBias(context, file, $"{prefix}.attn_q.bias", query, nodes, weights);
         key = EmitBias(context, file, $"{prefix}.attn_k.bias", key, nodes, weights);
         value = EmitBias(context, file, $"{prefix}.attn_v.bias", value, nodes, weights);
-        var rotatedQuery = context.Emit(GraphOperationKind.Rope, [query.Id], query.Shape, Float, nodes);
-        var rotatedKey = context.Emit(GraphOperationKind.Rope, [key.Id], key.Shape, Float, nodes);
+        var rope = new RopeAttributes(ropeTheta, headDimension, RotaryLayout.NeoX);
+        var rotatedQuery = context.Emit(
+            GraphOperationKind.Rope,
+            [query.Id, position.Id],
+            query.Shape,
+            Float,
+            nodes,
+            attributes: rope);
+        var rotatedKey = context.Emit(
+            GraphOperationKind.Rope,
+            [key.Id, position.Id],
+            key.Shape,
+            Float,
+            nodes,
+            attributes: rope);
         keyState = context.AddState(Matrix(contextSize, keyValueWidth));
         valueState = context.AddState(Matrix(contextSize, keyValueWidth));
         var stateEffect = context.AddEffect();
-        context.EmitStateAppend([rotatedKey.Id, value.Id], [keyState, valueState], stateEffect, nodes);
+        context.EmitStateAppend(
+            [rotatedKey.Id, value.Id, position.Id],
+            [keyState, valueState],
+            stateEffect,
+            nodes);
+        var attentionAttributes = new CausalAttentionAttributes(
+            attentionHeads,
+            keyValueHeads,
+            headDimension,
+            1.0f / MathF.Sqrt(headDimension),
+            AttentionMaskKind.Causal);
         var attention = context.Emit(
             GraphOperationKind.CausalAttention,
-            [rotatedQuery.Id],
+            [rotatedQuery.Id, position.Id],
             Vector(hiddenSize),
             Float,
             nodes,
             [keyState, valueState],
-            [stateEffect]);
+            [stateEffect],
+            attentionAttributes);
         var projection = EmitLinear(
             context,
             file,
@@ -115,11 +158,12 @@ internal static class Qwen2LayerGraphBuilder
         GraphValue residual,
         int hiddenSize,
         int feedForwardSize,
+        float normalizationEpsilon,
         ICollection<NodeId> nodes,
         ICollection<TensorId> weights)
     {
         var normWeight = AddWeight(context, file, $"{prefix}.ffn_norm.weight", nodes, weights);
-        var input = EmitUnary(context, GraphOperationKind.RmsNorm, residual, normWeight, nodes);
+        var input = EmitNormalization(context, residual, normWeight, normalizationEpsilon, nodes);
         var gate = EmitLinear(context, file, $"{prefix}.ffn_gate.weight", input, feedForwardSize, nodes, weights);
         var up = EmitLinear(context, file, $"{prefix}.ffn_up.weight", input, feedForwardSize, nodes, weights);
         var activatedGate = context.Emit(GraphOperationKind.Silu, [gate.Id], gate.Shape, Float, nodes);
@@ -175,17 +219,18 @@ internal static class Qwen2LayerGraphBuilder
         ICollection<NodeId> nodes,
         ICollection<TensorId> weights) => context.AddWeight(file.GetRequiredTensor(name), nodes, weights).Value;
 
-    private static GraphValue EmitUnary(
+    private static GraphValue EmitNormalization(
         Qwen2GraphBuildContext context,
-        GraphOperationKind operation,
         GraphValue input,
         GraphValue parameter,
+        float epsilon,
         ICollection<NodeId> nodes) => context.Emit(
-            operation,
+            GraphOperationKind.RmsNorm,
             [input.Id, parameter.Id],
             input.Shape,
             Float,
-            nodes);
+            nodes,
+            attributes: new NormalizationAttributes(epsilon));
 
     private static TensorShape Vector(long size) => new(ShapeDimension.Fixed(size));
 

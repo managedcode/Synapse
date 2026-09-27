@@ -37,6 +37,8 @@ public enum GraphDiagnosticCode
     RegionBoundaryMismatch,
     /// <summary>A constant tensor binding is missing, duplicated, or attached to another operation.</summary>
     InvalidTensorBinding,
+    /// <summary>An operation is missing required typed attributes or declares incompatible attributes.</summary>
+    InvalidOperationAttributes,
     /// <summary>An operation kind or contract is not supported by this verifier.</summary>
     UnsupportedOperation,
 }

@@ -38,7 +38,8 @@ internal sealed class Qwen2GraphBuildContext
         NumericType outputType,
         ICollection<NodeId> regionNodes,
         IEnumerable<StateSlotId>? stateReads = null,
-        IEnumerable<EffectToken>? effectInputs = null)
+        IEnumerable<EffectToken>? effectInputs = null,
+        GraphOperationAttributes? attributes = null)
     {
         var output = AddValue(outputShape, outputType);
         var node = AddNode(
@@ -46,7 +47,8 @@ internal sealed class Qwen2GraphBuildContext
             inputs,
             [output.Id],
             stateReads: stateReads,
-            effectInputs: effectInputs);
+            effectInputs: effectInputs,
+            attributes: attributes);
         regionNodes.Add(node);
         return output;
     }
@@ -124,7 +126,8 @@ internal sealed class Qwen2GraphBuildContext
         IEnumerable<StateSlotId>? stateWrites = null,
         IEnumerable<EffectToken>? effectInputs = null,
         IEnumerable<EffectToken>? effectOutputs = null,
-        TensorId? tensor = null)
+        TensorId? tensor = null,
+        GraphOperationAttributes? attributes = null)
     {
         var id = new NodeId(_nextNode++);
         Nodes.Add(new GraphNode(
@@ -136,7 +139,8 @@ internal sealed class Qwen2GraphBuildContext
             stateWrites,
             effectInputs,
             effectOutputs,
-            tensor: tensor));
+            tensor: tensor,
+            attributes: attributes));
         return id;
     }
 

@@ -64,6 +64,50 @@ public sealed class ReferenceSubjectsSmokeTests
         await Assert.That(result.Elapsed).IsGreaterThan(TimeSpan.Zero);
     }
 
+    [Test]
+    public async Task PositionIsExplicitRegionInput()
+    {
+        using var model = ModelLoader.Load(GetModelPath(), contextSize: 512);
+        var entryPoint = model.Graph.EntryPoints.Single();
+        await Assert.That(entryPoint.Inputs.Count).IsEqualTo(2);
+        var positionId = entryPoint.Inputs[1];
+        var position = model.Graph.Values.Single(value => value.Id == positionId);
+        var positionConsumers = model.Graph.Nodes.Where(node => node.Operation is
+            GraphOperationKind.Rope or
+            GraphOperationKind.StateAppend or
+            GraphOperationKind.CausalAttention).ToArray();
+        var transformerRegions = model.Graph.Regions.Where(region =>
+            region.SemanticAnnotations.Contains("DenseTransformerBlock", StringComparer.Ordinal)).ToArray();
+
+        await Assert.That(position.NumericType.Storage).IsEqualTo(StorageDataType.I32);
+        await Assert.That(position.Shape.Dimensions).IsEquivalentTo([ShapeDimension.Fixed(1)]);
+        await Assert.That(positionConsumers.Length).IsGreaterThan(0);
+        await Assert.That(positionConsumers.All(node => node.Inputs.Contains(positionId))).IsTrue();
+        await Assert.That(transformerRegions.Length).IsEqualTo(24);
+        await Assert.That(transformerRegions.All(region => region.Inputs.Contains(positionId))).IsTrue();
+        await Assert.That(model.Graph.Nodes
+            .Where(node => node.Operation == GraphOperationKind.RmsNorm)
+            .All(node => node.Attributes is NormalizationAttributes { Epsilon: > 0 })).IsTrue();
+        await Assert.That(model.Graph.Nodes
+            .Where(node => node.Operation == GraphOperationKind.Rope)
+            .All(node => node.Attributes is RopeAttributes
+            {
+                Theta: > 0,
+                HeadDimension: > 0,
+                Layout: RotaryLayout.NeoX,
+            })).IsTrue();
+        await Assert.That(model.Graph.Nodes
+            .Where(node => node.Operation == GraphOperationKind.CausalAttention)
+            .All(node => node.Attributes is CausalAttentionAttributes
+            {
+                QueryHeads: > 0,
+                KeyValueHeads: > 0,
+                HeadDimension: > 0,
+                Scale: > 0,
+                Mask: AttentionMaskKind.Causal,
+            })).IsTrue();
+    }
+
     private static async Task<JsonDocument> RunSubjectAsync(
         string subject,
         params string[] additionalArguments)

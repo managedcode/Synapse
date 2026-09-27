@@ -135,7 +135,8 @@ public sealed class GraphNode(
     IEnumerable<EffectToken>? effectOutputs = null,
     MergeMode? mergeMode = null,
     LoopDescriptor? loop = null,
-    TensorId? tensor = null)
+    TensorId? tensor = null,
+    GraphOperationAttributes? attributes = null)
 {
 
     /// <summary>Stable node identity.</summary>
@@ -160,6 +161,8 @@ public sealed class GraphNode(
     public LoopDescriptor? Loop { get; } = loop;
     /// <summary>Immutable tensor identity bound to a Constant node.</summary>
     public TensorId? Tensor { get; } = tensor;
+    /// <summary>Typed parameters required by this operation.</summary>
+    public GraphOperationAttributes? Attributes { get; } = attributes;
 
     private static System.Collections.ObjectModel.ReadOnlyCollection<T> Copy<T>(IEnumerable<T>? source) =>
         Array.AsReadOnly<T>(source is null ? [] : [.. source]);

@@ -18,7 +18,11 @@ The verifier executes before weight or execution-memory allocation and checks:
 - unknown state references, unwritten reads, and unordered writers;
 - executable-region membership and formal eligibility rules;
 - exact region inputs, outputs, constant tensors, state reads, and state writes
-  derived independently from member-node dependencies.
+  derived independently from member-node dependencies;
+- operation-compatible typed attributes for normalization, RoPE, and grouped
+  causal attention, including finite ranges and head/state shape agreement;
+- an explicit scalar I32 `position` input for RoPE, state append, and causal
+  attention rather than out-of-band decoder state.
 
 All graph-owned collections are defensive read-only snapshots. Executable
 regions are a disjoint partition of executable nodes; `Input`/`Output` nodes
@@ -44,11 +48,13 @@ the resulting regions to local or remote devices and worker incarnations.
 The working Qwen2 loader now materializes its embedding region, every dense
 transformer block, KV state/effect dependencies, and logits region as Model IR.
 The real GGUF-backed graph must verify before scratch or KV allocation, and all
-regions are `AlwaysRequired`. The optimized executor still invokes its managed
-C# kernels directly; a general DAG executor and Execution IR are the next
-boundary. Conditional routing, demand paging, latent region edges, and Orleans
-placement are not claimed until the corresponding trained/evaluated graph and
-execution/deployment plans exist.
+regions are `AlwaysRequired`. Its GGUF epsilon, RoPE theta, head counts, head
+dimension, attention scale/mask, and current decode position are explicit in
+the graph. The optimized executor still invokes its managed C# kernels directly;
+a general DAG executor and Execution IR are the next boundary. Conditional
+routing, demand paging, latent region edges, and Orleans placement are not
+claimed until the corresponding trained/evaluated graph and execution/
+deployment plans exist.
 
 ## Acceptance mapping
 
@@ -56,5 +62,7 @@ execution/deployment plans exist.
 multi-node and self cycles, unordered state writers, a non-boolean region
 predicate, caller-owned collection mutation, entry-plumbing exclusion, lying
 region boundaries, missing constant tensor identity, and overlapping execution
-ownership. The shared Qwen smoke test also verifies its real 26-region graph
-before checking generation against dotLLM and LLamaSharp.
+ownership. `OperationAttributesRequired` rejects hidden operator parameters;
+`PositionIsExplicitRegionInput` checks the real model's position wiring and
+typed GGUF-derived attributes. The shared Qwen smoke test verifies its real
+26-region graph before checking generation against dotLLM and LLamaSharp.

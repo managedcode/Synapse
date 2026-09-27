@@ -8,6 +8,9 @@ The initial executor supports this fixture's F32 vectors and Q8_0 matrices.
 It performs token embedding lookup, pre-norm attention with Q/K/V biases,
 NeoX RoPE, grouped-query causal attention, an in-memory KV cache, residuals,
 SwiGLU feed-forward layers, final RMS normalization, and greedy argmax.
+The verified Model IR carries normalization epsilon, RoPE theta/layout/head
+dimension, attention heads/scale/mask, and scalar decode position explicitly;
+RoPE, KV append, and attention all consume the same position entry input.
 
 The pinned correctness probe uses prompt tokens
 `785,6722,315,9625,374`. Synapse, dotLLM at commit

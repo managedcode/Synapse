@@ -16,6 +16,7 @@ public static class ModelGraphVerifier
         ValidateVersions(context);
         GraphDeclarationVerifier.Index(context);
         GraphStructureVerifier.Verify(context);
+        GraphOperationAttributeVerifier.Verify(context);
         GraphShapeVerifier.Verify(context);
         GraphStateVerifier.Verify(context);
         GraphEntryPointVerifier.Verify(context);

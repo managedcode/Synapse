@@ -9,6 +9,10 @@ public sealed class TypedGraphIrTests
         StorageDataType.Fp32,
         ComputeDataType.Fp32,
         AccumulatorDataType.Fp32);
+    private static readonly NumericType I32 = new(
+        StorageDataType.I32,
+        ComputeDataType.I32,
+        AccumulatorDataType.I32);
 
     [Test]
     public async Task ValidLinearRegionPassesVerification()
@@ -77,23 +81,32 @@ public sealed class TypedGraphIrTests
     {
         var shape = new TensorShape(ShapeDimension.Fixed(4));
         var input = new GraphValue(new ValueId(1), shape, Fp32);
+        var position = new GraphValue(
+            new ValueId(2),
+            new TensorShape(ShapeDimension.Fixed(1)),
+            I32);
         var nodes = new[]
         {
             new GraphNode(new NodeId(1), GraphOperationKind.Input, outputs: [input.Id]),
+            new GraphNode(new NodeId(5), GraphOperationKind.Input, outputs: [position.Id]),
             new GraphNode(
                 new NodeId(2),
                 GraphOperationKind.StateAppend,
-                inputs: [input.Id],
+                inputs: [input.Id, position.Id],
                 stateWrites: [new StateSlotId(1)]),
             new GraphNode(
                 new NodeId(3),
                 GraphOperationKind.StateAppend,
-                inputs: [input.Id],
+                inputs: [input.Id, position.Id],
                 stateWrites: [new StateSlotId(1)]),
             new GraphNode(new NodeId(4), GraphOperationKind.Output, inputs: [input.Id]),
         };
-        var slot = new StateSlotDescriptor(new StateSlotId(1), shape, Fp32, HasInitialValue: true);
-        var graph = CreateGraph([input], nodes, [input.Id], [input.Id], [slot]);
+        var slot = new StateSlotDescriptor(
+            new StateSlotId(1),
+            new TensorShape(ShapeDimension.Fixed(8), ShapeDimension.Fixed(4)),
+            Fp32,
+            HasInitialValue: true);
+        var graph = CreateGraph([input, position], nodes, [input.Id, position.Id], [input.Id], [slot]);
 
         var result = ModelGraphVerifier.Verify(graph);
 
@@ -236,6 +249,67 @@ public sealed class TypedGraphIrTests
         await Assert.That(result.Diagnostics.Any(item =>
             item.Code == GraphDiagnosticCode.InvalidTensorBinding &&
             item.NodeId == constant.Id)).IsTrue();
+    }
+
+    [Test]
+    public async Task OperationAttributesRequired()
+    {
+        var shape = new TensorShape(ShapeDimension.Fixed(4));
+        var input = new GraphValue(new ValueId(1), shape, Fp32);
+        var weights = new GraphValue(new ValueId(2), shape, Fp32);
+        var output = new GraphValue(new ValueId(3), shape, Fp32);
+        var nodes = new[]
+        {
+            new GraphNode(new NodeId(1), GraphOperationKind.Input, outputs: [input.Id]),
+            new GraphNode(
+                new NodeId(2),
+                GraphOperationKind.Constant,
+                outputs: [weights.Id],
+                tensor: new TensorId(1)),
+            new GraphNode(
+                new NodeId(3),
+                GraphOperationKind.RmsNorm,
+                [input.Id, weights.Id],
+                [output.Id]),
+            new GraphNode(new NodeId(4), GraphOperationKind.Output, inputs: [output.Id]),
+        };
+        var graph = CreateGraph([input, weights, output], nodes, [input.Id], [output.Id]);
+
+        var result = ModelGraphVerifier.Verify(graph);
+
+        await Assert.That(result.Diagnostics.Any(item =>
+            item.Code == GraphDiagnosticCode.InvalidOperationAttributes &&
+            item.NodeId == new NodeId(3))).IsTrue();
+    }
+
+    [Test]
+    public async Task UnrelatedOperationAttributesRejected()
+    {
+        var graph = CreateLinearGraph(new TensorShape(ShapeDimension.Fixed(3)));
+        var linear = graph.Nodes.Single(node => node.Operation == GraphOperationKind.Linear);
+        var attributedLinear = new GraphNode(
+            linear.Id,
+            linear.Operation,
+            linear.Inputs,
+            linear.Outputs,
+            linear.StateReads,
+            linear.StateWrites,
+            tensor: linear.Tensor,
+            attributes: new NormalizationAttributes(1e-5f));
+        var invalidGraph = new ModelGraph(
+            graph.GraphVersion,
+            graph.OpSetVersion,
+            graph.Values,
+            graph.Nodes.Select(node => node.Id == linear.Id ? attributedLinear : node),
+            graph.StateSlots,
+            graph.EntryPoints,
+            graph.Regions);
+
+        var result = ModelGraphVerifier.Verify(invalidGraph);
+
+        await Assert.That(result.Diagnostics.Any(item =>
+            item.Code == GraphDiagnosticCode.InvalidOperationAttributes &&
+            item.NodeId == linear.Id)).IsTrue();
     }
 
     private static ModelGraph CreateLinearGraph(
