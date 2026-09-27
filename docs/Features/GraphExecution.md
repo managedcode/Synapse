@@ -16,11 +16,15 @@ The verifier executes before weight or execution-memory allocation and checks:
 - structured loop bounds and carried-state arity;
 - entry-point completeness;
 - unknown state references, unwritten reads, and unordered writers;
-- executable-region membership and formal eligibility rules.
+- executable-region membership and formal eligibility rules;
+- exact region inputs, outputs, constant tensors, state reads, and state writes
+  derived independently from member-node dependencies.
 
 All graph-owned collections are defensive read-only snapshots. Executable
-regions are a disjoint node partition; semantic overlap is represented by
-annotations rather than duplicate execution ownership.
+regions are a disjoint partition of executable nodes; `Input`/`Output` nodes
+are entry-point plumbing outside that partition. Each `Constant` is bound to a
+unique `TensorId`. Semantic overlap is represented by annotations rather than
+duplicate execution ownership.
 
 ## FlyBrain regions
 
@@ -50,6 +54,7 @@ execution/deployment plans exist.
 
 `TypedGraphIrTests` covers a valid linear region, shape mismatch with NodeId,
 multi-node and self cycles, unordered state writers, a non-boolean region
-predicate, caller-owned collection mutation, and overlapping execution
+predicate, caller-owned collection mutation, entry-plumbing exclusion, lying
+region boundaries, missing constant tensor identity, and overlapping execution
 ownership. The shared Qwen smoke test also verifies its real 26-region graph
 before checking generation against dotLLM and LLamaSharp.

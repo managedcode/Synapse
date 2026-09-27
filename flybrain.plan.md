@@ -61,7 +61,7 @@ step that touches the same code.
 |---|---|---|---|---|
 | RV-1 | Resolved 2026-09-28 | `AGENTS.md`, `docs/Architecture.md`, README | C# is the permanent portable/reference path and first implementation. Rust takes optimized kernels, allocator, hot-KV operations, or direct transfer only after paired profiling. The current C# and Rust KV implementations are reference and optimized-candidate roles, not competing authorities. |
 | RV-2 | High | `Qwen2Model.cs` `Forward`/`ExecuteLayer` | Shadow IR: the graph is built and verified, but execution ignores it. The smoke test checks only the region count. | F1: execute through regions, then delete the hand-written layer loop. |
-| RV-3 | High | `GraphRegionVerifier.ValidateBoundaries` | Declared inputs, outputs, state, and weights are never compared with the member nodes. The Qwen2 builder already declares `token` as an input of the region that produces it (the `Input` node is a member), and puts the `Output` node inside the logits region. | F0.2, F0.3 |
+| RV-3 | Resolved 2026-09-28 | `GraphRegionVerifier`, `GraphRegionBoundaryVerifier`, Qwen2 graph builder | `Input`/`Output` are excluded from regions; every executable node is covered once. Inputs, outputs, state effects, and `TensorId`-bound constants are independently derived and compared with every descriptor. The real Qwen graph and explicit lying-descriptor regressions pass. |
 | RV-4 | High | `GraphRegions.cs` | `TrainedRoute` has no decision value. There are no skip semantics for outputs or state. | F0.7 (ADR-003) |
 | RV-5 | Medium | `Qwen2LayerGraphBuilder.AddAttention` | No operation attributes (epsilon, theta, heads, scale, mask) and no position value; `Rope([q])` and `CausalAttention([q])` are not executable from the IR. | F0.4 |
 | RV-6 | Medium | `Qwen2LayerGraphBuilder` `Matrix(contextSize, …)` | The session context size is baked into Model IR state shapes, so graph identity depends on a session option. | F0.5 |
@@ -78,15 +78,14 @@ step that touches the same code.
 ### F0. Make the IR honest and executable (completes TASK-GRF-001, ADR-003)
 
 - [x] F0.1 ADR-003 approved as the execution-semantics direction on
-  2026-09-28. Public contract implementation still starts with F0.2 and its
-  red/green tests.
-- [ ] F0.2 `Input` and `Output` nodes are not region members; every other node
-  is covered exactly once. Update the Qwen2 builder.
-  Test: `EntryPlumbingNotRegionMember`.
-- [ ] F0.3 Derive region inputs, outputs, state reads and writes, and required
+  2026-09-28.
+- [x] F0.2 `Input` and `Output` nodes are not region members; every other node
+  is covered exactly once. The Qwen2 builder follows this boundary.
+  Evidence: `EntryPlumbingNotRegionMember` and the real Qwen smoke test.
+- [x] F0.3 Derive region inputs, outputs, state reads and writes, and required
   weights from member nodes, and compare them with the descriptor.
-  Tests: `RegionBoundaryDerivedAndCompared` (a lying descriptor is rejected
-  with `RegionBoundaryMismatch`, and the real Qwen2 graph passes).
+  Evidence: `RegionBoundaryDerivedAndCompared` rejects a lying descriptor
+  with `RegionBoundaryMismatch`; the real Qwen2 graph passes.
 - [ ] F0.4 Add typed operation attributes and an explicit `position` entry
   input consumed by `Rope`, `StateAppend`, and `CausalAttention`. The Qwen2
   builder reads epsilon, theta, and heads from GGUF metadata.

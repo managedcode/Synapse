@@ -58,7 +58,7 @@ internal static class Qwen2GraphBuilder
     {
         var nodes = new List<NodeId>();
         var weights = new List<TensorId>();
-        token = context.Emit(GraphOperationKind.Input, [], Vector(1), Integer, nodes);
+        token = context.AddInput(Vector(1), Integer);
         var embedding = context.AddWeight(file.GetRequiredTensor("token_embd.weight"), nodes, weights);
         var hidden = context.Emit(
             GraphOperationKind.Embedding,
@@ -95,7 +95,7 @@ internal static class Qwen2GraphBuilder
             Vector(vocabularySize),
             Float,
             nodes);
-        nodes.Add(context.AddOutput(logits.Id));
+        _ = context.AddOutput(logits.Id);
         context.AddRegion(
             nodes,
             [hidden.Id],

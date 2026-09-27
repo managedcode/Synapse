@@ -68,6 +68,7 @@ internal static class GraphStructureVerifier
             return;
         }
 
+        context.AddValueConsumer(input, consumer.Id);
         ConnectOrdered(context, producer, consumer.Id, $"value {input}");
     }
 

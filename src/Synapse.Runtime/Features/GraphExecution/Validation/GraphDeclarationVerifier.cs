@@ -50,6 +50,38 @@ internal static class GraphDeclarationVerifier
 
             context.NodeIndices.Add(node.Id, index);
             context.Edges.Add(node.Id, []);
+            IndexTensor(context, node);
+        }
+    }
+
+    private static void IndexTensor(GraphVerificationContext context, GraphNode node)
+    {
+        if (node.Operation == GraphOperationKind.Constant)
+        {
+            if (node.Tensor is null)
+            {
+                context.Add(
+                    GraphDiagnosticCode.InvalidTensorBinding,
+                    $"Constant node {node.Id} has no immutable tensor identity.",
+                    node.Id);
+            }
+            else if (!context.TensorNodes.TryAdd(node.Tensor.Value, node.Id))
+            {
+                context.Add(
+                    GraphDiagnosticCode.InvalidTensorBinding,
+                    $"Tensor {node.Tensor.Value} is bound to more than one Constant node.",
+                    node.Id);
+            }
+
+            return;
+        }
+
+        if (node.Tensor is not null)
+        {
+            context.Add(
+                GraphDiagnosticCode.InvalidTensorBinding,
+                $"Non-Constant node {node.Id} declares tensor {node.Tensor.Value}.",
+                node.Id);
         }
     }
 

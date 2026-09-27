@@ -24,6 +24,13 @@ internal sealed class Qwen2GraphBuildContext
 
     public List<RegionDescriptor> Regions { get; } = [];
 
+    public GraphValue AddInput(TensorShape shape, NumericType numericType)
+    {
+        var value = AddValue(shape, numericType);
+        _ = AddNode(GraphOperationKind.Input, inputs: null, [value.Id]);
+        return value;
+    }
+
     public GraphValue Emit(
         GraphOperationKind operation,
         IEnumerable<ValueId> inputs,
@@ -65,8 +72,8 @@ internal sealed class Qwen2GraphBuildContext
         ICollection<TensorId> regionWeights)
     {
         var value = AddValue(ToLogicalShape(tensor), ToNumericType(tensor));
-        var node = AddNode(GraphOperationKind.Constant, inputs: null, [value.Id]);
         var tensorId = new TensorId(_nextTensor++);
+        var node = AddNode(GraphOperationKind.Constant, inputs: null, [value.Id], tensor: tensorId);
         regionNodes.Add(node);
         regionWeights.Add(tensorId);
         return new WeightValue(tensorId, value);
@@ -116,7 +123,8 @@ internal sealed class Qwen2GraphBuildContext
         IEnumerable<StateSlotId>? stateReads = null,
         IEnumerable<StateSlotId>? stateWrites = null,
         IEnumerable<EffectToken>? effectInputs = null,
-        IEnumerable<EffectToken>? effectOutputs = null)
+        IEnumerable<EffectToken>? effectOutputs = null,
+        TensorId? tensor = null)
     {
         var id = new NodeId(_nextNode++);
         Nodes.Add(new GraphNode(
@@ -127,7 +135,8 @@ internal sealed class Qwen2GraphBuildContext
             stateReads,
             stateWrites,
             effectInputs,
-            effectOutputs));
+            effectOutputs,
+            tensor: tensor));
         return id;
     }
 

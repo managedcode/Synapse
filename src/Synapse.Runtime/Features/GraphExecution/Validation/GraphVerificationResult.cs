@@ -33,6 +33,10 @@ public enum GraphDiagnosticCode
     InvalidEntryPoint,
     /// <summary>An execution region is empty, overlapping, or otherwise malformed.</summary>
     InvalidRegion,
+    /// <summary>A declared region boundary differs from its member-node dependencies.</summary>
+    RegionBoundaryMismatch,
+    /// <summary>A constant tensor binding is missing, duplicated, or attached to another operation.</summary>
+    InvalidTensorBinding,
     /// <summary>An operation kind or contract is not supported by this verifier.</summary>
     UnsupportedOperation,
 }

@@ -30,7 +30,8 @@ normative product scope.
 - [x] Typed Model IR core, bounded shapes, explicit numerical types, FlyBrain
   regions/eligibility, and verifier for SSA/order/cycles/state/entry points.
 - [x] Materialize and verify the managed Qwen2 dense topology as Model IR before
-  runtime scratch/KV allocation.
+  runtime scratch/KV allocation. Entry plumbing is outside regions; the
+  verifier independently derives exact value, tensor, and state boundaries.
 - [ ] Execute Qwen2 from the IR, add Execution IR/lifetime planning, and
   complete the scalar numerical oracle.
 - [ ] C# paged KV ownership, rollback, and ZoneTree prefix metadata.

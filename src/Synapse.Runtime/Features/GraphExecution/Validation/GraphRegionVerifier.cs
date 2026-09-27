@@ -21,18 +21,22 @@ internal static class GraphRegionVerifier
                 context.Add(GraphDiagnosticCode.DuplicateId, $"Region {region.Id} is declared more than once.");
             }
 
-            ValidateMembers(context, region, coveredNodes);
-            ValidateBoundaries(context, region);
+            var memberNodes = ValidateMembers(context, region, coveredNodes);
+            GraphRegionBoundaryVerifier.Verify(context, region, memberNodes);
             ValidateEligibility(context, region);
         }
 
-        foreach (var node in context.Nodes.Keys.Where(node => !coveredNodes.Contains(node)))
+        foreach (var node in context.Nodes.Values.Where(node =>
+                     !IsEntryPointPlumbing(node) && !coveredNodes.Contains(node.Id)))
         {
-            context.Add(GraphDiagnosticCode.UnknownReference, $"Node {node} is not assigned to an executable region.", node);
+            context.Add(
+                GraphDiagnosticCode.InvalidRegion,
+                $"Executable node {node.Id} is not assigned to a region.",
+                node.Id);
         }
     }
 
-    private static void ValidateMembers(
+    private static HashSet<NodeId> ValidateMembers(
         GraphVerificationContext context,
         RegionDescriptor region,
         HashSet<NodeId> coveredNodes)
@@ -48,10 +52,22 @@ internal static class GraphRegionVerifier
             if (!context.Nodes.ContainsKey(node))
             {
                 context.Add(GraphDiagnosticCode.UnknownReference, $"Region {region.Id} contains unknown node {node}.");
+                continue;
             }
-            else if (!localNodes.Add(node))
+
+            if (!localNodes.Add(node))
             {
                 context.Add(GraphDiagnosticCode.DuplicateId, $"Region {region.Id} repeats node {node}.", node);
+                continue;
+            }
+
+            if (IsEntryPointPlumbing(context.Nodes[node]))
+            {
+                context.Add(
+                    GraphDiagnosticCode.InvalidRegion,
+                    $"Region {region.Id} contains entry-point plumbing node {node}; Input and Output nodes are not executable region members.",
+                    node);
+                continue;
             }
 
             if (!coveredNodes.Add(node))
@@ -62,31 +78,13 @@ internal static class GraphRegionVerifier
                     node);
             }
         }
+
+        _ = localNodes.RemoveWhere(node => IsEntryPointPlumbing(context.Nodes[node]));
+        return localNodes;
     }
 
-    private static void ValidateBoundaries(GraphVerificationContext context, RegionDescriptor region)
-    {
-        foreach (var value in region.Inputs.Concat(region.Outputs))
-        {
-            if (!context.Values.ContainsKey(value))
-            {
-                context.Add(GraphDiagnosticCode.UnknownReference, $"Region {region.Id} references unknown value {value}.");
-            }
-        }
-
-        foreach (var slot in region.StateReads.Concat(region.StateWrites))
-        {
-            if (!context.StateSlots.ContainsKey(slot))
-            {
-                context.Add(GraphDiagnosticCode.UnknownReference, $"Region {region.Id} references unknown state slot {slot}.");
-            }
-        }
-
-        if (region.SemanticAnnotations.Any(string.IsNullOrWhiteSpace))
-        {
-            context.Add(GraphDiagnosticCode.InvalidRegion, $"Region {region.Id} contains an empty semantic annotation.");
-        }
-    }
+    private static bool IsEntryPointPlumbing(GraphNode node) =>
+        node.Operation is GraphOperationKind.Input or GraphOperationKind.Output;
 
     private static void ValidateEligibility(GraphVerificationContext context, RegionDescriptor region)
     {

@@ -16,6 +16,10 @@ internal sealed class GraphVerificationContext(ModelGraph graph)
 
     public Dictionary<ValueId, NodeId> ValueProducers { get; } = [];
 
+    public Dictionary<ValueId, HashSet<NodeId>> ValueConsumers { get; } = [];
+
+    public Dictionary<TensorId, NodeId> TensorNodes { get; } = [];
+
     public Dictionary<EffectToken, NodeId> EffectProducers { get; } = [];
 
     public Dictionary<NodeId, HashSet<NodeId>> Edges { get; } = [];
@@ -31,6 +35,17 @@ internal sealed class GraphVerificationContext(ModelGraph graph)
         {
             consumers = [];
             Edges.Add(producer, consumers);
+        }
+
+        _ = consumers.Add(consumer);
+    }
+
+    public void AddValueConsumer(ValueId value, NodeId consumer)
+    {
+        if (!ValueConsumers.TryGetValue(value, out var consumers))
+        {
+            consumers = [];
+            ValueConsumers.Add(value, consumers);
         }
 
         _ = consumers.Add(consumer);
