@@ -23,9 +23,18 @@ jobs:
           - name: macOS 15 ARM64 primary
             os: macos-15
             runtime_identifier: osx-arm64
+            executable_suffix: ''
+            llama_binary_directory: build/bin
           - name: Ubuntu 24.04 x64 portable
             os: ubuntu-24.04
             runtime_identifier: linux-x64
+            executable_suffix: ''
+            llama_binary_directory: build/bin
+          - name: Windows Server 2025 x64 portable
+            os: windows-2025
+            runtime_identifier: win-x64
+            executable_suffix: .exe
+            llama_binary_directory: build/bin/Release
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     env:
@@ -97,11 +106,11 @@ jobs:
 
       - name: Register dotLLM smoke-test executable
         shell: bash
-        run: echo "SYNAPSE_DOTLLM_EXECUTABLE=${GITHUB_WORKSPACE}/_external/dotLLM/src/DotLLM.Cli/bin/Release/net10.0/DotLLM.Cli" >> "${GITHUB_ENV}"
+        run: echo "SYNAPSE_DOTLLM_EXECUTABLE=${GITHUB_WORKSPACE}/_external/dotLLM/src/DotLLM.Cli/bin/Release/net10.0/DotLLM.Cli${{ matrix.executable_suffix }}" >> "${GITHUB_ENV}"
 
       - name: Register native llama.cpp smoke-test executable
         shell: bash
-        run: echo "SYNAPSE_LLAMACPP_EXECUTABLE=${GITHUB_WORKSPACE}/_external/llama.cpp/build/bin/llama-completion" >> "${GITHUB_ENV}"
+        run: echo "SYNAPSE_LLAMACPP_EXECUTABLE=${GITHUB_WORKSPACE}/_external/llama.cpp/${{ matrix.llama_binary_directory }}/llama-completion${{ matrix.executable_suffix }}" >> "${GITHUB_ENV}"
 
       - name: Test .NET
         run: dotnet test Synapse.slnx --configuration Release --no-build

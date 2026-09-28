@@ -9,11 +9,6 @@ public sealed class DiagnosticMatrixSmokeTests
 {
     private const string ExpectedIds8 = "12095,13,1084,374,279,7772,3283,304";
     private const string ExpectedText8 = " Paris. It is the largest city in";
-    private const string ExpectedIds32 = ExpectedIds8 +
-        ",4505,323,279,2086,7772,304,279,1879,13,1084,374,7407,304,279,4126,315,279,8585,92900,11,304,279,9806,315";
-    private const string ExpectedText32 =
-        " Paris. It is the largest city in Europe and the second largest in the world. " +
-        "It is located in the center of the French Alps, in the south of";
 
     [Test]
     public async Task RealFourSubjectRoundPreservesRawMemoryAndQuality()
@@ -50,17 +45,17 @@ public sealed class DiagnosticMatrixSmokeTests
     }
 
     [Test]
-    public async Task DivergentLongContinuationIsIneligible()
+    public async Task IncorrectReferenceIsIneligible()
     {
-        using var evidence = await RunMatrixAsync(32, ExpectedIds32, ExpectedText32);
+        // A deliberately impossible expected token exercises the quality gate
+        // without turning the verification suite into a long performance run.
+        using var evidence = await RunMatrixAsync(8, ExpectedIds8[..^3] + "2147483647", ExpectedText8);
         var root = evidence.RootElement;
         await Assert.That(root.GetProperty("status").GetString()).IsEqualTo("ineligible_quality_mismatch");
         var samples = root.GetProperty("samples").EnumerateArray().ToArray();
         await Assert.That(samples.Length).IsEqualTo(4);
-        var dotLlm = samples.Single(sample => sample.GetProperty("subject").GetString() == "dotllm");
-        await Assert.That(dotLlm.GetProperty("quality_matched").GetBoolean()).IsFalse();
-        await Assert.That(dotLlm.GetProperty("subject_result").GetProperty("text").GetString())
-            .Contains("the south of France");
+        var synapse = samples.Single(sample => sample.GetProperty("subject").GetString() == "synapse");
+        await Assert.That(synapse.GetProperty("quality_matched").GetBoolean()).IsFalse();
     }
 
     private static async Task<JsonDocument> RunMatrixAsync(int maxTokens, string expectedIds, string expectedText)
@@ -101,7 +96,8 @@ public sealed class DiagnosticMatrixSmokeTests
             "--model", GetModelPath(), "--prompt", Prompt,
             "--prompt-token-ids", string.Join(',', PromptTokens),
             "--expected-token-ids", expectedIds, "--expected-text", expectedText,
-            "--synapse-executable", Path.Combine(root, "src", "Synapse.Cli", "bin", "Release", "net10.0", "synapse"),
+            "--synapse-executable", Path.Combine(root, "src", "Synapse.Cli", "bin", "Release", "net10.0",
+                OperatingSystem.IsWindows() ? "synapse.exe" : "synapse"),
             "--dotllm-executable", RequireEnvironmentFile("SYNAPSE_DOTLLM_EXECUTABLE"),
             "--dotllm-version", "d88040451d7db56e5dfef9d5754ad0955b0f7fe5",
             "--llamacpp-executable", RequireEnvironmentFile("SYNAPSE_LLAMACPP_EXECUTABLE"),

@@ -125,5 +125,15 @@ earlier ggml exit 134 has not been conclusively explained. Coverage collection
 passes but the aggregate line rate is 70.2% and child-process CLI execution is
 not attributed to the test-host report; the required changed-line coverage
 gate and remote CI are not verified. No `TASK-BMK-001` release claim is closed.
+
+CI separation follow-up: Ubuntu `verify` on `3bbd5ee` ran 73 tests with one
+failure because a functional assertion required a platform-specific 32-token
+dotLLM divergence; the same test timed out after five minutes on hosted macOS.
+The quality-gate regression now uses an impossible expected token in an
+eight-token run, and the performance measurements are in a distinct
+manual Mac/Linux/Windows Actions workflow with raw artifacts and a C# report.
+The report behavior test was red (unknown `report` command) before the renderer
+was added. Three-OS CI execution, artifact publication, and the statistical
+release gate remain unverified until the new run completes.
 - [ ] Execute Qwen2 from the verified region IR instead of the parallel shadow
   loop, following `flybrain.plan.md` F0/F1 and accepted ADR-003.

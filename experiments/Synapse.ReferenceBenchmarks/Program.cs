@@ -6,9 +6,12 @@ using LLama.Common;
 using LLama.Native;
 using LLama.Sampling;
 
-return await (args.FirstOrDefault() == "matrix"
-    ? DiagnosticMatrixCommand.RunAsync(args[1..])
-    : ReferenceBenchmarkCommand.RunAsync(args)).ConfigureAwait(false);
+return await (args.FirstOrDefault() switch
+{
+    "matrix" => DiagnosticMatrixCommand.RunAsync(args[1..]),
+    "report" => DiagnosticMatrixReportCommand.RunAsync(args[1..]),
+    _ => ReferenceBenchmarkCommand.RunAsync(args),
+}).ConfigureAwait(false);
 
 internal static class ReferenceBenchmarkCommand
 {

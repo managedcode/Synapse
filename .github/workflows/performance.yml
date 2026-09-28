@@ -1,0 +1,120 @@
+name: performance-diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  four-subject-matrix:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS 15 ARM64 CPU
+            os: macos-15
+            runtime_identifier: osx-arm64
+            executable_suffix: ''
+            llama_binary_directory: build/bin
+          - name: Ubuntu 24.04 x64 CPU
+            os: ubuntu-24.04
+            runtime_identifier: linux-x64
+            executable_suffix: ''
+            llama_binary_directory: build/bin
+          - name: Windows Server 2025 x64 CPU
+            os: windows-2025
+            runtime_identifier: win-x64
+            executable_suffix: .exe
+            llama_binary_directory: build/bin/Release
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+      SYNAPSE_MODEL_ROOT: ${{ github.workspace }}/artifacts/models
+      SYNAPSE_BENCHMARK_RUNNER_LABEL: ${{ matrix.name }}
+    steps:
+      - name: Checkout Synapse
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Checkout pinned dotLLM
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: kkokosa/dotLLM
+          ref: d88040451d7db56e5dfef9d5754ad0955b0f7fe5
+          path: _external/dotLLM
+          persist-credentials: false
+
+      - name: Checkout pinned llama.cpp
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ggml-org/llama.cpp
+          ref: b29c606e28a01b1bc8c1351026a0fa6e616bf6c4
+          path: _external/llama.cpp
+          persist-credentials: false
+
+      - name: Install pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Build Synapse benchmark and CLI
+        run: |
+          dotnet restore Synapse.slnx --locked-mode
+          dotnet build Synapse.slnx --configuration Release --no-restore
+
+      - name: Restore verified model cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ${{ env.SYNAPSE_MODEL_ROOT }}
+          key: synapse-models-${{ runner.os }}-${{ matrix.runtime_identifier }}-${{ hashFiles('models/catalog.json') }}
+
+      - name: Fetch pinned Qwen smoke model
+        shell: bash
+        run: dotnet run --project src/Synapse.Cli --configuration Release --no-build -- model fetch --id qwen2.5-0.5b-instruct-q8_0 --output "${SYNAPSE_MODEL_ROOT}"
+
+      - name: Build pinned dotLLM
+        run: dotnet build _external/dotLLM/src/DotLLM.Cli/DotLLM.Cli.csproj --configuration Release
+
+      - name: Build pinned CPU llama.cpp
+        shell: bash
+        run: |
+          cmake -S _external/llama.cpp -B _external/llama.cpp/build \
+            -DCMAKE_BUILD_TYPE=Release -DGGML_METAL=OFF \
+            -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_SERVER=OFF
+          cmake --build _external/llama.cpp/build --config Release --parallel 4 \
+            --target llama-completion
+
+      - name: Run isolated four-subject performance matrix
+        shell: bash
+        run: |
+          dotnet experiments/Synapse.ReferenceBenchmarks/bin/Release/net10.0/Synapse.ReferenceBenchmarks.dll matrix \
+            --model "${SYNAPSE_MODEL_ROOT}/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.gguf" \
+            --prompt "The capital of France is" \
+            --prompt-token-ids "785,6722,315,9625,374" \
+            --expected-token-ids "12095,13,1084,374,279,7772,3283,304" \
+            --expected-text " Paris. It is the largest city in" \
+            --synapse-executable "${GITHUB_WORKSPACE}/src/Synapse.Cli/bin/Release/net10.0/synapse${{ matrix.executable_suffix }}" \
+            --dotllm-executable "${GITHUB_WORKSPACE}/_external/dotLLM/src/DotLLM.Cli/bin/Release/net10.0/DotLLM.Cli${{ matrix.executable_suffix }}" \
+            --dotllm-version d88040451d7db56e5dfef9d5754ad0955b0f7fe5 \
+            --llamacpp-executable "${GITHUB_WORKSPACE}/_external/llama.cpp/${{ matrix.llama_binary_directory }}/llama-completion${{ matrix.executable_suffix }}" \
+            --llamacpp-version b29c606e28a01b1bc8c1351026a0fa6e616bf6c4 \
+            --max-tokens 8 --threads 2 --warmups 3 --measurements 5 \
+            --output "${RUNNER_TEMP}/synapse-benchmark.json"
+
+      - name: Summarize measured performance and workload
+        shell: bash
+        run: |
+          dotnet experiments/Synapse.ReferenceBenchmarks/bin/Release/net10.0/Synapse.ReferenceBenchmarks.dll report \
+            --input "${RUNNER_TEMP}/synapse-benchmark.json" \
+            --summary "${GITHUB_STEP_SUMMARY}"
+
+      - name: Preserve raw per-round evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: performance-${{ matrix.runtime_identifier }}
+          path: ${{ runner.temp }}/synapse-benchmark.json
+          if-no-files-found: error
+          retention-days: 30

@@ -25,7 +25,7 @@ recorded together. Short smoke runs carry no winner verdict.
 
 The memory headline is the operating-system observation of the **whole subject
 process**, including CLR and native allocations: peak resident working set on
-both platforms and physical footprint on macOS when `proc_pid_rusage` permits
+macOS, Linux, and Windows, and physical footprint on macOS when `proc_pid_rusage` permits
 it. Sampling begins before model load and continues through generation; the
 report records the sample count and separately labels private/virtual address
 space, which is not resident memory. Synapse CLI and LLamaSharp additionally
@@ -34,6 +34,14 @@ allocation-flow counters, not a partition of resident bytes. In particular,
 `resident - GC heap` is **not** reported as native allocation: mmap pages,
 shared libraries, runtime heaps, and driver memory make that subtraction
 invalid. A missing platform metric remains null with its scope recorded.
+
+Functional CI and performance evidence are separate workflows. Functional
+tests may make short real-process quality and schema assertions but do not
+assert throughput or use long generation as a performance proxy. The manually
+dispatched performance workflow runs its own macOS/Linux/Windows matrix and
+retains every measured round as an artifact with a descriptive report. Hosted
+runners are variable hardware, so their results are never pooled across OSes
+or compared to the owner's Mac as a release winner verdict.
 
 ## Consequences
 

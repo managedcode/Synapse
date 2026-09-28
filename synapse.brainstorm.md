@@ -63,3 +63,14 @@ Date: 2026-09-27. Status: accepted for the bootstrap slice.
 - Record sampling coverage and missing metric status. A memory claim needs a
   fresh process from pre-load to exit, the same workload, and raw paired runs;
   the current short Qwen smoke remains diagnostic only.
+
+## 2026-09-28 CI performance separation
+
+- Keep functional `verify` fast and assertion-oriented. A long, exact Qwen
+  continuation is not portable evidence of a quality regression when CPU
+  kernels choose a different valid sequence; test rejection with an impossible
+  reference token instead.
+- Dispatch performance independently on macOS, Linux, and Windows. Preserve
+  each runner's raw process samples and render a descriptive summary of the
+  workload and medians. Hosted-runner results form separate hardware cohorts;
+  they are not a cross-OS leaderboard or a substitute for paired owner-Mac runs.
