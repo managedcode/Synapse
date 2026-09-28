@@ -94,6 +94,17 @@ evaluated from raw paired runs; missing/incompatible baselines are
   MLX Swift/native Mac Metal subject and a C# ONNX Runtime GenAI subject with
   pinned packages, architecture/tokenizer/quality checks, and separate
   hardware/precision cohorts before any cross-engine timing claim.
+- [ ] `TASK-BMK-001` memory checkpoint: test the absence of a whole-process
+  memory envelope, then record comparable pre-load-through-exit peak resident
+  bytes and macOS physical footprint for every external process. Expose CLR
+  heap/allocated diagnostics only for instrumented managed subjects; keep
+  private virtual size and missing metrics explicitly distinct. Do not mark
+  complete until real-process regressions and raw paired evidence pass.
+- [ ] `TASK-BMK-001` diagnostic matrix checkpoint: a C# process runner executes
+  Synapse, dotLLM, LLamaSharp, and direct llama.cpp in rotated fresh-process
+  rounds, verifies the same pinned continuation, and writes immutable raw
+  JSON with per-subject whole-process memory. This remains a smoke diagnostic
+  until 30 paired measurements, locked dialogue, and schema validation land.
 
 Local direct-native evidence: pinned Homebrew llama.cpp `b29c606e2` reproduced
 the Qwen prompt token IDs and continuation, three focused real-process native
@@ -102,5 +113,17 @@ control are recorded. The full local 107-test suite passed before concurrent
 ModelPackages tests were added; the later 130-test run reported all test cases
 successful but the process exited 134 while loading ggml's in-process oracle.
 No benchmark task is verified, and the new CI native path has not run remotely.
+
+Whole-process memory/matrix checkpoint: the missing-field and missing-runner
+real-process tests failed first, then passed after implementation. A 3+5
+rotated Mac CPU run retained 32 raw Qwen samples for all four subjects,
+including RSS, macOS footprint, and CLR diagnostics where instrumented.
+A separate 32-token run is `ineligible_quality_mismatch` because dotLLM
+diverges from the LLamaSharp/native continuation; Synapse has token IDs but no
+owned text decoder yet. The current full .NET gate passes 134/134, while the
+earlier ggml exit 134 has not been conclusively explained. Coverage collection
+passes but the aggregate line rate is 70.2% and child-process CLI execution is
+not attributed to the test-host report; the required changed-line coverage
+gate and remote CI are not verified. No `TASK-BMK-001` release claim is closed.
 - [ ] Execute Qwen2 from the verified region IR instead of the parallel shadow
   loop, following `flybrain.plan.md` F0/F1 and accepted ADR-003.

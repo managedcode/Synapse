@@ -143,9 +143,41 @@ Separately, native `llama-bench` reported 115.36 ± 5.94 tok/s for five
 excludes tokenization and sampling, so it is a kernel diagnostic, not a
 completion-process result.
 
+### Whole-process memory diagnostic (new run)
+
+A separate C# matrix runner rotated all four CPU subjects through 3 warm-up
+and 5 measured fresh-process rounds on this Mac, with 8 threads, the same
+Qwen GGUF and matching eight-token continuation. Medians below are from
+[the raw 32 samples](benchmarks/results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-four-subject-memory-clr-smoke.json).
+Power/thermal and competing-load state were not captured for this run, so it
+has **no statistical winner verdict** and must not be merged with the earlier
+12-thread table.
+
+| Subject · CPU | Peak RSS MiB | Peak physical footprint MiB | CLR live heap MiB | Matrix process wall ms |
+|---|---:|---:|---:|---:|
+| Synapse | 560.8 | 39.9 | 20.4 | 895.1 |
+| dotLLM | 1,187.3 | 663.1 | not instrumented | 1,350.9 |
+| LLamaSharp | 1,274.9 | 606.9 | 1.1 | 962.6 |
+| direct llama.cpp | 1,258.6 | 594.6 | not applicable | 681.6 |
+
+Peak RSS includes managed, native, and file-backed resident pages. macOS
+physical footprint is a different accounting view; for example, Synapse's
+mapped model raises RSS far above its footprint. CLR heap is a diagnostic
+subset, **not** total .NET memory; subtracting it from RSS does not yield
+native allocations. The raw JSON also preserves virtual-size availability,
+sample counts, executable/model hashes, and each subject's original result.
+Profilers are run separately so their overhead does not contaminate this
+table.
+
+The [32-token quality diagnostic](benchmarks/results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-32tok-quality-divergence-final.json)
+is `ineligible_quality_mismatch`: dotLLM's continuation diverged from
+LLamaSharp/direct llama.cpp after a shared prefix. Synapse currently emits
+token IDs without a repo-owned decoder, so its 32-token text parity cannot
+yet be asserted. These 32-token timings are **not** a four-engine speed result.
+
 | Catalog model / architecture | Synapse | dotLLM | LLamaSharp | native llama.cpp | MLX | ONNX Runtime |
 |---|---|---|---|---|---|---|
-| Qwen2.5 0.5B Q8_0 · Qwen2 | D8 | D8 | D8 | D8 + D128 | NR | NR |
+| Qwen2.5 0.5B Q8_0 · Qwen2 | D8 + D32 IDs | D8 + D32 mismatch | D8 + D32 | D8 + D32 + D128 | NR | NR |
 | SmolLM2 135M BF16 · Llama | NR | NR | NR | NR | NR | NR |
 | Qwen3 0.6B Q8_0 · Qwen3 | NR | NR | NR | NR | NR | NR |
 | Mamba 130M F32 · SSM | NR | NR | NR | NR | NR | NR |
@@ -237,6 +269,9 @@ docs/                        architecture, ADRs, features, commands, task regist
 | [llama.cpp](https://github.com/ggml-org/llama.cpp) | GGUF/quantization reference and direct native baseline | MIT; external CPU process pinned at `b29c606e2` |
 | [MLX Swift LM](https://github.com/ml-explore/mlx-swift-lm) | Candidate Python-free Apple Silicon/Metal baseline | External subject planned; no measurement yet |
 | [ONNX Runtime GenAI](https://onnxruntime.ai/docs/genai/api/csharp.html) | Candidate C# ONNX-format baseline | Preview API; verified ONNX package and measurement pending |
+| [dotnet/diagnostics](https://github.com/dotnet/diagnostics) | CLR heap, GC counters, and traces for managed allocation diagnosis | Separate profiling runs, never the clean timing baseline |
+| [samply](https://github.com/mstange/samply) | Mac/Linux CPU stack sampling across native hotspots | Separate profiling runs; not a memory allocation collector |
+| [KDE heaptrack](https://github.com/KDE/heaptrack) | Native heap allocation trace on Linux | Collector is Linux-only; not used for Mac claims |
 | [ZoneTree](https://github.com/ZoneTree/ZoneTree) | Durable cache metadata, prefix indexes, journals, evidence indexes | MIT; runtime package 1.9.8 |
 | [Microsoft Orleans](https://github.com/dotnet/orleans) | Request/control plane, leases, epochs, placement, recovery | Planned D3 dependency; never tensor/KV transport |
 | [Aspire](https://github.com/dotnet/aspire) | Multi-process topology, health, telemetry, test orchestration | Added only with the first real distributed topology |

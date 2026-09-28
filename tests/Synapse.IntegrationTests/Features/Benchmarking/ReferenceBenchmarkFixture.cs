@@ -104,7 +104,7 @@ internal static class ReferenceBenchmarkFixture
             : Path.GetFullPath(configured);
     }
 
-    private static string FindRepositoryRoot()
+    public static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null)

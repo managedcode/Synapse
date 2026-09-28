@@ -35,6 +35,17 @@ public sealed class NativeLlamaCppSmokeTests
         await Assert.That(root.GetProperty("native_eval_milliseconds").GetDouble()).IsGreaterThan(0);
         await Assert.That(root.GetProperty("measurement_scope").GetString())
             .IsEqualTo("native_internal_plus_process_observed");
+        await Assert.That(root.GetProperty("maximum_observed_working_set_bytes").GetInt64()).IsGreaterThan(0);
+        await Assert.That(root.GetProperty("maximum_observed_virtual_bytes").GetInt64()).IsGreaterThan(0);
+        await Assert.That(root.GetProperty("memory_sample_count").GetInt32()).IsGreaterThan(0);
+        await Assert.That(root.GetProperty("managed_live_heap_after_generation_bytes").ValueKind)
+            .IsEqualTo(JsonValueKind.Null);
+        if (OperatingSystem.IsMacOS())
+        {
+            await Assert.That(root.GetProperty("maximum_observed_private_virtual_bytes").ValueKind)
+                .IsEqualTo(JsonValueKind.Null);
+            await Assert.That(root.GetProperty("peak_physical_footprint_bytes").GetInt64()).IsGreaterThan(0);
+        }
     }
 
     [Test]

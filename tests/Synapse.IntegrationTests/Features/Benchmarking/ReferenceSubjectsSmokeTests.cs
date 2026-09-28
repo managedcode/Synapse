@@ -36,6 +36,8 @@ public sealed class ReferenceSubjectsSmokeTests
             "--subject-version", version);
 
         await AssertSuccessfulGenerationAsync(result, "dotllm");
+        await Assert.That(result.RootElement.GetProperty("managed_live_heap_after_generation_bytes").ValueKind)
+            .IsEqualTo(JsonValueKind.Null);
     }
 
     [Test]
@@ -44,6 +46,10 @@ public sealed class ReferenceSubjectsSmokeTests
         using var result = await RunSubjectAsync("llamasharp", "--backend", "cpu");
 
         await AssertSuccessfulGenerationAsync(result, "llamasharp");
+        await Assert.That(result.RootElement.GetProperty("managed_live_heap_after_generation_bytes").GetInt64())
+            .IsGreaterThan(0);
+        await Assert.That(result.RootElement.GetProperty("managed_allocated_during_subject_bytes").GetInt64())
+            .IsGreaterThan(0);
     }
 
     [Test]
@@ -171,6 +177,15 @@ public sealed class ReferenceSubjectsSmokeTests
             .IsEqualTo(" Paris. It is the largest city in");
         await Assert.That(root.GetProperty("total_generation_milliseconds").GetDouble())
             .IsGreaterThan(0);
+        await Assert.That(root.GetProperty("maximum_observed_working_set_bytes").GetInt64()).IsGreaterThan(0);
+        await Assert.That(root.GetProperty("maximum_observed_virtual_bytes").GetInt64()).IsGreaterThan(0);
+        await Assert.That(root.GetProperty("memory_sample_count").GetInt32()).IsGreaterThan(0);
+        if (OperatingSystem.IsMacOS())
+        {
+            await Assert.That(root.GetProperty("maximum_observed_private_virtual_bytes").ValueKind)
+                .IsEqualTo(JsonValueKind.Null);
+            await Assert.That(root.GetProperty("peak_physical_footprint_bytes").GetInt64()).IsGreaterThan(0);
+        }
     }
 
 }

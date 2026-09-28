@@ -53,7 +53,7 @@ internal static class LlamaCppSubject
         var subjectTimer = Stopwatch.StartNew();
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("llama-completion process did not start.");
-        var metricsTask = ReferenceBenchmarkCommand.ObserveProcessAsync(process);
+        await using var memorySampler = new ProcessMemorySampler(process);
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
         try
@@ -73,7 +73,7 @@ internal static class LlamaCppSubject
         }
 
         subjectTimer.Stop();
-        var metrics = await metricsTask.ConfigureAwait(false);
+        var metrics = await memorySampler.CompleteAsync().ConfigureAwait(false);
         var text = (await outputTask.ConfigureAwait(false)).TrimEnd('\r', '\n');
         var diagnostics = await errorTask.ConfigureAwait(false);
         if (process.ExitCode != 0)
@@ -123,7 +123,11 @@ internal static class LlamaCppSubject
             NativeEvalMilliseconds: evalMs,
             NativeEvalTokensPerSecond: evalMs <= 0 || generatedTokens <= 1
                 ? null
-                : evalRuns / (evalMs / 1000));
+                : evalRuns / (evalMs / 1000),
+            MaximumObservedPrivateVirtualBytes: capture.Metrics.MaximumObservedPrivateVirtualBytes,
+            MaximumObservedVirtualBytes: capture.Metrics.MaximumObservedVirtualBytes,
+            PeakPhysicalFootprintBytes: capture.Metrics.PeakPhysicalFootprintBytes,
+            MemorySampleCount: capture.Metrics.MemorySampleCount);
     }
 
     private sealed record CompletionCapture(

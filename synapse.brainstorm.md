@@ -51,3 +51,15 @@ Date: 2026-09-27. Status: accepted for the bootstrap slice.
   Neither may inherit the GGUF Q8_0 numbers: different model formats or
   quantizations require weight provenance and a separate cohort unless
   numerical/quality parity is demonstrated.
+
+## 2026-09-28 whole-process benchmark memory checkpoint
+
+- Use process-wide OS resident/footprint peaks as the comparable CPU memory
+  envelope for all subjects, regardless of managed or native implementation.
+  Do not confuse private virtual address space with physical consumption.
+- Expose CLR heap/allocated bytes only where the measured .NET subject can
+  report them without attaching a diagnostic agent. Never infer native bytes
+  by subtracting heap size from RSS or footprint.
+- Record sampling coverage and missing metric status. A memory claim needs a
+  fresh process from pre-load to exit, the same workload, and raw paired runs;
+  the current short Qwen smoke remains diagnostic only.

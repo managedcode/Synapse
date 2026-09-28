@@ -23,6 +23,18 @@ generation, or process-wall measurements. A result is comparable only when
 revision, model digest, prompt token IDs, backend, hardware, and workload are
 recorded together. Short smoke runs carry no winner verdict.
 
+The memory headline is the operating-system observation of the **whole subject
+process**, including CLR and native allocations: peak resident working set on
+both platforms and physical footprint on macOS when `proc_pid_rusage` permits
+it. Sampling begins before model load and continues through generation; the
+report records the sample count and separately labels private/virtual address
+space, which is not resident memory. Synapse CLI and LLamaSharp additionally
+report CLR live heap and cumulative managed allocation as diagnostics. These are subsets or
+allocation-flow counters, not a partition of resident bytes. In particular,
+`resident - GC heap` is **not** reported as native allocation: mmap pages,
+shared libraries, runtime heaps, and driver memory make that subtraction
+invalid. A missing platform metric remains null with its scope recorded.
+
 ## Consequences
 
 The benchmark result schema adds nullable timing fields and a provenance label

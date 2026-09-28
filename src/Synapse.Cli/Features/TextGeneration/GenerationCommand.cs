@@ -24,6 +24,7 @@ internal static class GenerationCommand
             using var process = Process.GetCurrentProcess();
             var subjectTimer = Stopwatch.StartNew();
             var subjectCpuStart = process.TotalProcessorTime;
+            var managedAllocatedBefore = GC.GetTotalAllocatedBytes();
             var loadTimer = Stopwatch.StartNew();
             using var model = ModelLoader.Load(
                 options.ModelPath,
@@ -32,8 +33,11 @@ internal static class GenerationCommand
             loadTimer.Stop();
             process.Refresh();
             var workingSetAfterLoad = process.WorkingSet64;
+            var managedHeapAfterLoad = GC.GetTotalMemory(forceFullCollection: false);
             var result = model.Generate(options.Tokens, options.MaximumTokens);
             subjectTimer.Stop();
+            var managedHeapAfterGeneration = GC.GetTotalMemory(forceFullCollection: false);
+            var managedAllocated = GC.GetTotalAllocatedBytes() - managedAllocatedBefore;
             process.Refresh();
             var maximumObservedWorkingSet = Math.Max(workingSetAfterLoad, process.WorkingSet64);
             if (process.PeakWorkingSet64 > 0)
@@ -66,7 +70,10 @@ internal static class GenerationCommand
                     ? null
                     : subjectCpu.TotalSeconds / subjectTimer.Elapsed.TotalSeconds,
                 workingSetAfterLoad,
-                maximumObservedWorkingSet);
+                maximumObservedWorkingSet,
+                managedHeapAfterLoad,
+                managedHeapAfterGeneration,
+                managedAllocated);
             Console.WriteLine(JsonSerializer.Serialize(output, GenerationJsonContext.Default.GenerationOutput));
             return 0;
         }
@@ -152,7 +159,10 @@ internal sealed record GenerationOutput(
     double ProcessCpuMilliseconds,
     double? AverageCpuCores,
     long WorkingSetAfterLoadBytes,
-    long MaximumObservedWorkingSetBytes);
+    long MaximumObservedWorkingSetBytes,
+    long ManagedLiveHeapAfterLoadBytes,
+    long ManagedLiveHeapAfterGenerationBytes,
+    long ManagedAllocatedDuringSubjectBytes);
 
 [JsonSerializable(typeof(GenerationOutput))]
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]

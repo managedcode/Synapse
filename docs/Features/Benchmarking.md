@@ -25,6 +25,37 @@ subject wall time, process CPU time, average CPU cores, and observed working
 set. Energy/power is a separate nullable status. `not_run_missing_privilege`
 or `not_run_missing_hardware` never acquires a numeric zero.
 
+The process memory envelope is collected before model load through completion
+for every reference subject. Peak resident working set includes managed and
+native pages; macOS physical footprint is recorded separately via
+`proc_pid_rusage`. Virtual/private address-space values are **not** interpreted
+as resident memory (private virtual size is unavailable from the current
+macOS process API and remains null). Synapse CLI and LLamaSharp also emit live
+CLR heap and cumulative managed allocation diagnostics. These cannot be subtracted from
+RSS to obtain native bytes. The sampler records its count; unavailable metrics
+remain null. The existing dated smoke samples predate this schema and are not
+retroactively relabeled.
+
+Profiling is a separate diagnostic run, not part of paired timing samples:
+open-source `dotnet/diagnostics` supplies CLR counters/traces/heap inspection,
+`samply` can inspect native CPU stacks on macOS and Linux, and installed Xcode
+Instruments supplies Mac Allocations/Leaks/Metal traces. Linux-only heaptrack
+is not a Mac collector. Profiling overhead and native allocator attribution
+must be reported with the trace, never silently merged into baseline timing.
+
+The C# `matrix` command in `experiments/Synapse.ReferenceBenchmarks` now runs
+Synapse, dotLLM, LLamaSharp, and direct llama.cpp in rotated fresh-process
+rounds. It requires explicit executable paths, source/model token IDs, a
+locked expected continuation, thread/output limits, and a new output path;
+defaults are three warm-ups and five measured rounds. The output is immutable
+raw JSON with binary/model SHA-256 digests, every subject's original JSON,
+quality status, OS memory peaks, and sample counts. A mismatch is retained as
+`ineligible_quality_mismatch`, not erased or awarded a throughput verdict.
+Run `dotnet experiments/Synapse.ReferenceBenchmarks/bin/Release/net10.0/Synapse.ReferenceBenchmarks.dll matrix`
+without arguments for the exact option list. This diagnostic runner is not yet
+the 30-pair randomized release benchmark, and 8-token decode timing remains
+too short for an optimization win claim.
+
 Two 10-turn modes use `benchmarks/scenarios/travel-planner-10-turns.json`:
 
 - **locked transcript** feeds the same pre-recorded assistant response into
