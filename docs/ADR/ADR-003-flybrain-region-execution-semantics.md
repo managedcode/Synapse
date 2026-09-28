@@ -175,6 +175,13 @@ Future and masked KV positions are not read. A query with no visible key fails
 with `AllKeysMasked`; it never returns NaN or a fabricated zero vector. The
 remaining reference operators and graph interpreter are F1.1 work.
 
+The next scalar vector operations follow the same finite-input and atomic
+output rule. RMSNorm uses a positive finite epsilon and the mean of squared
+values; SiLU applies `x/(1+exp(-x))`; softmax subtracts the maximum before
+exponentiation. RoPE supports both NeoX half-pair and interleaved adjacent-pair
+layouts with explicit position and theta. Each numerical output rounds once
+to FP32 after a fixed-order FP64 calculation.
+
 ## Alternatives rejected
 
 - Keep one `ExecutionEligibility` union. It forces provenance and runtime

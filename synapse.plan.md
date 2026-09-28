@@ -40,9 +40,10 @@ normative product scope.
   runtime scratch/KV allocation. Entry plumbing is outside regions; the
   verifier independently derives exact value, tensor, and state boundaries.
 - [ ] Execute Qwen2 from the IR, add Execution IR/lifetime planning, and
-  complete the scalar numerical oracle. Initial C# reference linear/bias and
-  causal grouped-query attention operators now have FP64 oracle/masking tests
-  (58/58 local Release gate); the graph interpreter and remaining ops are open.
+  complete the scalar numerical oracle. Initial C# reference linear/bias,
+  causal GQA, RMSNorm, SiLU, element-wise, Softmax, and RoPE operators now have
+  FP64 oracle/masking tests (62/62 local Release gate); the graph interpreter
+  and remaining ops are open.
 - [ ] C# paged KV ownership, rollback, and ZoneTree prefix metadata.
 - [ ] Repo-owned tokenizer plus pinned SmolLM/Qwen import and text generation.
 - [ ] .NET SDK, worker IPC, bounded streaming, and cancellation.

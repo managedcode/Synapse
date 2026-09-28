@@ -156,9 +156,10 @@ GitHub Actions runs the real model download, digest checks, managed Synapse,
 dotLLM, and LLamaSharp smoke tests on macOS ARM64 and Ubuntu x64, followed by
 the Rust format/lint/test gates.
 
-The current local checkpoint passes 58/58 Release tests. It includes the
-first scalar reference linear/bias and causal grouped-query attention
-operators, with FP64 oracle and masking tests; Qwen generation does not yet
+The current local checkpoint passes 62/62 Release tests. It includes scalar
+reference linear/bias, causal grouped-query attention, RMSNorm, SiLU,
+element-wise math, stable Softmax, and both RoPE layouts, with FP64 oracle and
+masking tests; Qwen generation does not yet
 execute from this IR reference path. A post-change eight-token parity smoke
 produced the same Synapse token IDs and baseline text shown in the measured
 table; its one-shot timings are

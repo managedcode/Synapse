@@ -67,8 +67,10 @@ bypass mappings, typed route parameters, and state-hole flags. These are
 validated Model IR contracts; runtime branch scheduling and hole-aware kernels
 are F1 work.
 
-The first F1 scalar reference operators now compute row-major linear/bias and
-causal grouped-query attention with FP64 accumulation and FP32 outputs. The
+The first F1 scalar reference operators now compute row-major linear/bias,
+causal grouped-query attention, RMSNorm, SiLU, element-wise Add/Multiply,
+stable Softmax, and NeoX/interleaved RoPE with FP64 intermediates and FP32
+outputs. The
 attention path reads only valid positions at or before the query position;
 `AllKeysMasked`, active non-finite values, and FP32 overflow are typed failures
 that leave the output unchanged. `NumericalPolicy` names the small-tensor FP32,
@@ -115,5 +117,6 @@ state combinations. `RegionActivationValidGraphTests` accepts valid feature
 routing, tolerant merge, and hole-aware attention graphs, rejects an unaware
 reader, and proves provenance changes the canonical fingerprint.
 `ReferenceOperatorsTests` checks seeded and adversarial linear cases against
-an independent FP64 calculation, causal future-value isolation, and the typed
-all-masked error.
+an independent FP64 calculation, causal future-value isolation, the typed
+all-masked error, RMSNorm/SiLU values, stable large-logit softmax, both RoPE
+layouts, and non-mutating shape errors.

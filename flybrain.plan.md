@@ -125,9 +125,10 @@ produces token `12095`. Not claimed: execution from the IR.
   FP64 accumulation, covering every operation that the Qwen2 and tiny
   fixtures use. Tests: `OperatorsMatchFp64Oracle`,
   `CausalMaskPreventsFutureLeak`, `AllMaskedRowDefined`.
-  Partial evidence (2026-09-28): scalar linear/bias and causal grouped-query
-  attention are implemented with typed numerical failures; four focused tests
-  and the 58/58 local real-model Release gate pass. The interpreter and
+  Partial evidence (2026-09-28): scalar linear/bias, causal grouped-query
+  attention, RMSNorm, SiLU, element-wise math, stable Softmax, and both RoPE
+  layouts are implemented with typed numerical failures; eight focused tests
+  and the 62/62 local real-model Release gate pass. The interpreter and
   remaining operators are not implemented; F1.1 stays unchecked.
 - [ ] F1.2 A region scheduler. Precompute the topological region order; keep
   indegree counters and a bounded ready queue for DAG fan-out. Outcomes are

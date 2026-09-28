@@ -1,3 +1,4 @@
+using ManagedCode.Synapse.Contracts.Features.GraphExecution;
 using ManagedCode.Synapse.Runtime.Features.GraphExecution.Reference;
 
 namespace ManagedCode.Synapse.IntegrationTests.Features.GraphExecution;
@@ -97,6 +98,77 @@ public sealed class ReferenceOperatorsTests
         }
 
         await Assert.That(failure?.Failure == ReferenceNumericalFailure.AllKeysMasked).IsTrue();
+        await Assert.That(output).IsEquivalentTo([42f, 43f]);
+    }
+
+    [Test]
+    public async Task RmsNormAndSiluMatchFp64Oracle()
+    {
+        float[] input = [0.25f, -2f, 3.5f, 0f];
+        float[] weights = [1f, 0.5f, -1.25f, 2f];
+        var normalized = new float[input.Length];
+        var activated = new float[input.Length];
+
+        ReferenceNormalizationOperators.RmsNorm(input, weights, 1e-5f, normalized);
+        ReferenceVectorOperators.Silu(input, activated);
+
+        var sumOfSquares = input.Sum(value => (double)value * value);
+        var scale = 1.0 / Math.Sqrt((sumOfSquares / input.Length) + 1e-5f);
+        for (var index = 0; index < input.Length; index++)
+        {
+            var normOracle = input[index] * scale * weights[index];
+            var siluOracle = input[index] / (1 + Math.Exp(-input[index]));
+            await Assert.That(NumericalPolicy.Fp32.IsWithinTolerance(normalized[index], normOracle)).IsTrue();
+            await Assert.That(NumericalPolicy.Fp32.IsWithinTolerance(activated[index], siluOracle)).IsTrue();
+        }
+    }
+
+    [Test]
+    public async Task StableSoftmaxAvoidsOverflow()
+    {
+        float[] logits = [1000f, 1001f, -1000f];
+        var output = new float[logits.Length];
+
+        ReferenceVectorOperators.Softmax(logits, output);
+
+        var first = 1.0 / (1 + Math.E);
+        var second = Math.E / (1 + Math.E);
+        await Assert.That(NumericalPolicy.Fp32.IsWithinTolerance(output[0], first)).IsTrue();
+        await Assert.That(NumericalPolicy.Fp32.IsWithinTolerance(output[1], second)).IsTrue();
+        await Assert.That(output[2]).IsEqualTo(0f);
+        await Assert.That(output.Sum()).IsBetween(0.99999f, 1.00001f);
+    }
+
+    [Test]
+    public async Task RopeLayoutsMatchKnownCoordinates()
+    {
+        float[] input = [1f, 2f, 3f, 4f];
+        var neox = new float[4];
+        var interleaved = new float[4];
+
+        ReferenceRotaryOperators.Apply(input, 4, 1, 10_000f, RotaryLayout.NeoX, neox);
+        ReferenceRotaryOperators.Apply(input, 4, 1, 10_000f, RotaryLayout.Interleaved, interleaved);
+
+        var cosine = Math.Cos(1);
+        var sine = Math.Sin(1);
+        var neoxFirst = cosine - (3 * sine);
+        var interleavedFirst = cosine - (2 * sine);
+        await Assert.That(NumericalPolicy.Fp32.IsWithinTolerance(neox[0], neoxFirst)).IsTrue();
+        await Assert.That(NumericalPolicy.Fp32.IsWithinTolerance(interleaved[0], interleavedFirst)).IsTrue();
+        var inputNorm = input.Sum(value => (double)value * value);
+        var neoxNorm = neox.Sum(value => (double)value * value);
+        var interleavedNorm = interleaved.Sum(value => (double)value * value);
+        await Assert.That(NumericalPolicy.Fp32.IsWithinTolerance((float)neoxNorm, inputNorm)).IsTrue();
+        await Assert.That(NumericalPolicy.Fp32.IsWithinTolerance((float)interleavedNorm, inputNorm)).IsTrue();
+    }
+
+    [Test]
+    public async Task ElementwiseRejectsShapeMismatchBeforeWriting()
+    {
+        float[] output = [42f, 43f];
+
+        await Assert.That(() => ReferenceVectorOperators.Add(
+            [1f, 2f], [3f], output)).Throws<ArgumentException>();
         await Assert.That(output).IsEquivalentTo([42f, 43f]);
     }
 }
