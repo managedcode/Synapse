@@ -38,9 +38,12 @@ internal static class GraphTestModelFactory
             nodes,
             [input.Id],
             [output.Id],
-            eligibility: conditionalPredicate is { } predicate
-                ? new GraphPredicateEligibility(predicate)
-                : new AlwaysRequiredEligibility());
+            activation: conditionalPredicate is { } predicate
+                ? new RegionActivation(
+                    new PredicateDecision(predicate, RouteScope.Step),
+                    new ProgrammedProvenance(),
+                    new OutputsAbsent())
+                : AlwaysStructural());
     }
 
     public static ModelGraph CreateGraph(
@@ -49,14 +52,14 @@ internal static class GraphTestModelFactory
         IReadOnlyList<ValueId> inputs,
         IReadOnlyList<ValueId> outputs,
         IEnumerable<StateSlotDescriptor>? stateSlots = null,
-        ExecutionEligibility? eligibility = null)
+        RegionActivation? activation = null)
     {
         var valueArray = values.ToArray();
         var nodeArray = nodes.ToArray();
         var memberNodes = nodeArray
             .Where(node => node.Operation is not (GraphOperationKind.Input or GraphOperationKind.Output))
             .ToArray();
-        var region = CreateRegion(nodeArray, memberNodes, outputs, eligibility);
+        var region = CreateRegion(nodeArray, memberNodes, outputs, activation);
         var valuesById = valueArray.ToDictionary(value => value.Id);
         var weights = memberNodes
             .Where(node => node.Operation == GraphOperationKind.Constant)
@@ -87,7 +90,7 @@ internal static class GraphTestModelFactory
         IReadOnlyList<GraphNode> allNodes,
         IReadOnlyList<GraphNode> memberNodes,
         IReadOnlyList<ValueId> outputs,
-        ExecutionEligibility? eligibility)
+        RegionActivation? activation)
     {
         var memberIds = memberNodes.Select(node => node.Id).ToHashSet();
         var producers = allNodes
@@ -111,9 +114,14 @@ internal static class GraphTestModelFactory
                 .Select(node => node.Tensor!.Value),
             memberNodes.SelectMany(node => node.StateReads).Distinct(),
             memberNodes.SelectMany(node => node.StateWrites).Distinct(),
-            eligibility ?? new AlwaysRequiredEligibility(),
+            activation ?? AlwaysStructural(),
             semanticAnnotations: ["test"]);
     }
+
+    private static RegionActivation AlwaysStructural() => new(
+        new AlwaysActive(),
+        new StructuralProvenance(),
+        new NotSkippable());
 
     private static WeightDescriptor CreateWeight(
         GraphNode node,

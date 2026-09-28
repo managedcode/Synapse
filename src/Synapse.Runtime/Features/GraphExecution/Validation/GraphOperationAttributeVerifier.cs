@@ -9,7 +9,7 @@ internal static class GraphOperationAttributeVerifier
         foreach (var node in context.Graph.Nodes)
         {
             if (node.Operation is not (GraphOperationKind.RmsNorm or GraphOperationKind.LayerNorm or
-                GraphOperationKind.Rope or GraphOperationKind.CausalAttention) &&
+                GraphOperationKind.Rope or GraphOperationKind.CausalAttention or GraphOperationKind.TopKRoute) &&
                 node.Attributes is not null)
             {
                 AddInvalid(context, node, "does not accept operation attributes");
@@ -25,6 +25,9 @@ internal static class GraphOperationAttributeVerifier
                     break;
                 case GraphOperationKind.CausalAttention:
                     ValidateAttention(context, node);
+                    break;
+                case GraphOperationKind.TopKRoute:
+                    ValidateTopKRoute(context, node);
                     break;
                 case GraphOperationKind.Input:
                     break;
@@ -65,8 +68,6 @@ internal static class GraphOperationAttributeVerifier
                 case GraphOperationKind.StateCommit:
                     break;
                 case GraphOperationKind.StateRollback:
-                    break;
-                case GraphOperationKind.TopKRoute:
                     break;
                 case GraphOperationKind.Branch:
                     break;
@@ -118,6 +119,16 @@ internal static class GraphOperationAttributeVerifier
                 context,
                 node,
                 "requires compatible query/KV heads, head dimension, positive finite scale, and mask");
+        }
+    }
+
+    private static void ValidateTopKRoute(GraphVerificationContext context, GraphNode node)
+    {
+        if (node.Attributes is not TopKRouteAttributes attributes ||
+            attributes.K <= 0 || !Enum.IsDefined(attributes.Axis) ||
+            !Enum.IsDefined(attributes.TiePolicy) || attributes.Capacity is <= 0)
+        {
+            AddInvalid(context, node, "requires positive k, valid axis and tie policy, and optional positive capacity");
         }
     }
 

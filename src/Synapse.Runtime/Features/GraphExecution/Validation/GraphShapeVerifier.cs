@@ -305,10 +305,10 @@ internal static class GraphShapeVerifier
             return;
         }
 
-        if (node.MergeMode is MergeMode.Add or MergeMode.GatedSum &&
+        if (node.MergeMode is MergeMode.Add or MergeMode.GatedSum or MergeMode.SelectActive &&
             inputs.Any(input => !SameShape(input.Shape, output.Shape)))
         {
-            AddShapeMismatch(context, node, "add/gated merge inputs and output must have identical shapes");
+            AddShapeMismatch(context, node, "add/gated/select-active merge inputs and output must have identical shapes");
         }
     }
 

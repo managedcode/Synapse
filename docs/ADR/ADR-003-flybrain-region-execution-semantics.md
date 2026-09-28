@@ -2,10 +2,10 @@
 
 ## Status
 
-Accepted on 2026-09-28 as the implementation direction after the
-planning/review pass in `flybrain.plan.md`. The public `Synapse.Contracts`
-changes remain unimplemented until their F0 red/green behavior tests land. It
-extends ADR-002 and does not replace it.
+Accepted on 2026-09-28 after the planning/review pass in
+`flybrain.plan.md`. The F0 public contract and verifier rules are implemented
+and covered by 13 region-activation tests. Runtime execution from these rules
+remains F1 work. This ADR extends ADR-002.
 
 ## Context
 
@@ -17,7 +17,7 @@ executor cannot skip anything safely, so every FlyBrain capability (routing,
 early exit, expert paging, placement, precision per region) would have to
 invent private semantics.
 
-The concrete gaps in the current code:
+The gaps identified before F0 implementation were:
 
 1. `TrainedRouteEligibility(PolicyHash)` names a policy but no graph value that
    carries its decision. The runtime cannot evaluate it.

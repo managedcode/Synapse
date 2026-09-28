@@ -76,6 +76,8 @@ public enum MergeMode
     Add,
     /// <summary>Uses explicit gates to combine active inputs.</summary>
     GatedSum,
+    /// <summary>Passes through the single active input.</summary>
+    SelectActive,
 }
 
 /// <summary>An SSA tensor value declared by the model graph.</summary>
@@ -89,11 +91,13 @@ public sealed record GraphValue(ValueId Id, TensorShape Shape, NumericType Numer
 /// <param name="Shape">Bounded per-entry shape.</param>
 /// <param name="NumericType">Stored and computed numeric types.</param>
 /// <param name="HasInitialValue">Whether a read is valid before the first graph writer.</param>
+/// <param name="PositionHolesAllowed">Whether skipped positions may be absent from this state.</param>
 public sealed record StateSlotDescriptor(
     StateSlotId Id,
     TensorShape Shape,
     NumericType NumericType,
-    bool HasInitialValue = false);
+    bool HasInitialValue = false,
+    bool PositionHolesAllowed = false);
 
 /// <summary>Structured loop bounds and loop-carried SSA values.</summary>
 public sealed class LoopDescriptor

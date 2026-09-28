@@ -1,27 +1,9 @@
 namespace ManagedCode.Synapse.Contracts.Features.GraphExecution;
 
-/// <summary>Formal rule controlling whether an executable region may be skipped.</summary>
-public abstract record ExecutionEligibility;
-
-/// <summary>The region is required for every execution of its entry point.</summary>
-public sealed record AlwaysRequiredEligibility : ExecutionEligibility;
-
-/// <summary>The region executes when a graph-produced boolean predicate is true.</summary>
-/// <param name="Predicate">Boolean SSA value controlling the region.</param>
-public sealed record GraphPredicateEligibility(ValueId Predicate) : ExecutionEligibility;
-
-/// <summary>The region is selected by a versioned learned routing policy.</summary>
-/// <param name="PolicyHash">Identity of the immutable trained policy.</param>
-public sealed record TrainedRouteEligibility(ContentHash PolicyHash) : ExecutionEligibility;
-
-/// <summary>The region is optional only within an evaluated approximation profile.</summary>
-/// <param name="EvaluationHash">Identity of the quality evidence.</param>
-public sealed record ApproximateProfileEligibility(ContentHash EvaluationHash) : ExecutionEligibility;
-
 /// <summary>A coarse executable subgraph used for activation-wave scheduling.</summary>
 public sealed class RegionDescriptor
 {
-    /// <summary>Creates one region with explicit execution eligibility.</summary>
+    /// <summary>Creates one region with explicit activation and skip semantics.</summary>
     public RegionDescriptor(
         RegionId id,
         IEnumerable<NodeId> nodes,
@@ -30,13 +12,13 @@ public sealed class RegionDescriptor
         IEnumerable<TensorId>? requiredWeights,
         IEnumerable<StateSlotId>? stateReads,
         IEnumerable<StateSlotId>? stateWrites,
-        ExecutionEligibility eligibility,
+        RegionActivation activation,
         IEnumerable<string>? semanticAnnotations = null)
     {
         ArgumentNullException.ThrowIfNull(nodes);
         ArgumentNullException.ThrowIfNull(inputs);
         ArgumentNullException.ThrowIfNull(outputs);
-        ArgumentNullException.ThrowIfNull(eligibility);
+        ArgumentNullException.ThrowIfNull(activation);
         Id = id;
         Nodes = Copy(nodes);
         Inputs = Copy(inputs);
@@ -44,7 +26,7 @@ public sealed class RegionDescriptor
         RequiredWeights = Copy(requiredWeights);
         StateReads = Copy(stateReads);
         StateWrites = Copy(stateWrites);
-        Eligibility = eligibility;
+        Activation = activation;
         SemanticAnnotations = Copy(semanticAnnotations);
     }
 
@@ -62,8 +44,8 @@ public sealed class RegionDescriptor
     public IReadOnlyList<StateSlotId> StateReads { get; }
     /// <summary>State slots mutated by the region.</summary>
     public IReadOnlyList<StateSlotId> StateWrites { get; }
-    /// <summary>Formal execution or skip rule.</summary>
-    public ExecutionEligibility Eligibility { get; }
+    /// <summary>Formal decision, provenance, and skip contract.</summary>
+    public RegionActivation Activation { get; }
     /// <summary>Non-semantic labels such as CSharp or Reasoning.</summary>
     public IReadOnlyList<string> SemanticAnnotations { get; }
 

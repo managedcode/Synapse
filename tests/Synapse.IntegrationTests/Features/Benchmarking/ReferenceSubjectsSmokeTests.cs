@@ -59,7 +59,12 @@ public sealed class ReferenceSubjectsSmokeTests
         await Assert.That(model.Architecture).IsEqualTo("qwen2");
         await Assert.That(model.Graph.Regions.Count).IsEqualTo(26);
         await Assert.That(model.Graph.Regions.All(region =>
-            region.Eligibility is AlwaysRequiredEligibility)).IsTrue();
+            region.Activation is
+            {
+                Decision: AlwaysActive,
+                Provenance: StructuralProvenance,
+                Skip: NotSkippable,
+            })).IsTrue();
         await Assert.That(result.GeneratedTokens).IsEquivalentTo([12095]);
         await Assert.That(result.Elapsed).IsGreaterThan(TimeSpan.Zero);
     }

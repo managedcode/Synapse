@@ -16,11 +16,13 @@ The verifier executes before weight or execution-memory allocation and checks:
 - structured loop bounds and carried-state arity;
 - entry-point completeness;
 - unknown state references, unwritten reads, and unordered writers;
-- executable-region membership and formal eligibility rules;
+- executable-region membership and explicit activation, provenance, and skip
+  rules;
 - exact region inputs, outputs, constant tensors, state reads, and state writes
   derived independently from member-node dependencies;
-- operation-compatible typed attributes for normalization, RoPE, and grouped
-  causal attention, including finite ranges and head/state shape agreement;
+- operation-compatible typed attributes for normalization, RoPE, grouped
+  causal attention, and top-k routing, including finite ranges and
+  head/state shape agreement;
 - an explicit scalar I32 `position` input for RoPE, state append, and causal
   attention rather than out-of-band decoder state.
 
@@ -40,17 +42,30 @@ optional until the ZoneTree-backed F2 hash cache lands.
 versioned, explicitly little-endian, length-prefixed encoding and returns its
 lower-case SHA-256 digest. Top-level declarations and set-like region fields
 are ordered by their stable IDs; operation input order and entry-point argument
-order remain significant. Unknown attribute or eligibility variants fail
+order remain significant. Unknown attribute or activation variants fail
 instead of silently colliding with a known encoding.
 
 ## FlyBrain regions
 
 Regions are coarse execution units with nodes, boundary values, required
-weights, state effects, and one explicit eligibility rule. A region is either
-always required, controlled by a scalar boolean graph value, selected by an
-immutable trained-policy hash, or tied to immutable approximation evidence.
-Semantic annotations such as `CSharp` and `Reasoning` do not affect control
-flow by themselves.
+weights, state effects, and a three-part `RegionActivation` contract. The
+decision is `AlwaysActive`, a graph-produced boolean predicate, a slot of a
+graph-produced `TopKRoute`, or an admission profile. Provenance records whether
+skipping is structural, programmed, trained, or backed by approximation
+evidence. Skip semantics declare whether outputs remain required, are absent,
+or bypass to shape- and type-compatible region inputs. The verifier rejects
+self-gating, decisions produced after their regions, out-of-range route slots,
+non-causal sequence routing for step or
+token decisions, absent outputs consumed by ordinary nodes, invalid bypasses,
+and skippable state writers without position-hole-aware readers. Semantic
+annotations such as `CSharp` and `Reasoning` do not affect control flow.
+
+`Merge(Add)` and `Merge(SelectActive)` can consume absent values. A state slot
+can allow skipped positions only when every reader masks those holes. The
+canonical graph fingerprint includes all activation decisions, provenance,
+bypass mappings, typed route parameters, and state-hole flags. These are
+validated Model IR contracts; runtime branch scheduling and hole-aware kernels
+are F1 work.
 
 This represents the `what executes` axis. Execution IR will add kernels,
 layouts, lifetimes, memory spaces, and precision. Deployment plans will bind
@@ -61,7 +76,8 @@ the resulting regions to local or remote devices and worker incarnations.
 The working Qwen2 loader now materializes its embedding region, every dense
 transformer block, KV state/effect dependencies, and logits region as Model IR.
 The real GGUF-backed graph must verify before scratch or KV allocation, and all
-regions are `AlwaysRequired`. Its GGUF epsilon, RoPE theta, head counts, head
+regions are `AlwaysActive` with structural provenance and `NotSkippable`. Its
+GGUF epsilon, RoPE theta, head counts, head
 dimension, attention scale/mask, and current decode position are explicit in
 the graph. KV state capacity is `Context[1..model_max_context]`; the smaller
 session allocation remains outside Model IR, so loading the same checkpoint at
@@ -86,4 +102,7 @@ and proves one model fingerprint. `RequiredWeightsResolveToSourceRanges`
 checks every required tensor in the real Qwen graph; the missing-descriptor
 regression proves the verifier fails closed. The shared Qwen smoke test verifies
 its real 26-region graph before checking generation against dotLLM and
-LLamaSharp.
+LLamaSharp. `RegionActivationTests` rejects eight invalid decision, skip, and
+state combinations. `RegionActivationValidGraphTests` accepts valid feature
+routing, tolerant merge, and hole-aware attention graphs, rejects an unaware
+reader, and proves provenance changes the canonical fingerprint.

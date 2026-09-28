@@ -20,6 +20,9 @@ model-side hidden state. KV slots use a model-bounded `Context` symbol, and a
 versioned canonical SHA-256 fingerprint identifies the Model IR independently
 of a session's requested context capacity. Every region-required weight resolves
 to a package-relative GGUF byte range, logical shape, and F32 or Q8_0 encoding.
+The activation contract records the graph decision, provenance, and skipped
+output behavior. The verifier checks route causality, bypass shapes, tolerant
+merges, and KV position holes before an execution plan can use them.
 Its eight-token continuation matches dotLLM and LLamaSharp.
 
 ## Architecture
@@ -153,7 +156,7 @@ GitHub Actions runs the real model download, digest checks, managed Synapse,
 dotLLM, and LLamaSharp smoke tests on macOS ARM64 and Ubuntu x64, followed by
 the Rust format/lint/test gates.
 
-The current Model IR contract checkpoint passes 41/41 local Release
+The current F0 Model IR contract checkpoint passes 54/54 local Release
 tests. A post-change eight-token parity smoke produced the same Synapse token
 IDs and baseline text shown in the measured table; its one-shot timings are
 not mixed into the recorded 3-warm-up/5-measurement evidence.

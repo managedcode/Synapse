@@ -1,7 +1,8 @@
 # FlyBrain execution plan
 
-Date: 2026-09-27. Status: plan only. No step below is implemented unless it
-is checked with evidence paths. Normative scope remains the development
+Date: 2026-09-27. Status: F0 contract and verifier implemented through F0.8;
+later milestones remain planned. No step below is implemented unless it is
+checked with evidence paths. Normative scope remains the development
 specification, `docs/Architecture.md`, ADR-002, and accepted ADR-003.
 Decision summary: `flybrain.brainstorm.md`.
 
@@ -62,7 +63,7 @@ step that touches the same code.
 | RV-1 | Resolved 2026-09-28 | `AGENTS.md`, `docs/Architecture.md`, README | C# is the permanent portable/reference path and first implementation. Rust takes optimized kernels, allocator, hot-KV operations, or direct transfer only after paired profiling. The current C# and Rust KV implementations are reference and optimized-candidate roles, not competing authorities. |
 | RV-2 | High | `Qwen2Model.cs` `Forward`/`ExecuteLayer` | Shadow IR: the graph is built and verified, but execution ignores it. The smoke test checks only the region count. | F1: execute through regions, then delete the hand-written layer loop. |
 | RV-3 | Resolved 2026-09-28 | `GraphRegionVerifier`, `GraphRegionBoundaryVerifier`, Qwen2 graph builder | `Input`/`Output` are excluded from regions; every executable node is covered once. Inputs, outputs, state effects, and `TensorId`-bound constants are independently derived and compared with every descriptor. The real Qwen graph and explicit lying-descriptor regressions pass. |
-| RV-4 | High | `GraphRegions.cs` | `TrainedRoute` has no decision value. There are no skip semantics for outputs or state. | F0.7 (ADR-003) |
+| RV-4 | Resolved 2026-09-28 | `RegionActivation`, graph verifier | Trained provenance requires a graph decision value; decision, provenance, skip, bypass, state-hole, and tolerant-merge rules are explicit and covered by 13 tests. Runtime execution remains F1. |
 | RV-5 | Resolved 2026-09-28 | operation attribute contracts/verifier and Qwen2 graph builders | Normalization, RoPE, and causal-attention parameters are typed and verified. `position` is the second entry input and is consumed by RoPE, state append, and attention; real-model wiring/attribute tests pass. |
 | RV-6 | Resolved 2026-09-28 | `Qwen2LayerGraphBuilder`, `ModelGraphFingerprint` | KV slots use `Context[1..model_max_context]`; session allocation stays outside Model IR. A versioned canonical SHA-256 encoding gives the real Qwen graph the same identity at 256- and 512-token session capacities. |
 | RV-7 | Resolved 2026-09-28 | `WeightDescriptor`, `Qwen2GraphBuildContext.AddWeight`, `GraphWeightVerifier` | Every `TensorId` resolves to a package-relative GGUF offset/length, F32 or Q8_0 encoding, and logical shape. Encoded-range content hashes remain optional until the ZoneTree-backed F2 cache. |
@@ -101,15 +102,19 @@ step that touches the same code.
   hashes can come in F2 (cached in ZoneTree).
   Evidence: `RequiredWeightsResolveToSourceRanges` checks the real Qwen graph;
   `ConstantRequiresWeightDescriptor` proves missing descriptors fail closed.
-- [ ] F0.7 Implement `RegionActivation` = decision + provenance + skip,
+- [x] F0.7 Implement `RegionActivation` = decision + provenance + skip,
   `StateSlotDescriptor.PositionHolesAllowed`, and `MergeMode.SelectActive`,
   with the ADR-003 verifier rules. Migrate the existing tests.
   Tests: `TrainedRouteRequiresDecisionValue`, `DecisionProducerOutsideRegion`,
   `NonCausalDecodeRouteRejected`, `AbsentOutputRequiresTolerantConsumer`,
   `BypassShapeMustMatch`, `SkippableStateWriterRequiresHoleAwareReaders`,
   `AlwaysActiveMustBeNotSkippable`.
-- [ ] F0.8 Update `docs/Features/GraphExecution.md`, mark ADR-003 accepted,
-  and record evidence for TASK-GRF-001.
+  Evidence: seven named rejection tests, one decision-order regression, and five acceptance/sensitivity tests
+  in `RegionActivationTests` and `RegionActivationValidGraphTests`; full local
+  Release gate 54/54, with 8-token Synapse/dotLLM/LLamaSharp parity.
+- [x] F0.8 Update `docs/Features/GraphExecution.md`, record ADR-003 F0
+  implementation status, and record evidence for TASK-GRF-001.
+  Evidence: this plan, the feature document, ADR-003, and README checkpoint.
 
 Exit: GRF-001 AC 1–3 plus the new tests pass, and the Qwen smoke test still
 produces token `12095`. Not claimed: execution from the IR.

@@ -158,7 +158,10 @@ public sealed class TypedGraphIrTests
             requiredWeights: null,
             stateReads: null,
             stateWrites: null,
-            new AlwaysRequiredEligibility());
+            new RegionActivation(
+                new AlwaysActive(),
+                new StructuralProvenance(),
+                new NotSkippable()));
         var graphWithOverlap = new ModelGraph(
             graph.GraphVersion,
             graph.OpSetVersion,
@@ -189,7 +192,7 @@ public sealed class TypedGraphIrTests
             source.RequiredWeights,
             source.StateReads,
             source.StateWrites,
-            source.Eligibility,
+            source.Activation,
             source.SemanticAnnotations);
         var invalidGraph = ReplaceRegion(graph, invalidRegion);
 
@@ -214,7 +217,7 @@ public sealed class TypedGraphIrTests
             requiredWeights: [],
             stateReads: source.StateReads,
             stateWrites: source.StateWrites,
-            eligibility: source.Eligibility,
+            activation: source.Activation,
             semanticAnnotations: source.SemanticAnnotations);
         var invalidGraph = ReplaceRegion(graph, lyingRegion);
 
@@ -350,7 +353,7 @@ public sealed class TypedGraphIrTests
             region.RequiredWeights.Reverse(),
             region.StateReads.Reverse(),
             region.StateWrites.Reverse(),
-            region.Eligibility,
+            region.Activation,
             region.SemanticAnnotations.Reverse());
         var reordered = ReplaceRegion(graph, reorderedRegion);
         var linear = graph.Nodes.Single(node => node.Operation == GraphOperationKind.Linear);

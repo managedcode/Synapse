@@ -114,7 +114,10 @@ internal sealed class Qwen2GraphBuildContext
             weights,
             stateReads,
             stateWrites,
-            new AlwaysRequiredEligibility(),
+            new RegionActivation(
+                new AlwaysActive(),
+                new StructuralProvenance(),
+                new NotSkippable()),
             annotations));
 
     public NodeId AddOutput(ValueId value) =>

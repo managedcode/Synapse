@@ -28,10 +28,14 @@ normative product scope.
   the Synapse manifest/chunk format, tokenizer/template import, and bounded
   allocator do not.
 - [x] Typed Model IR core, bounded shapes, explicit numerical types, FlyBrain
-  regions/eligibility, typed operation attributes and decode position, and
+  region activation/provenance/skip contracts, typed operation attributes and
+  decode position, and
   verifier for SSA/order/cycles/state/entry points. Model-bounded symbolic KV
   context and canonical graph fingerprinting keep identity session-independent;
   weight descriptors bind tensors to verified source ranges and encodings.
+  F0.7 adds decision-value, non-causal route, bypass, tolerant-merge, and
+  position-hole verifier rules; 13 focused region tests and the full 54-test
+  real-model Mac gate pass. Execution of conditional regions remains F1.
 - [x] Materialize and verify the managed Qwen2 dense topology as Model IR before
   runtime scratch/KV allocation. Entry plumbing is outside regions; the
   verifier independently derives exact value, tensor, and state boundaries.

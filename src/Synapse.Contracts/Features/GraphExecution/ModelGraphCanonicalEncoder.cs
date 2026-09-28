@@ -2,7 +2,7 @@ namespace ManagedCode.Synapse.Contracts.Features.GraphExecution;
 
 internal sealed class ModelGraphCanonicalEncoder(CanonicalHashWriter writer)
 {
-    private const uint EncodingVersion = 2;
+    private const uint EncodingVersion = 3;
 
     public void Write(ModelGraph graph)
     {
@@ -62,7 +62,7 @@ internal sealed class ModelGraphCanonicalEncoder(CanonicalHashWriter writer)
             WriteOptionalEnum(node.MergeMode);
             WriteLoop(node.Loop);
             WriteOptionalUInt32(node.Tensor?.Value);
-            WriteAttributes(node.Attributes);
+            ModelGraphSemanticEncoder.WriteAttributes(writer, node.Attributes);
         }
     }
 
@@ -75,6 +75,7 @@ internal sealed class ModelGraphCanonicalEncoder(CanonicalHashWriter writer)
             WriteShape(slot.Shape);
             WriteNumericType(slot.NumericType);
             writer.WriteBoolean(slot.HasInitialValue);
+            writer.WriteBoolean(slot.PositionHolesAllowed);
         }
     }
 
@@ -102,7 +103,7 @@ internal sealed class ModelGraphCanonicalEncoder(CanonicalHashWriter writer)
             WriteSortedIds(region.RequiredWeights, id => id.Value);
             WriteSortedIds(region.StateReads, id => id.Value);
             WriteSortedIds(region.StateWrites, id => id.Value);
-            WriteEligibility(region.Eligibility);
+            ModelGraphSemanticEncoder.WriteActivation(writer, region.Activation);
             WriteStrings([.. region.SemanticAnnotations.Order(StringComparer.Ordinal)]);
         }
     }
@@ -136,62 +137,6 @@ internal sealed class ModelGraphCanonicalEncoder(CanonicalHashWriter writer)
         writer.WriteInt32(loop.MaximumIterations);
         WriteIds(loop.CarriedInputs, id => id.Value);
         WriteIds(loop.CarriedOutputs, id => id.Value);
-    }
-
-    private void WriteAttributes(GraphOperationAttributes? attributes)
-    {
-        switch (attributes)
-        {
-            case null:
-                writer.WriteByte(0);
-                break;
-            case NormalizationAttributes normalization:
-                writer.WriteByte(1);
-                writer.WriteSingle(normalization.Epsilon);
-                break;
-            case RopeAttributes rope:
-                writer.WriteByte(2);
-                writer.WriteSingle(rope.Theta);
-                writer.WriteInt32(rope.HeadDimension);
-                writer.WriteInt32((int)rope.Layout);
-                break;
-            case CausalAttentionAttributes attention:
-                writer.WriteByte(3);
-                writer.WriteInt32(attention.QueryHeads);
-                writer.WriteInt32(attention.KeyValueHeads);
-                writer.WriteInt32(attention.HeadDimension);
-                writer.WriteSingle(attention.Scale);
-                writer.WriteInt32((int)attention.Mask);
-                break;
-            default:
-                throw new NotSupportedException(
-                    $"Operation attributes '{attributes.GetType().FullName}' have no canonical encoding.");
-        }
-    }
-
-    private void WriteEligibility(ExecutionEligibility eligibility)
-    {
-        switch (eligibility)
-        {
-            case AlwaysRequiredEligibility:
-                writer.WriteByte(1);
-                break;
-            case GraphPredicateEligibility predicate:
-                writer.WriteByte(2);
-                writer.WriteUInt32(predicate.Predicate.Value);
-                break;
-            case TrainedRouteEligibility trained:
-                writer.WriteByte(3);
-                writer.WriteString(trained.PolicyHash.Value);
-                break;
-            case ApproximateProfileEligibility approximate:
-                writer.WriteByte(4);
-                writer.WriteString(approximate.EvaluationHash.Value);
-                break;
-            default:
-                throw new NotSupportedException(
-                    $"Execution eligibility '{eligibility.GetType().FullName}' has no canonical encoding.");
-        }
     }
 
     private void WriteIds<T>(IReadOnlyList<T> ids, Func<T, uint> select)

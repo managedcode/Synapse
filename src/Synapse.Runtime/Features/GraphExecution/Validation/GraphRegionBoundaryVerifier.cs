@@ -48,6 +48,10 @@ internal static class GraphRegionBoundaryVerifier
         var entryOutputs = context.Graph.EntryPoints
             .SelectMany(entryPoint => entryPoint.Outputs)
             .ToHashSet();
+        var decisionValues = context.Graph.Regions
+            .Select(region => region.Activation.Decision)
+            .SelectMany(GetDecisionValues)
+            .ToHashSet();
 
         foreach (var nodeId in memberNodes)
         {
@@ -65,7 +69,7 @@ internal static class GraphRegionBoundaryVerifier
             {
                 var consumedOutside = context.ValueConsumers.TryGetValue(output, out var consumers) &&
                     consumers.Any(consumer => !memberNodes.Contains(consumer));
-                if (consumedOutside || entryOutputs.Contains(output))
+                if (consumedOutside || entryOutputs.Contains(output) || decisionValues.Contains(output))
                 {
                     _ = outputs.Add(output);
                 }
@@ -82,6 +86,13 @@ internal static class GraphRegionBoundaryVerifier
 
         return new DerivedRegionBoundary(inputs, outputs, weights, stateReads, stateWrites);
     }
+
+    private static IEnumerable<ValueId> GetDecisionValues(ActivationDecision decision) => decision switch
+    {
+        PredicateDecision predicate => [predicate.Predicate],
+        RouteSlotDecision route => [route.Route],
+        _ => [],
+    };
 
     private static void ValidateDeclaredReferences(
         GraphVerificationContext context,
