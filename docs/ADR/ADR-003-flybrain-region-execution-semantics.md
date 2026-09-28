@@ -166,6 +166,15 @@ op-by-op reference interpreter is always available as the oracle and as the
 reference backend. The hand-written Qwen2 layer loop is removed once the
 region kernels replace it.
 
+The reference math uses named tolerance policies for bounded tiny tensors:
+FP32 `atol=1e-5, rtol=1e-4`, FP16 `5e-3/5e-3`, and BF16 `2e-2/2e-2`.
+Initial scalar linear and causal grouped-query attention operators accumulate
+left-to-right in FP64, then round once to FP32. Active NaN/Inf operands and
+FP32 overflow produce typed numerical errors before caller output is changed.
+Future and masked KV positions are not read. A query with no visible key fails
+with `AllKeysMasked`; it never returns NaN or a fabricated zero vector. The
+remaining reference operators and graph interpreter are F1.1 work.
+
 ## Alternatives rejected
 
 - Keep one `ExecutionEligibility` union. It forces provenance and runtime

@@ -1,7 +1,8 @@
 # FlyBrain graph-native execution: brainstorm
 
-Date: 2026-09-27. Status: planning input for `flybrain.plan.md`; nothing
-here is implemented or measured.
+Date: 2026-09-27. Status: design input for `flybrain.plan.md`; F0 region
+contracts and the first F1 scalar reference operators are implemented. The
+later execution and performance ideas below remain planned or hypothetical.
 
 ## The idea, restated precisely
 

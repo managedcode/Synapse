@@ -34,8 +34,9 @@ Orleans (later D3 request/control plane only)
 The central FlyBrain execution model is a bounded activation wave over coarse
 regions. Model IR answers **what may execute**; Execution IR decides **how and
 with which precision**; the deployment plan decides **where**. Region labels
-are annotations only. Skipping work requires an explicit graph predicate,
-trained policy hash, or evaluated approximation profile. See
+are annotations only. A skippable region declares a graph decision or profile,
+its structural/programmed/trained/approximate provenance, and explicit absent
+or bypassed output behavior. See
 `docs/ADR/ADR-002-flybrain-activation-waves.md`.
 
 Large tensors, activations, and KV payloads never transit Orleans. There is no
@@ -58,6 +59,8 @@ architecture and SIMD capability, memory budget validation, a real Rust child
 process, and a durable ZoneTree write/reopen/read. The first inference slice
 adds a bounded GGUF v3 reader, a verified 26-region Qwen2 Model IR, and a
 managed Qwen2 Q8_0 forward/decode path. It currently accepts pre-tokenized IDs;
-execution from the IR, the tokenizer, Metal, paged KV, and the Orleans topology
+the first scalar reference linear and causal attention operators are also
+covered by FP64 and masking tests. Execution from the IR, the tokenizer, Metal,
+paged KV, and the Orleans topology
 remain on the critical path. Model acquisition and import boundaries are in
 `ADR-004` and `docs/Features/ModelPackages.md`.
