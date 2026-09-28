@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="392" viewBox="0 0 960 392" font-family="Satoshi, 'Host Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="title desc">
+  <title id="title">Long prompts: the wait before the first token grows</title>
+  <desc id="desc">Time to first token by prompt length on a MacBook Pro M2 Pro, earlier run with SIMD C# kernels on 2 threads. Synapse: 425 ms at 70 tokens, 841 ms at 165 tokens, 1,391 ms at 274 tokens. LLamaSharp with llama.cpp inside: 133, 287, and 473 ms. Synapse is about 3 times slower.</desc>
+  <defs>
+    <linearGradient id="syn" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ed732e"/><stop offset="1" stop-color="#db3276"/></linearGradient>
+    <linearGradient id="gapfill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff7e5d" stop-opacity="0.32"/><stop offset="1" stop-color="#ff7e5d" stop-opacity="0.06"/></linearGradient>
+  </defs>
+  <style>
+    .bgc { fill: #f9f7f5; stroke: #d3d8da; }
+    .h { fill: #121212; }
+    .t { fill: #161616; }
+    .m { fill: #121212; fill-opacity: 0.6; }
+    .chip { fill: #ffffff; stroke: #d3d8da; }
+    .grid { stroke: #121212; stroke-opacity: 0.08; }
+    .axis { stroke: #121212; stroke-opacity: 0.3; }
+    .synl { stroke: url(#syn); stroke-width: 4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .synp { fill: #db3276; stroke: #f9f7f5; stroke-width: 2.5; }
+    .synt { fill: #b33a20; }
+    .refl { stroke: #2d40ea; stroke-width: 4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .refp { fill: #2d40ea; stroke: #f9f7f5; stroke-width: 2.5; }
+    .reft { fill: #2d40ea; }
+    .gapt { fill: #d71c21; }
+    @media (prefers-color-scheme: dark) {
+      .bgc { fill: #161616; stroke: #3a3a3a; }
+      .h, .t { fill: #f9f7f5; }
+      .m { fill: #f9f7f5; fill-opacity: 0.6; }
+      .chip { fill: #ffffff; fill-opacity: 0.06; stroke: #ffffff; stroke-opacity: 0.25; }
+      .grid { stroke: #ffffff; stroke-opacity: 0.1; }
+      .axis { stroke: #ffffff; stroke-opacity: 0.35; }
+      .synp { stroke: #161616; }
+      .synt { fill: #ff7e5d; }
+      .refl { stroke: #6d7bff; }
+      .refp { fill: #6d7bff; stroke: #161616; }
+      .reft { fill: #8f9bff; }
+      .gapt { fill: #ff6b6b; }
+    }
+  </style>
+
+  <rect class="bgc" x="0.5" y="0.5" width="959" height="391" rx="24"/>
+  <text class="h" x="32" y="46" font-size="22" font-weight="600">Long prompts: the wait before the first token grows</text>
+  <text class="m" x="32" y="70" font-size="13">Earlier run · SIMD C# kernels · 2 threads · 1 measurement · before batched prompt reading (task CPU.2)</text>
+  <rect class="chip" x="32" y="84" width="232" height="26" rx="13"/>
+  <text class="t" x="46" y="101" font-size="12">MacBook Pro · Apple M2 Pro · 32 GB</text>
+
+  <path d="M620,97 L644,97" stroke="#e4513f" stroke-width="4" stroke-linecap="round"/>
+  <text class="t" x="652" y="101" font-size="13" font-weight="600">Synapse</text>
+  <path class="refl" d="M730,97 L754,97"/>
+  <text class="t" x="762" y="101" font-size="13">LLamaSharp (llama.cpp)</text>
+
+  <!-- 0..1500 ms mapped to y 336..136 (0.1333 px per ms); 0..300 tokens mapped to x 100..900 -->
+  <path class="grid" d="M100,136 L900,136 M100,202.7 L900,202.7 M100,269.3 L900,269.3"/>
+  <path class="axis" d="M100,336 L900,336"/>
+  <text class="m" x="92" y="140" font-size="12" text-anchor="end">1,500 ms</text>
+  <text class="m" x="92" y="206.7" font-size="12" text-anchor="end">1,000 ms</text>
+  <text class="m" x="92" y="273.3" font-size="12" text-anchor="end">500 ms</text>
+  <text class="m" x="92" y="340" font-size="12" text-anchor="end">0</text>
+  <text class="t" x="286.7" y="356" font-size="12" text-anchor="middle">70 tokens</text>
+  <text class="t" x="540" y="356" font-size="12" text-anchor="middle">165 tokens</text>
+  <text class="t" x="830.7" y="356" font-size="12" text-anchor="middle">274 tokens</text>
+  <text class="m" x="500" y="378" font-size="12" text-anchor="middle">prompt length</text>
+
+  <path d="M286.7,279.3 L540,223.9 L830.7,150.5 L830.7,272.9 L540,297.7 L286.7,318.3 Z" fill="url(#gapfill)"/>
+
+  <path class="refl" d="M286.7,318.3 L540,297.7 L830.7,272.9"/>
+  <circle class="refp" cx="286.7" cy="318.3" r="6.5"/>
+  <circle class="refp" cx="540" cy="297.7" r="6.5"/>
+  <circle class="refp" cx="830.7" cy="272.9" r="6.5"/>
+  <text class="reft" x="276" y="310" font-size="13" font-weight="600" text-anchor="end">133 ms</text>
+  <text class="reft" x="529" y="290" font-size="13" font-weight="600" text-anchor="end">287 ms</text>
+  <text class="reft" x="820" y="265" font-size="13" font-weight="600" text-anchor="end">473 ms</text>
+
+  <path class="synl" d="M286.7,279.3 L540,223.9 L830.7,150.5"/>
+  <circle class="synp" cx="286.7" cy="279.3" r="6.5"/>
+  <circle class="synp" cx="540" cy="223.9" r="6.5"/>
+  <circle class="synp" cx="830.7" cy="150.5" r="6.5"/>
+  <text class="synt" x="276" y="271" font-size="14" font-weight="600" text-anchor="end">425 ms</text>
+  <text class="synt" x="529" y="216" font-size="14" font-weight="600" text-anchor="end">841 ms</text>
+  <text class="synt" x="820" y="143" font-size="14" font-weight="600" text-anchor="end">1,391 ms</text>
+
+  <text class="gapt" x="298" y="304" font-size="14" font-weight="600">3.2×</text>
+  <text class="gapt" x="552" y="266" font-size="14" font-weight="600">2.9×</text>
+  <text class="gapt" x="842" y="216" font-size="14" font-weight="600">2.9×</text>
+  <text class="gapt" x="842" y="234" font-size="12" font-weight="600">slower</text>
+</svg>

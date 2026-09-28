@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="644" viewBox="0 0 960 644" font-family="Satoshi, 'Host Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="title desc">
+  <title id="title">Synapse architecture</title>
+  <desc id="desc">An application uses Synapse locally in one process, or through a planned Orleans control plane that coordinates workers. Workers pass the hidden state directly to each other. Every worker runs the same runtime: Model IR decides what can run, Execution IR decides how and how precisely, the deployment plan decides where, and the wave scheduler runs only the needed regions on C# kernels, Rust, Metal or CUDA kernels, weight residency, and the hot KV cache. Model packages and ZoneTree keep local durable state.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="head" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+    <linearGradient id="syn" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ed732e"/><stop offset="1" stop-color="#db3276"/></linearGradient>
+  </defs>
+  <style>
+    .bgc { fill: #f9f7f5; stroke: #d3d8da; }
+    .h { fill: #121212; }
+    .t { fill: #161616; }
+    .m { fill: #121212; fill-opacity: 0.6; }
+    .w { fill: #ffffff; }
+    .head { fill: #121212; fill-opacity: 0.55; }
+    .line { stroke: #121212; stroke-opacity: 0.55; stroke-width: 1.6; fill: none; }
+    .dash { stroke-dasharray: 5 4; }
+    .control { fill: #f5ede2; stroke: #cfa37e; stroke-width: 1.4; }
+    .data { fill: #ffffff; stroke: #2d40ea; stroke-opacity: 0.55; stroke-width: 1.4; }
+    .dataframe { fill: none; stroke: #2d40ea; stroke-opacity: 0.55; stroke-width: 1.4; stroke-dasharray: 6 4; }
+    .ir { fill: #eceefd; stroke: #2d40ea; stroke-width: 1.4; }
+    .exec { fill: #fdebe5; stroke: #ff7e5d; stroke-width: 1.4; }
+    .store { fill: #efeeec; stroke: #d3d8da; stroke-width: 1.4; }
+    .rtframe { fill: none; stroke: url(#syn); stroke-width: 2; }
+    .stframe { fill: none; stroke: #d3d8da; stroke-width: 1.4; }
+    .rtlabel { fill: #b33a20; }
+    @media (prefers-color-scheme: dark) {
+      .bgc { fill: #161616; stroke: #3a3a3a; }
+      .h, .t { fill: #f9f7f5; }
+      .m { fill: #f9f7f5; fill-opacity: 0.6; }
+      .head { fill: #ffffff; fill-opacity: 0.6; }
+      .line { stroke: #ffffff; stroke-opacity: 0.55; }
+      .control { fill: #cfa37e; fill-opacity: 0.15; }
+      .data { fill: #ffffff; fill-opacity: 0.06; stroke: #6d7bff; }
+      .dataframe { stroke: #6d7bff; }
+      .ir { fill: #2d40ea; fill-opacity: 0.22; stroke: #6d7bff; }
+      .exec { fill: #ff7e5d; fill-opacity: 0.15; }
+      .store { fill: #ffffff; fill-opacity: 0.06; stroke: #ffffff; stroke-opacity: 0.25; }
+      .stframe { stroke: #ffffff; stroke-opacity: 0.25; }
+      .rtlabel { fill: #ff9b80; }
+    }
+  </style>
+
+  <rect class="bgc" x="0.5" y="0.5" width="959" height="643" rx="24"/>
+
+  <!-- Entry -->
+  <rect fill="url(#syn)" x="370" y="24" width="220" height="44" rx="22"/>
+  <text class="w" x="480" y="51" font-size="14" font-weight="600" text-anchor="middle">Your app · .NET SDK · CLI</text>
+
+  <!-- Local mode -->
+  <path class="line" d="M430,68 C430,96 170,90 170,118" marker-end="url(#arrow)"/>
+  <text class="m" x="262" y="94" font-size="12" text-anchor="middle">local</text>
+  <rect class="data" x="40" y="120" width="260" height="64" rx="10"/>
+  <text class="t" x="170" y="146" font-size="14" font-weight="600" text-anchor="middle">Local mode</text>
+  <text class="t" x="170" y="166" font-size="12" text-anchor="middle">one process · offline · no network</text>
+
+  <!-- Cluster -->
+  <path class="line" d="M530,68 C530,92 740,86 740,108" marker-end="url(#arrow)"/>
+  <text class="m" x="652" y="90" font-size="12" text-anchor="middle">cluster</text>
+  <rect class="control" x="560" y="110" width="360" height="58" rx="10"/>
+  <text class="t" x="740" y="134" font-size="14" font-weight="600" text-anchor="middle">Orleans control plane (planned)</text>
+  <text class="t" x="740" y="154" font-size="12" text-anchor="middle">sessions · leases · epochs · placement · no tensors</text>
+
+  <path class="line dash" d="M740,168 L740,186" marker-end="url(#arrow)"/>
+  <text class="m" x="750" y="182" font-size="11">control only</text>
+
+  <rect class="dataframe" x="560" y="188" width="360" height="82" rx="10"/>
+  <text class="m" x="574" y="205" font-size="12">Data plane · direct between workers</text>
+  <rect class="data" x="576" y="214" width="120" height="44" rx="8"/>
+  <text class="t" x="636" y="233" font-size="13" font-weight="600" text-anchor="middle">Worker A</text>
+  <text class="t" x="636" y="250" font-size="11" text-anchor="middle">layers 0 … 11</text>
+  <rect class="data" x="784" y="214" width="120" height="44" rx="8"/>
+  <text class="t" x="844" y="233" font-size="13" font-weight="600" text-anchor="middle">Worker B</text>
+  <text class="t" x="844" y="250" font-size="11" text-anchor="middle">layers 12 … 23</text>
+  <path class="line" d="M700,240 L780,240" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text class="m" x="740" y="233" font-size="11" text-anchor="middle">hidden state</text>
+
+  <!-- Into the runtime -->
+  <path class="line" d="M144,184 L144,338" marker-end="url(#arrow)"/>
+  <path class="line" d="M740,270 L740,300" marker-end="url(#arrow)"/>
+  <text class="m" x="730" y="290" font-size="11" text-anchor="end">every worker runs the same runtime</text>
+
+  <!-- Runtime -->
+  <rect class="rtframe" x="24" y="302" width="912" height="210" rx="12"/>
+  <text class="rtlabel" x="442" y="325" font-size="13" font-weight="600" text-anchor="middle">Synapse runtime · same code in one process or in every worker</text>
+
+  <rect class="ir" x="44" y="340" width="200" height="66" rx="10"/>
+  <text class="t" x="144" y="362" font-size="14" font-weight="600" text-anchor="middle">Model IR</text>
+  <text class="t" x="144" y="380" font-size="12" font-weight="600" text-anchor="middle">WHAT can run</text>
+  <text class="m" x="144" y="396" font-size="12" text-anchor="middle">regions · state</text>
+
+  <rect class="ir" x="268" y="340" width="200" height="66" rx="10"/>
+  <text class="t" x="368" y="362" font-size="14" font-weight="600" text-anchor="middle">Execution IR</text>
+  <text class="t" x="368" y="380" font-size="12" font-weight="600" text-anchor="middle">HOW, and how precisely</text>
+  <text class="m" x="368" y="396" font-size="12" text-anchor="middle">kernels · memory layout</text>
+
+  <rect class="ir" x="492" y="340" width="200" height="66" rx="10"/>
+  <text class="t" x="592" y="362" font-size="14" font-weight="600" text-anchor="middle">Deployment plan</text>
+  <text class="t" x="592" y="380" font-size="12" font-weight="600" text-anchor="middle">WHERE it runs</text>
+  <text class="m" x="592" y="396" font-size="12" text-anchor="middle">device · worker</text>
+
+  <rect class="exec" x="716" y="340" width="200" height="66" rx="10"/>
+  <text class="t" x="816" y="362" font-size="14" font-weight="600" text-anchor="middle">Wave scheduler</text>
+  <text class="t" x="816" y="380" font-size="12" font-weight="600" text-anchor="middle">runs only needed regions</text>
+  <text class="m" x="816" y="396" font-size="12" text-anchor="middle">skips only with proof</text>
+
+  <path class="line" d="M244,373 L266,373" marker-end="url(#arrow)"/>
+  <path class="line" d="M468,373 L490,373" marker-end="url(#arrow)"/>
+  <path class="line" d="M692,373 L714,373" marker-end="url(#arrow)"/>
+
+  <path class="line" d="M816,406 L816,424 M144,424 L816,424"/>
+  <path class="line" d="M144,424 L144,440" marker-end="url(#arrow)"/>
+  <path class="line" d="M368,424 L368,440" marker-end="url(#arrow)"/>
+  <path class="line" d="M592,424 L592,440" marker-end="url(#arrow)"/>
+  <path class="line" d="M816,424 L816,440" marker-end="url(#arrow)"/>
+
+  <rect class="exec" x="44" y="442" width="200" height="56" rx="10"/>
+  <text class="t" x="144" y="465" font-size="14" font-weight="600" text-anchor="middle">C# kernels</text>
+  <text class="m" x="144" y="484" font-size="12" text-anchor="middle">reference · always works</text>
+
+  <rect class="exec" x="268" y="442" width="200" height="56" rx="10"/>
+  <text class="t" x="368" y="465" font-size="14" font-weight="600" text-anchor="middle">Rust · Metal · CUDA</text>
+  <text class="m" x="368" y="484" font-size="12" text-anchor="middle">fast paths, after profiling</text>
+
+  <rect class="exec" x="492" y="442" width="200" height="56" rx="10"/>
+  <text class="t" x="592" y="465" font-size="14" font-weight="600" text-anchor="middle">Weight residency</text>
+  <text class="m" x="592" y="484" font-size="12" text-anchor="middle">load on demand · precision</text>
+
+  <rect class="exec" x="716" y="442" width="200" height="56" rx="10"/>
+  <text class="t" x="816" y="465" font-size="14" font-weight="600" text-anchor="middle">Hot KV cache</text>
+  <text class="m" x="816" y="484" font-size="12" text-anchor="middle">one owner per session</text>
+
+  <!-- Durable state -->
+  <path class="line" d="M592,498 L592,552" marker-end="url(#arrow)"/>
+  <path class="line" d="M816,498 L816,552" marker-end="url(#arrow)"/>
+
+  <rect class="stframe" x="24" y="540" width="912" height="84" rx="12"/>
+  <text class="t" x="40" y="566" font-size="13" font-weight="600">Local durable state</text>
+  <text class="m" x="40" y="586" font-size="12">on this machine, never in Git</text>
+
+  <rect class="store" x="492" y="554" width="200" height="56" rx="10"/>
+  <text class="t" x="592" y="577" font-size="14" font-weight="600" text-anchor="middle">Model packages</text>
+  <text class="m" x="592" y="596" font-size="12" text-anchor="middle">pinned · SHA-256 verified</text>
+
+  <rect class="store" x="716" y="554" width="200" height="56" rx="10"/>
+  <text class="t" x="816" y="577" font-size="14" font-weight="600" text-anchor="middle">ZoneTree</text>
+  <text class="m" x="816" y="596" font-size="12" text-anchor="middle">cache index · journal</text>
+</svg>

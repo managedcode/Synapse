@@ -1,0 +1,171 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="716" viewBox="0 0 960 716" font-family="Satoshi, 'Host Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="title desc">
+  <title id="title">Synapse vs the reference engines on a MacBook Pro M2 Pro</title>
+  <desc id="desc">Qwen2.5 0.5B Q8_0, short request, median of 5 runs. Writing speed on 2 threads: Synapse 136.6, llama.cpp 133.7, LLamaSharp 97.1, dotLLM 9.7 tokens per second; MLX on the GPU 225.5 in a separate test. On 8 threads: Synapse 190.6, llama.cpp 167.2, LLamaSharp 147.0, dotLLM 31.7. Whole request: Synapse 0.22 s, llama.cpp 0.69 s, LLamaSharp 0.94 s, dotLLM 2.23 s. Peak memory: Synapse 555 MiB, llama.cpp 1,256, LLamaSharp 1,275, dotLLM 1,190, MLX 656.</desc>
+  <defs>
+    <linearGradient id="kpi" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ed732e"/><stop offset="1" stop-color="#db3276"/></linearGradient>
+    <linearGradient id="syn" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ed732e"/><stop offset="1" stop-color="#db3276"/></linearGradient>
+    <linearGradient id="llama" x1="0" y1="0" x2="1" y2="0"><stop class="c-llama" offset="0"/><stop class="c-llama" offset="1"/></linearGradient>
+    <linearGradient id="sharp" x1="0" y1="0" x2="1" y2="0"><stop class="c-sharp" offset="0"/><stop class="c-sharp" offset="1"/></linearGradient>
+    <linearGradient id="dot" x1="0" y1="0" x2="1" y2="0"><stop class="c-dot" offset="0"/><stop class="c-dot" offset="1"/></linearGradient>
+    <linearGradient id="mlx" x1="0" y1="0" x2="1" y2="0"><stop class="c-mlx" offset="0"/><stop class="c-mlx" offset="1"/></linearGradient>
+  </defs>
+  <style>
+    .bgc { fill: #f9f7f5; stroke: #d3d8da; }
+    .h { fill: #121212; }
+    .t { fill: #161616; }
+    .m { fill: #121212; fill-opacity: 0.6; }
+    .s { fill: #b33a20; }
+    .ok { fill: #114e0b; }
+    .panel { fill: #f2ede8; }
+    .chip, .tile { fill: #ffffff; stroke: #d3d8da; }
+    .pill { fill: #ff7e5d; fill-opacity: 0.18; }
+    .gpu { stroke: none; }
+    .c-llama { stop-color: #2d40ea; }
+    .c-sharp { stop-color: #cfa37e; }
+    .c-dot { stop-color: #9aa3ab; }
+    .c-mlx { stop-color: #283849; }
+    @media (prefers-color-scheme: dark) {
+      .bgc { fill: #161616; stroke: #3a3a3a; }
+      .h, .t { fill: #f9f7f5; }
+      .m { fill: #f9f7f5; fill-opacity: 0.6; }
+      .s { fill: #ff7e5d; }
+      .ok { fill: #6fcf7a; }
+      .panel { fill: #ffffff; fill-opacity: 0.06; }
+      .chip, .tile { fill: #ffffff; fill-opacity: 0.06; stroke: #ffffff; stroke-opacity: 0.25; }
+      .pill { fill-opacity: 0.22; }
+      .c-llama { stop-color: #6d7bff; }
+      .c-dot { stop-color: #6b7680; }
+      .c-mlx { stop-color: #c7cdd4; }
+    }
+  </style>
+
+  <rect class="bgc" x="0.5" y="0.5" width="959" height="715" rx="24"/>
+
+  <text class="h" x="36" y="50" font-size="24" font-weight="600">Synapse vs the reference engines</text>
+  <text class="m" x="36" y="76" font-size="13">Short request: 5-token prompt, 8-token answer · median of 5 runs after 3 warm-ups · CPU engines on the same threads</text>
+
+  <rect class="chip" x="36" y="92" width="344" height="26" rx="13"/>
+  <text class="t" x="50" y="109" font-size="12">MacBook Pro · Apple M2 Pro · 12 CPU cores · 32 GB</text>
+  <rect class="chip" x="390" y="92" width="133" height="26" rx="13"/>
+  <text class="t" x="404" y="109" font-size="12">Qwen2.5 0.5B Q8_0</text>
+  <rect class="chip" x="533" y="92" width="226" height="26" rx="13"/>
+  <circle cx="549" cy="105" r="4.5" class="ok"/>
+  <text class="t" x="560" y="109" font-size="12">same answer from every engine</text>
+
+  <!-- KPI tiles -->
+  <rect class="tile" x="36" y="136" width="210" height="100" rx="14"/>
+  <text x="54" y="186" font-size="36" font-weight="600" fill="url(#kpi)">102%</text>
+  <text class="t" x="54" y="208" font-size="13" font-weight="600">of llama.cpp speed</text>
+  <text class="m" x="54" y="225" font-size="12">2 threads: 137 vs 134 tok/s</text>
+
+  <rect class="tile" x="262" y="136" width="210" height="100" rx="14"/>
+  <text x="280" y="186" font-size="36" font-weight="600" fill="url(#kpi)">114%</text>
+  <text class="t" x="280" y="208" font-size="13" font-weight="600">of llama.cpp speed</text>
+  <text class="m" x="280" y="225" font-size="12">8 threads: 191 vs 167 tok/s</text>
+
+  <rect class="tile" x="488" y="136" width="210" height="100" rx="14"/>
+  <text x="506" y="186" font-size="36" font-weight="600" fill="url(#kpi)">3.2×</text>
+  <text class="t" x="506" y="208" font-size="13" font-weight="600">faster whole request</text>
+  <text class="m" x="506" y="225" font-size="12">0.22 s vs 0.69 s</text>
+
+  <rect class="tile" x="714" y="136" width="210" height="100" rx="14"/>
+  <text x="732" y="186" font-size="36" font-weight="600" fill="url(#kpi)">2.3×</text>
+  <text class="t" x="732" y="208" font-size="13" font-weight="600">less memory</text>
+  <text class="m" x="732" y="225" font-size="12">555 vs 1,256 MiB</text>
+
+  <!-- Panel 1: speed, 2 threads (1 px per token/s) -->
+  <g transform="translate(36,256)">
+    <rect class="panel" width="436" height="190" rx="14"/>
+    <text class="h" x="18" y="28" font-size="15" font-weight="600">Writing speed · 2 threads</text>
+    <text class="m" x="18" y="45" font-size="12">tokens per second · higher is better</text>
+    <rect class="pill" x="276" y="13" width="142" height="24" rx="12"/>
+    <text class="s" x="347" y="29.5" font-size="12" font-weight="600" text-anchor="middle">102% of llama.cpp</text>
+    <text class="s" x="112" y="70" font-size="13" font-weight="600" text-anchor="end">Synapse</text>
+    <rect x="122" y="58" width="136.6" height="16" rx="4" fill="url(#syn)"/>
+    <text class="h" x="266.6" y="70" font-size="13" font-weight="600">136.6</text>
+    <text class="t" x="112" y="95" font-size="13" text-anchor="end">llama.cpp</text>
+    <rect x="122" y="83" width="133.7" height="16" rx="4" fill="url(#llama)"/>
+    <text class="t" x="263.7" y="95" font-size="13">133.7</text>
+    <text class="t" x="112" y="120" font-size="13" text-anchor="end">LLamaSharp</text>
+    <rect x="122" y="108" width="97.1" height="16" rx="4" fill="url(#sharp)"/>
+    <text class="t" x="227.1" y="120" font-size="13">97.1</text>
+    <text class="t" x="112" y="145" font-size="13" text-anchor="end">dotLLM</text>
+    <rect x="122" y="133" width="9.7" height="16" rx="4" fill="url(#dot)"/>
+    <text class="t" x="139.7" y="145" font-size="13">9.7</text>
+    <text class="t" x="112" y="170" font-size="13" text-anchor="end">MLX · GPU *</text>
+    <rect class="gpu" x="122" y="158" width="225.5" height="16" rx="4" fill="url(#mlx)"/>
+    <text class="t" x="355.5" y="170" font-size="13">225.5</text>
+  </g>
+
+  <!-- Panel 2: speed, 8 threads (1 px per token/s) -->
+  <g transform="translate(488,256)">
+    <rect class="panel" width="436" height="190" rx="14"/>
+    <text class="h" x="18" y="28" font-size="15" font-weight="600">Writing speed · 8 threads</text>
+    <text class="m" x="18" y="45" font-size="12">tokens per second · higher is better</text>
+    <rect class="pill" x="276" y="13" width="142" height="24" rx="12"/>
+    <text class="s" x="347" y="29.5" font-size="12" font-weight="600" text-anchor="middle">114% of llama.cpp</text>
+    <text class="s" x="112" y="70" font-size="13" font-weight="600" text-anchor="end">Synapse</text>
+    <rect x="122" y="58" width="190.6" height="16" rx="4" fill="url(#syn)"/>
+    <text class="h" x="320.6" y="70" font-size="13" font-weight="600">190.6</text>
+    <text class="t" x="112" y="95" font-size="13" text-anchor="end">llama.cpp</text>
+    <rect x="122" y="83" width="167.2" height="16" rx="4" fill="url(#llama)"/>
+    <text class="t" x="297.2" y="95" font-size="13">167.2</text>
+    <text class="t" x="112" y="120" font-size="13" text-anchor="end">LLamaSharp</text>
+    <rect x="122" y="108" width="147" height="16" rx="4" fill="url(#sharp)"/>
+    <text class="t" x="277" y="120" font-size="13">147.0</text>
+    <text class="t" x="112" y="145" font-size="13" text-anchor="end">dotLLM</text>
+    <rect x="122" y="133" width="31.7" height="16" rx="4" fill="url(#dot)"/>
+    <text class="t" x="161.7" y="145" font-size="13">31.7</text>
+    <text class="t" x="112" y="170" font-size="13" text-anchor="end">MLX · GPU *</text>
+    <rect class="gpu" x="122" y="158" width="225.5" height="16" rx="4" fill="url(#mlx)"/>
+    <text class="t" x="355.5" y="170" font-size="13">225.5</text>
+  </g>
+
+  <!-- Panel 3: whole request, 2 threads (100 px per second) -->
+  <g transform="translate(36,460)">
+    <rect class="panel" width="436" height="190" rx="14"/>
+    <text class="h" x="18" y="28" font-size="15" font-weight="600">Whole request · start to answer</text>
+    <text class="m" x="18" y="45" font-size="12">seconds, 2 threads · lower is better</text>
+    <rect class="pill" x="319" y="13" width="99" height="24" rx="12"/>
+    <text class="s" x="368.5" y="29.5" font-size="12" font-weight="600" text-anchor="middle">3.2× faster</text>
+    <text class="s" x="112" y="74" font-size="13" font-weight="600" text-anchor="end">Synapse</text>
+    <rect x="122" y="62" width="22" height="16" rx="4" fill="url(#syn)"/>
+    <text class="h" x="152" y="74" font-size="13" font-weight="600">0.22 s</text>
+    <text class="t" x="112" y="104" font-size="13" text-anchor="end">llama.cpp</text>
+    <rect x="122" y="92" width="69" height="16" rx="4" fill="url(#llama)"/>
+    <text class="t" x="199" y="104" font-size="13">0.69 s</text>
+    <text class="t" x="112" y="134" font-size="13" text-anchor="end">LLamaSharp</text>
+    <rect x="122" y="122" width="94" height="16" rx="4" fill="url(#sharp)"/>
+    <text class="t" x="224" y="134" font-size="13">0.94 s</text>
+    <text class="t" x="112" y="164" font-size="13" text-anchor="end">dotLLM</text>
+    <rect x="122" y="152" width="223" height="16" rx="4" fill="url(#dot)"/>
+    <text class="t" x="353" y="164" font-size="13">2.23 s</text>
+  </g>
+
+  <!-- Panel 4: peak memory, 2 threads (0.17857 px per MiB) -->
+  <g transform="translate(488,460)">
+    <rect class="panel" width="436" height="190" rx="14"/>
+    <text class="h" x="18" y="28" font-size="15" font-weight="600">Peak memory · whole process</text>
+    <text class="m" x="18" y="45" font-size="12">MiB · lower is better</text>
+    <rect class="pill" x="333" y="13" width="85" height="24" rx="12"/>
+    <text class="s" x="375.5" y="29.5" font-size="12" font-weight="600" text-anchor="middle">2.3× less</text>
+    <text class="s" x="112" y="70" font-size="13" font-weight="600" text-anchor="end">Synapse</text>
+    <rect x="122" y="58" width="99.1" height="16" rx="4" fill="url(#syn)"/>
+    <text class="h" x="229.1" y="70" font-size="13" font-weight="600">555</text>
+    <text class="t" x="112" y="95" font-size="13" text-anchor="end">llama.cpp</text>
+    <rect x="122" y="83" width="224.3" height="16" rx="4" fill="url(#llama)"/>
+    <text class="t" x="354.3" y="95" font-size="13">1,256</text>
+    <text class="t" x="112" y="120" font-size="13" text-anchor="end">LLamaSharp</text>
+    <rect x="122" y="108" width="227.7" height="16" rx="4" fill="url(#sharp)"/>
+    <text class="t" x="357.7" y="120" font-size="13">1,275</text>
+    <text class="t" x="112" y="145" font-size="13" text-anchor="end">dotLLM</text>
+    <rect x="122" y="133" width="212.5" height="16" rx="4" fill="url(#dot)"/>
+    <text class="t" x="342.5" y="145" font-size="13">1,190</text>
+    <text class="t" x="112" y="170" font-size="13" text-anchor="end">MLX · GPU *</text>
+    <rect class="gpu" x="122" y="158" width="117.1" height="16" rx="4" fill="url(#mlx)"/>
+    <text class="t" x="247.1" y="170" font-size="13">656</text>
+  </g>
+
+  <text class="m" x="36" y="680" font-size="12">* MLX (SwiftLM b795) runs on the Apple GPU in a separate 128-token test, so it is the GPU target, not a paired CPU result.</text>
+  <text class="m" x="36" y="698" font-size="12">llama.cpp speed is its own internal generation rate. Diagnostic run, not the final 30-run gate. Raw data: benchmarks/results/.</text>
+</svg>

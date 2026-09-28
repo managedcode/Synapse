@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="436" viewBox="0 0 960 436" font-family="Satoshi, 'Host Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="title desc">
+  <title id="title">Synapse progress and roadmap</title>
+  <desc id="desc">CPU writing speed as a share of llama.cpp: first version 18 percent, SIMD C# kernels 88 percent, Rust kernels 102 percent. Done: Qwen2.5 runs fully in C# with the same answer as llama.cpp, model graph and verifier, verified model downloads, benchmarks on three operating systems. Now: finish CPU kernels, faster first token on long prompts, run the model from its graph. Built but not wired in: 2 to 8 bit and ternary compression, one model across several devices. Next: tokenizer, skipping regions and loading on demand, KV cache, Metal and CUDA, more models, Orleans cluster.</desc>
+  <defs>
+    <linearGradient id="syn" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ed732e"/><stop offset="1" stop-color="#db3276"/></linearGradient>
+  </defs>
+  <style>
+    .bgc { fill: #f9f7f5; stroke: #d3d8da; }
+    .h { fill: #121212; }
+    .t { fill: #161616; }
+    .m { fill: #121212; fill-opacity: 0.6; }
+    .track { fill: #efeeec; }
+    .dot { fill: #ffffff; stroke: #db3276; stroke-width: 3; }
+    .goal { stroke: #2d40ea; stroke-width: 2; stroke-dasharray: 4 3; }
+    .goalt { fill: #2d40ea; }
+    .done { fill: #e8f0e6; stroke: #114e0b; stroke-opacity: 0.45; }
+    .doneh { fill: #114e0b; }
+    .now { fill: #fdebe5; stroke: #ff7e5d; }
+    .nowh { fill: #b33a20; }
+    .built { fill: #eceefd; stroke: #2d40ea; stroke-opacity: 0.6; }
+    .builth { fill: #2d40ea; }
+    .next { fill: #efeeec; stroke: #d3d8da; }
+    .nexth { fill: #283849; }
+    @media (prefers-color-scheme: dark) {
+      .bgc { fill: #161616; stroke: #3a3a3a; }
+      .h, .t { fill: #f9f7f5; }
+      .m { fill: #f9f7f5; fill-opacity: 0.6; }
+      .track { fill: #ffffff; fill-opacity: 0.1; }
+      .dot { fill: #161616; }
+      .goal { stroke: #6d7bff; }
+      .goalt { fill: #8f9bff; }
+      .done { fill: #6fcf7a; fill-opacity: 0.1; stroke: #6fcf7a; stroke-opacity: 0.6; }
+      .doneh { fill: #6fcf7a; }
+      .now { fill: #ff7e5d; fill-opacity: 0.12; }
+      .nowh { fill: #ff9b80; }
+      .built { fill: #2d40ea; fill-opacity: 0.2; stroke: #6d7bff; }
+      .builth { fill: #8f9bff; }
+      .next { fill: #ffffff; fill-opacity: 0.06; stroke: #ffffff; stroke-opacity: 0.25; }
+      .nexth { fill: #cbd5e1; }
+    }
+  </style>
+
+  <rect class="bgc" x="0.5" y="0.5" width="959" height="435" rx="24"/>
+
+  <!-- 0..120% mapped to x 40..920 (7.333 px per %) -->
+  <text class="h" x="32" y="42" font-size="20" font-weight="600">CPU writing speed, % of llama.cpp</text>
+  <rect class="track" x="40" y="86" width="880" height="12" rx="6"/>
+  <rect x="40" y="86" width="748" height="12" rx="6" fill="url(#syn)"/>
+  <path class="goal" d="M773.3,68 L773.3,114"/>
+  <text class="goalt" x="773.3" y="62" font-size="12" font-weight="600" text-anchor="middle">llama.cpp = 100%</text>
+  <circle class="dot" cx="172" cy="92" r="8"/>
+  <circle class="dot" cx="685.3" cy="92" r="8"/>
+  <circle class="dot" cx="788" cy="92" r="9"/>
+  <text class="h" x="172" y="130" font-size="16" font-weight="600" text-anchor="middle">18%</text>
+  <text class="m" x="172" y="148" font-size="12" text-anchor="middle">first version</text>
+  <text class="h" x="672" y="130" font-size="16" font-weight="600" text-anchor="middle">88%</text>
+  <text class="m" x="672" y="148" font-size="12" text-anchor="middle">SIMD C# kernels</text>
+  <text class="h" x="802" y="130" font-size="16" font-weight="600" text-anchor="middle">102%</text>
+  <text class="m" x="802" y="148" font-size="12" text-anchor="middle">Rust kernels</text>
+  <text class="m" x="32" y="176" font-size="12">First version: 12 threads, against LLamaSharp. SIMD and Rust: 2 threads, against llama.cpp. MacBook Pro M2 Pro.</text>
+
+  <rect class="done" x="40" y="196" width="212" height="214" rx="14"/>
+  <text class="doneh" x="56" y="226" font-size="15" font-weight="600">✓ Done</text>
+  <text class="t" x="56" y="254" font-size="13">• Qwen2.5 runs fully in C#</text>
+  <text class="t" x="56" y="276" font-size="13">• Same answer as llama.cpp</text>
+  <text class="t" x="56" y="298" font-size="13">• Model graph + verifier</text>
+  <text class="t" x="56" y="320" font-size="13">• Verified model downloads</text>
+  <text class="t" x="56" y="342" font-size="13">• Benchmarks on 3 OSes</text>
+
+  <rect class="now" x="268" y="196" width="212" height="214" rx="14"/>
+  <text class="nowh" x="284" y="226" font-size="15" font-weight="600">▶ Now</text>
+  <text class="t" x="284" y="254" font-size="13">• Finish CPU kernels</text>
+  <text class="m" x="294" y="272" font-size="12">already ≥ llama.cpp</text>
+  <text class="t" x="284" y="300" font-size="13">• Faster first token</text>
+  <text class="m" x="294" y="318" font-size="12">on long prompts</text>
+  <text class="t" x="284" y="346" font-size="13">• Run the model</text>
+  <text class="m" x="294" y="364" font-size="12">from its graph</text>
+
+  <rect class="built" x="496" y="196" width="212" height="214" rx="14"/>
+  <text class="builth" x="512" y="226" font-size="15" font-weight="600">◆ Built, not wired in</text>
+  <text class="t" x="512" y="254" font-size="13">• 2–8-bit and ternary</text>
+  <text class="m" x="522" y="272" font-size="12">compression</text>
+  <text class="t" x="512" y="300" font-size="13">• One model across</text>
+  <text class="m" x="522" y="318" font-size="12">several devices</text>
+
+  <rect class="next" x="724" y="196" width="212" height="214" rx="14"/>
+  <text class="nexth" x="740" y="226" font-size="15" font-weight="600">○ Next</text>
+  <text class="t" x="740" y="254" font-size="13">• Tokenizer: text in/out</text>
+  <text class="t" x="740" y="276" font-size="13">• Skip regions,</text>
+  <text class="m" x="750" y="294" font-size="12">load on demand</text>
+  <text class="t" x="740" y="320" font-size="13">• KV cache</text>
+  <text class="t" x="740" y="342" font-size="13">• Metal and CUDA</text>
+  <text class="t" x="740" y="364" font-size="13">• More models</text>
+  <text class="t" x="740" y="386" font-size="13">• Orleans cluster</text>
+</svg>

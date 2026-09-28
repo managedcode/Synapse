@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="420" viewBox="0 0 960 420" font-family="Satoshi, 'Host Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="title desc">
+  <title id="title">Other engines run every block; Synapse runs only the blocks a token needs</title>
+  <desc id="desc">Left: other engines run every attention block and every expert in every layer, and keep all weights in memory. Right: Synapse always runs the dense attention blocks, but the model's own router picks one expert per layer, so the other experts are skipped and can stay on disk.</desc>
+  <defs>
+    <linearGradient id="hot" x1="0" y1="0" x2="1" y2="1"><stop class="c-hot" offset="0"/><stop class="c-hot" offset="1"/></linearGradient>
+    <linearGradient id="on" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ed732e"/><stop offset="1" stop-color="#db3276"/></linearGradient>
+  </defs>
+  <style>
+    .bgc { fill: #f9f7f5; stroke: #d3d8da; }
+    .h { fill: #121212; }
+    .t { fill: #161616; }
+    .m { fill: #121212; fill-opacity: 0.6; }
+    .panel { fill: #f2ede8; }
+    .hot { fill: url(#hot); }
+    .on { fill: url(#on); }
+    .off { fill: none; stroke: #121212; stroke-opacity: 0.3; stroke-width: 1.4; stroke-dasharray: 5 4; }
+    .badL { fill: #2d40ea; }
+    .goodR { fill: #b33a20; }
+    .c-hot { stop-color: #2d40ea; }
+    @media (prefers-color-scheme: dark) {
+      .bgc { fill: #161616; stroke: #3a3a3a; }
+      .h, .t { fill: #f9f7f5; }
+      .m { fill: #f9f7f5; fill-opacity: 0.6; }
+      .panel { fill: #ffffff; fill-opacity: 0.06; }
+      .off { stroke: #ffffff; stroke-opacity: 0.3; }
+      .badL { fill: #8f9bff; }
+      .goodR { fill: #ff7e5d; }
+      .c-hot { stop-color: #6d7bff; }
+    }
+  </style>
+
+  <rect class="bgc" x="0.5" y="0.5" width="959" height="419" rx="24"/>
+
+  <g transform="translate(24,24)">
+    <rect class="panel" width="444" height="372" rx="14"/>
+    <text class="h" x="20" y="34" font-size="18" font-weight="600">Other engines</text>
+    <text class="badL" x="20" y="56" font-size="13" font-weight="600">every token runs every block</text>
+    <text class="m" x="128" y="88" font-size="12" text-anchor="middle">Attention</text>
+    <text class="m" x="214" y="88" font-size="12" text-anchor="middle">Expert A</text>
+    <text class="m" x="300" y="88" font-size="12" text-anchor="middle">Expert B</text>
+    <text class="m" x="386" y="88" font-size="12" text-anchor="middle">Expert C</text>
+    <text class="m" x="20" y="116" font-size="12">Layer 1</text>
+    <rect class="hot" x="90" y="96" width="76" height="30" rx="7"/><rect class="hot" x="176" y="96" width="76" height="30" rx="7"/><rect class="hot" x="262" y="96" width="76" height="30" rx="7"/><rect class="hot" x="348" y="96" width="76" height="30" rx="7"/>
+    <text class="m" x="20" y="156" font-size="12">Layer 2</text>
+    <rect class="hot" x="90" y="136" width="76" height="30" rx="7"/><rect class="hot" x="176" y="136" width="76" height="30" rx="7"/><rect class="hot" x="262" y="136" width="76" height="30" rx="7"/><rect class="hot" x="348" y="136" width="76" height="30" rx="7"/>
+    <text class="m" x="20" y="196" font-size="12">Layer 3</text>
+    <rect class="hot" x="90" y="176" width="76" height="30" rx="7"/><rect class="hot" x="176" y="176" width="76" height="30" rx="7"/><rect class="hot" x="262" y="176" width="76" height="30" rx="7"/><rect class="hot" x="348" y="176" width="76" height="30" rx="7"/>
+    <text class="m" x="20" y="236" font-size="12">Layer 4</text>
+    <rect class="hot" x="90" y="216" width="76" height="30" rx="7"/><rect class="hot" x="176" y="216" width="76" height="30" rx="7"/><rect class="hot" x="262" y="216" width="76" height="30" rx="7"/><rect class="hot" x="348" y="216" width="76" height="30" rx="7"/>
+    <text class="m" x="20" y="276" font-size="12">Layer 5</text>
+    <rect class="hot" x="90" y="256" width="76" height="30" rx="7"/><rect class="hot" x="176" y="256" width="76" height="30" rx="7"/><rect class="hot" x="262" y="256" width="76" height="30" rx="7"/><rect class="hot" x="348" y="256" width="76" height="30" rx="7"/>
+    <text class="t" x="20" y="316" font-size="13">All weights sit in memory.</text>
+    <text class="t" x="20" y="336" font-size="13">Every block does work for every token.</text>
+    <rect class="hot" x="20" y="350" width="14" height="14" rx="3"/>
+    <text class="m" x="42" y="362" font-size="12">runs</text>
+  </g>
+
+  <g transform="translate(492,24)">
+    <rect class="panel" width="444" height="372" rx="14"/>
+    <text class="h" x="20" y="34" font-size="18" font-weight="600">Synapse</text>
+    <text class="goodR" x="20" y="56" font-size="13" font-weight="600">a token lights up only the blocks it needs</text>
+    <text class="m" x="128" y="88" font-size="12" text-anchor="middle">Attention</text>
+    <text class="m" x="214" y="88" font-size="12" text-anchor="middle">Expert A</text>
+    <text class="m" x="300" y="88" font-size="12" text-anchor="middle">Expert B</text>
+    <text class="m" x="386" y="88" font-size="12" text-anchor="middle">Expert C</text>
+    <text class="m" x="20" y="116" font-size="12">Layer 1</text>
+    <rect class="on" x="90" y="96" width="76" height="30" rx="7"/><rect class="off" x="176" y="96" width="76" height="30" rx="7"/><rect class="on" x="262" y="96" width="76" height="30" rx="7"/><rect class="off" x="348" y="96" width="76" height="30" rx="7"/>
+    <text class="m" x="20" y="156" font-size="12">Layer 2</text>
+    <rect class="on" x="90" y="136" width="76" height="30" rx="7"/><rect class="on" x="176" y="136" width="76" height="30" rx="7"/><rect class="off" x="262" y="136" width="76" height="30" rx="7"/><rect class="off" x="348" y="136" width="76" height="30" rx="7"/>
+    <text class="m" x="20" y="196" font-size="12">Layer 3</text>
+    <rect class="on" x="90" y="176" width="76" height="30" rx="7"/><rect class="off" x="176" y="176" width="76" height="30" rx="7"/><rect class="off" x="262" y="176" width="76" height="30" rx="7"/><rect class="on" x="348" y="176" width="76" height="30" rx="7"/>
+    <text class="m" x="20" y="236" font-size="12">Layer 4</text>
+    <rect class="on" x="90" y="216" width="76" height="30" rx="7"/><rect class="on" x="176" y="216" width="76" height="30" rx="7"/><rect class="off" x="262" y="216" width="76" height="30" rx="7"/><rect class="off" x="348" y="216" width="76" height="30" rx="7"/>
+    <text class="m" x="20" y="276" font-size="12">Layer 5</text>
+    <rect class="on" x="90" y="256" width="76" height="30" rx="7"/><rect class="off" x="176" y="256" width="76" height="30" rx="7"/><rect class="on" x="262" y="256" width="76" height="30" rx="7"/><rect class="off" x="348" y="256" width="76" height="30" rx="7"/>
+    <text class="t" x="20" y="316" font-size="13">Dense parts always run. The model's own router</text>
+    <text class="t" x="20" y="336" font-size="13">picks 1 expert per layer; the rest stay on disk.</text>
+    <rect class="on" x="20" y="350" width="14" height="14" rx="3"/>
+    <text class="m" x="42" y="362" font-size="12">runs</text>
+    <rect class="off" x="90" y="350" width="14" height="14" rx="3"/>
+    <text class="m" x="112" y="362" font-size="12">skipped with proof, can stay on disk</text>
+  </g>
+</svg>
