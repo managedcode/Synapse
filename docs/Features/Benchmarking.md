@@ -107,5 +107,36 @@ ONNX Runtime GenAI can be exercised from the C# benchmark project, but needs a
 verified ONNX model package. A Metal MLX run and a CPU GGUF run are different
 hardware cohorts; a separately exported or quantized ONNX/MLX model is a
 different weight/precision cohort unless quality and provenance qualify it.
-Unrun cells remain `not_run`, and neither subject is currently installed or
-measured by the CI benchmark matrix.
+Unrun cells remain `not_run`; ONNX Runtime GenAI is not yet installed or
+measured. The MLX cohort below has local diagnostic evidence but no confirmed
+GitHub Actions measurement yet.
+
+## Longer diagnostics and MLX Metal cohort (2026-09-28)
+
+`dialogue` runs one- or three-turn locked-transcript scenarios from
+`benchmarks/scenarios/`. The single request allows up to 128 output tokens;
+the France/US/UK dialogue allows 64 per turn. It tokenizes each exact CPU
+prompt once with the pinned GGUF tokenizer, then launches all four CPU
+subjects in rotating order and retains actual generated counts, prompt IDs,
+load/TTFT/decode (where available), process wall/CPU/RSS, derived average CPU
+cores (process CPU time divided by wall time), and raw results.
+`report-dialogue --input <raw.json> [--summary <path>]` renders these as a
+separate performance report; neither command runs inside TUnit.
+`performance.yml` now requests one warm-up and three measured rounds for each
+longer scenario on every CPU runner. An early EOS is reported at its actual
+output count. These diagnostic results are not the 30-pair release gate.
+
+This CPU mode starts a **new process for every turn**. The locked earlier
+assistant messages make prompt length grow deterministically but do not reuse
+live KV. OS file-cache warming may occur and is not a KV-cache hit. The
+separate `mlx` command instead starts a resident SwiftLM/MLX Metal server and
+streams each request to measure client-observed TTFT, exact usage tokens,
+request wall, CPU and whole-process RSS/physical footprint. Its pinned server
+log can identify prompt-cache hit-token counts; absent hit logs are `n/a`, not
+proof of a miss. Server load is separate from request wall. SwiftLM is an
+external benchmark subject, not a Synapse engine, and uses a distinct pinned
+MLX 8-bit SafeTensors Qwen package instead of the CPU GGUF Q8_0 weights.
+Metal allocation is not independently measured; RSS and physical footprint
+must not be added. Both cohorts currently label answer quality unreviewed.
+The GitHub Actions MLX job downloads a SHA-256-verified prebuilt binary and
+content-verified model; it does not build Swift or use Python.

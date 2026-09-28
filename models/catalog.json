@@ -2,6 +2,30 @@
   "schemaVersion": 1,
   "packages": [
     {
+      "id": "qwen2.5-0.5b-instruct-mlx-8bit",
+      "displayName": "Qwen2.5 0.5B Instruct MLX 8-bit",
+      "architecture": "qwen2",
+      "kind": "text-generation",
+      "format": "mlx-safetensors",
+      "precision": "MLX-8bit",
+      "parameterCount": 494032768,
+      "license": "Apache-2.0",
+      "sourceUrl": "https://huggingface.co/mlx-community/Qwen2.5-0.5B-Instruct-8bit",
+      "revision": "6474d4c1a05bd7bd634a9c993560e4e7272eda3d",
+      "sets": ["benchmark-mlx"],
+      "files": [
+        { "path": "added_tokens.json", "url": "https://huggingface.co/mlx-community/Qwen2.5-0.5B-Instruct-8bit/resolve/6474d4c1a05bd7bd634a9c993560e4e7272eda3d/added_tokens.json", "sizeBytes": 605, "sha256": "58b54bbe36fc752f79a24a271ef66a0a0830054b4dfad94bde757d851968060b" },
+        { "path": "config.json", "url": "https://huggingface.co/mlx-community/Qwen2.5-0.5B-Instruct-8bit/resolve/6474d4c1a05bd7bd634a9c993560e4e7272eda3d/config.json", "sizeBytes": 783, "sha256": "4dae7c9622e41e50752ba422149df0694044266c06cd851aff630799701c83c6" },
+        { "path": "merges.txt", "url": "https://huggingface.co/mlx-community/Qwen2.5-0.5B-Instruct-8bit/resolve/6474d4c1a05bd7bd634a9c993560e4e7272eda3d/merges.txt", "sizeBytes": 1671853, "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5" },
+        { "path": "model.safetensors", "url": "https://huggingface.co/mlx-community/Qwen2.5-0.5B-Instruct-8bit/resolve/6474d4c1a05bd7bd634a9c993560e4e7272eda3d/model.safetensors", "sizeBytes": 525045902, "sha256": "3dd0b6c2983ac5fe35f60ba260b1c7c35e4c38f17f3d5139d0bb477924e7aef4" },
+        { "path": "model.safetensors.index.json", "url": "https://huggingface.co/mlx-community/Qwen2.5-0.5B-Instruct-8bit/resolve/6474d4c1a05bd7bd634a9c993560e4e7272eda3d/model.safetensors.index.json", "sizeBytes": 44209, "sha256": "e48752ffebac15ee35d1d86e96c9b87f2efd7783b19ebf82a26955dbd43e0476" },
+        { "path": "special_tokens_map.json", "url": "https://huggingface.co/mlx-community/Qwen2.5-0.5B-Instruct-8bit/resolve/6474d4c1a05bd7bd634a9c993560e4e7272eda3d/special_tokens_map.json", "sizeBytes": 613, "sha256": "76862e765266b85aa9459767e33cbaf13970f327a0e88d1c65846c2ddd3a1ecd" },
+        { "path": "tokenizer.json", "url": "https://huggingface.co/mlx-community/Qwen2.5-0.5B-Instruct-8bit/resolve/6474d4c1a05bd7bd634a9c993560e4e7272eda3d/tokenizer.json", "sizeBytes": 7031673, "sha256": "a8506e7111b80c6d8635951a02eab0f4e1a8e4e5772da83846579e97b16f61bf" },
+        { "path": "tokenizer_config.json", "url": "https://huggingface.co/mlx-community/Qwen2.5-0.5B-Instruct-8bit/resolve/6474d4c1a05bd7bd634a9c993560e4e7272eda3d/tokenizer_config.json", "sizeBytes": 7308, "sha256": "f7c61e32b7a17d19bf8e7037dcb74079a833e53ea9801f24008cac68458f03b7" },
+        { "path": "vocab.json", "url": "https://huggingface.co/mlx-community/Qwen2.5-0.5B-Instruct-8bit/resolve/6474d4c1a05bd7bd634a9c993560e4e7272eda3d/vocab.json", "sizeBytes": 2776833, "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910" }
+      ]
+    },
+    {
       "id": "qwen2.5-0.5b-instruct-q8_0",
       "displayName": "Qwen2.5 0.5B Instruct Q8_0",
       "architecture": "qwen2",

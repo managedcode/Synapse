@@ -94,6 +94,11 @@ evaluated from raw paired runs; missing/incompatible baselines are
   MLX Swift/native Mac Metal subject and a C# ONNX Runtime GenAI subject with
   pinned packages, architecture/tokenizer/quality checks, and separate
   hardware/precision cohorts before any cross-engine timing claim.
+- [ ] `TASK-BMK-001` workload expansion: verify 128-token single-request and
+  three 64-token locked-transcript diagnostics on all four CPU subjects, keep
+  early EOS and quality-review status visible, and publish raw evidence and
+  summaries in performance CI only. A separate resident-session implementation
+  is required before reporting KV/prefix-cache hit and miss performance.
 - [ ] `TASK-BMK-001` memory checkpoint: test the absence of a whole-process
   memory envelope, then record comparable pre-load-through-exit peak resident
   bytes and macOS physical footprint for every external process. Expose CLR

@@ -57,3 +57,23 @@ MLX and ONNX Runtime GenAI may enter the matrix as external subjects only via
 Python-free launch paths, pinned model packages, and separate hardware and
 weight/precision cohorts where appropriate. A cross-format label alone does
 not establish comparable weights or tokenization.
+
+The one-turn and three-turn locked-transcript diagnostics are distinct from the
+eight-token smoke matrix. The three prompts are replayed in order with the same
+pre-recorded assistant turns, so prompt context grows deterministically. Each
+subject/turn still starts a fresh process: this measures recomputation of a
+growing transcript and OS/model-file warm-up, **not** retained KV or prefix-cache
+reuse. Raw evidence labels this scope and marks answer quality `unreviewed`
+until a separate review/quality gate exists. A future resident multi-turn
+cohort must hold the model alive, prove KV ownership and cache hit/miss state,
+and report it separately; neither this runner nor the eight-token smoke may
+claim cache performance.
+
+The separate SwiftLM/MLX Metal diagnostic does hold its server resident and
+records prompt-cache hit-token counts only when observed in the pinned server
+log. It uses independently quantized MLX weights and a chat template, so its
+prompt counts and timings are not paired with the CPU GGUF cohort. Its request
+wall excludes model load; whole-process RSS and macOS physical footprint are
+reported as distinct, non-additive memory views. A warm-hit observation alone
+does not establish the speedup caused by caching without matched hit/miss
+requests and output-quality review.

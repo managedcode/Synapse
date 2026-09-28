@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "capitals-france-us-uk-3-turns",
+  "kind": "locked-chat",
+  "system": "Answer concisely. Preserve the countries and capitals already discussed; do not invent a capital.",
+  "turns": [
+    {
+      "user": "What is the capital of France? Write a useful travel briefing of at least six sentences: identify the capital, describe its location, explain one civic role, and give three practical visitor details. Do not discuss other countries yet.",
+      "lockedAssistant": "The capital of France is Paris. It lies on the Seine in north-central France and hosts the national government. Travelers can use the Metro, visit museums, and plan accessible routes in advance. No bookings have been made."
+    },
+    {
+      "user": "Now give a six-sentence travel briefing for the United States capital: name it, locate it, mention its government role and three practical visitor details. Contrast it with the French capital from our previous turn without changing that answer.",
+      "lockedAssistant": "The capital of the United States is Washington, D.C. It is a federal district on the Potomac River and houses the White House, Congress, and Supreme Court. Visitors can use Metrorail, explore museums, and check timed-entry rules. The French capital remains Paris."
+    },
+    {
+      "user": "Finally give a six-sentence travel briefing for the United Kingdom capital: name it, locate it, mention its government role and three practical visitor details. Then recap all three country-capital pairs in discussion order and note which two are European capitals.",
+      "lockedAssistant": "The capital of the United Kingdom is London. It lies on the Thames and hosts Parliament and the government. Visitors can use the Underground, explore museums, and check accessibility before booking. Recap: France — Paris; United States — Washington, D.C.; United Kingdom — London. Paris and London are European capitals."
+    }
+  ]
+}

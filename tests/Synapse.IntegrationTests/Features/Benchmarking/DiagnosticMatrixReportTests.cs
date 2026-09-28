@@ -32,7 +32,14 @@ public sealed class DiagnosticMatrixReportTests
         await Assert.That(report).Contains("ca59ca7f13d0e15a8cfa77bd17e65d24f6844b554a7b6c12e07a5f89ff76844e");
         await Assert.That(report).Contains("dotllm");
         await Assert.That(report).Contains("llamacpp");
-        await Assert.That(report).Contains("peak RSS MiB");
+        await Assert.That(report).Contains("Peak RSS MiB");
+        await Assert.That(report).Contains("Load ms");
+        await Assert.That(report).Contains("TTFT ms");
+        await Assert.That(report).Contains("Generation ms");
+        await Assert.That(report).Contains("Process CPU ms");
+        await Assert.That(report).Contains("Avg CPU cores");
+        await Assert.That(report).Contains("End-to-end output tok/s");
+        await Assert.That(report).Contains("|llamacpp|matched|n/a|n/a|n/a|");
         await Assert.That(report).Contains("Measured rounds: 5");
     }
 

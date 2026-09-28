@@ -10,6 +10,9 @@ return await (args.FirstOrDefault() switch
 {
     "matrix" => DiagnosticMatrixCommand.RunAsync(args[1..]),
     "report" => DiagnosticMatrixReportCommand.RunAsync(args[1..]),
+    "dialogue" => LockedDialogueCommand.RunAsync(args[1..]),
+    "mlx" => MlxBenchmarkCommand.RunAsync(args[1..]),
+    "report-dialogue" => DialogueReportCommand.RunAsync(args[1..]),
     _ => ReferenceBenchmarkCommand.RunAsync(args),
 }).ConfigureAwait(false);
 
@@ -344,6 +347,9 @@ internal sealed record DotLlmTimings(
 [System.Text.Json.Serialization.JsonSerializable(typeof(BenchmarkResult))]
 [System.Text.Json.Serialization.JsonSerializable(typeof(DotLlmResult))]
 [System.Text.Json.Serialization.JsonSerializable(typeof(DiagnosticMatrixEvidence))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(DialogueEvidence))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(MlxEvidence))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(MlxRequest))]
 [System.Text.Json.Serialization.JsonSourceGenerationOptions(
     PropertyNamingPolicy = System.Text.Json.Serialization.JsonKnownNamingPolicy.SnakeCaseLower)]
 internal sealed partial class BenchmarkJsonContext : System.Text.Json.Serialization.JsonSerializerContext;

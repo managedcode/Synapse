@@ -84,8 +84,8 @@ internal static class DiagnosticMatrixReportCommand
             .AppendLine(".  ");
         _ = result.Append("Power state: `").Append(root.GetProperty("power_state").GetString())
             .AppendLine("`. Each sample is a fresh process; order rotates by round.").AppendLine();
-        _ = result.AppendLine("| Subject | Quality | Median process wall ms | Median peak RSS MiB | Median physical footprint MiB | Median reported decode tok/s |")
-            .AppendLine("|---|---|---:|---:|---:|---:|");
+        _ = result.AppendLine("| Subject | Quality | Load ms | TTFT ms | Generation ms | End-to-end output tok/s | Reported decode tok/s | Process wall ms | Process CPU ms | Avg CPU cores | Peak RSS MiB | Physical footprint MiB |")
+            .AppendLine("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
 
         foreach (var group in samples.GroupBy(sample => sample.GetProperty("subject").GetString())
             .OrderBy(group => Array.IndexOf(SubjectOrder, group.Key)))
@@ -94,16 +94,42 @@ internal static class DiagnosticMatrixReportCommand
             var quality = subjectSamples.All(sample => sample.GetProperty("quality_matched").GetBoolean())
                 ? "matched" : "mismatch";
             _ = result.Append('|').Append(group.Key).Append('|').Append(quality).Append('|')
-                .Append(Median(subjectSamples.Select(sample => Number(sample, "matrix_process_wall_milliseconds"))))
-                .Append('|').Append(Median(subjectSamples.Select(sample => Mebibytes(sample, "peak_resident_bytes"))))
-                .Append('|').Append(Median(subjectSamples.Select(sample => Mebibytes(sample, "peak_physical_footprint_bytes"))))
+                .Append(Median(subjectSamples.Select(sample => Number(
+                    sample.GetProperty("subject_result"), "load_milliseconds"))))
+                .Append('|').Append(Median(subjectSamples.Select(sample => Number(
+                    sample.GetProperty("subject_result"), "time_to_first_token_milliseconds"))))
+                .Append('|').Append(Median(subjectSamples.Select(sample => Number(
+                    sample.GetProperty("subject_result"), "total_generation_milliseconds"))))
+                .Append('|').Append(Median(subjectSamples.Select(ProcessOutputRate)))
                 .Append('|').Append(Median(subjectSamples.Select(sample => Number(
                     sample.GetProperty("subject_result"), "decode_tokens_per_second"))))
+                .Append('|').Append(Median(subjectSamples.Select(sample => Number(sample, "matrix_process_wall_milliseconds"))))
+                .Append('|').Append(Median(subjectSamples.Select(sample => Number(
+                    sample.GetProperty("subject_result"), "process_cpu_milliseconds"))))
+                .Append('|').Append(Median(subjectSamples.Select(sample => Number(
+                    sample.GetProperty("subject_result"), "average_cpu_cores"))))
+                .Append('|').Append(Median(subjectSamples.Select(sample => Mebibytes(sample, "peak_resident_bytes"))))
+                .Append('|').Append(Median(subjectSamples.Select(sample => Mebibytes(sample, "peak_physical_footprint_bytes"))))
                 .AppendLine("|");
         }
 
-        _ = result.AppendLine().AppendLine("RSS is whole-process resident memory, not CLR heap. Physical footprint is only available on macOS. Decode rates are subject-reported phases and are **not** comparable to whole-process wall time; native llama.cpp has no equivalent decode rate in this interface. Raw per-round JSON is the source of truth.");
+        _ = result.AppendLine().AppendLine("End-to-end output tok/s is generated tokens divided by fresh-process wall time, including load, prefill, and teardown; it is **not** steady-state decode throughput. Load, TTFT, generation, decode and CPU are subject-reported/inner-process observations with their original scopes; native llama.cpp has no comparable load, TTFT or generation fields. RSS is whole-subject-process resident memory, not CLR heap; Mac physical footprint is a separate OS metric, not added to RSS. Metal allocations are not separately measured. Medians are per column, not one synthetic sample. Raw per-round JSON is the source of truth.");
         return result.ToString();
+    }
+
+    private static double? ProcessOutputRate(JsonElement sample)
+    {
+        var milliseconds = Number(sample, "matrix_process_wall_milliseconds");
+        if (milliseconds is not > 0)
+        {
+            return null;
+        }
+
+        var generated = sample.GetProperty("subject_result").GetProperty("generated_tokens");
+        var count = generated.ValueKind == JsonValueKind.Number
+            ? generated.GetInt32()
+            : generated.ValueKind == JsonValueKind.Array ? generated.GetArrayLength() : 0;
+        return count > 0 ? count * 1000d / milliseconds.Value : null;
     }
 
     private static string Ids(JsonElement array) => string.Join(',', array.EnumerateArray()

@@ -75,3 +75,18 @@ Date: 2026-09-27. Status: accepted for the bootstrap slice.
   each runner's raw process samples and render a descriptive summary of the
   workload and medians. Hosted-runner results form separate hardware cohorts;
   they are not a cross-OS leaderboard or a substitute for paired owner-Mac runs.
+
+## 2026-09-28 longer workload follow-up
+
+- Preserve the eight-token run as startup/parity smoke only. Add a 128-token
+  single request and three 64-token locked-transcript turns (France/Paris,
+  United States/Washington, United Kingdom/London) with actual generated-token
+  counts and prompt IDs in raw evidence. A token cap is not a promise that a
+  model will keep generating until it; early EOS remains visible.
+- Keep cold fresh-process growing-context numbers distinct from resident
+  model, warm-prefix, and hot-KV experiments. Current CLIs lack a common
+  persistent-session API, so no cache win can be asserted from this runner.
+- For MLX, prefer a verified prebuilt Apple Silicon binary as requested. Its
+  Metal/MLX-format model stays a separate cohort from GGUF Q8_0; capture
+  release digest and model revision and never infer quality/speed parity from
+  the shared Qwen family name.

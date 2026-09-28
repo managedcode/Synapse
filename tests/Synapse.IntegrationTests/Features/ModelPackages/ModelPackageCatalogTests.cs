@@ -23,6 +23,13 @@ public sealed class ModelPackageCatalogTests
             .IsEquivalentTo(["bert", "bert"]);
         await Assert.That(catalog.GetRequired("smollm2-135m-instruct-bf16").Files.Count)
             .IsEqualTo(8);
+        var mlx = catalog.SelectSet("benchmark-mlx");
+        await Assert.That(mlx.Select(package => package.Id))
+            .IsEquivalentTo(["qwen2.5-0.5b-instruct-mlx-8bit"]);
+        await Assert.That(mlx[0].Format).IsEqualTo("mlx-safetensors");
+        await Assert.That(mlx[0].Revision)
+            .IsEqualTo("6474d4c1a05bd7bd634a9c993560e4e7272eda3d");
+        await Assert.That(mlx[0].Files.Count).IsEqualTo(9);
         await Assert.That(catalog.Packages.SelectMany(package => package.Files)
             .All(file => file.Url.Scheme == Uri.UriSchemeHttps && file.Sha256.Length == 64)).IsTrue();
     }

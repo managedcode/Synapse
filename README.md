@@ -338,7 +338,7 @@ sample counts, executable/model hashes, and each subject's original result.
 Profilers are run separately so their overhead does not contaminate this
 table.
 
-The separate [GitHub Actions performance run](https://github.com/managedcode/Synapse/actions/runs/36403943949)
+The separate [GitHub Actions performance run](https://github.com/managedcode/Synapse/actions/runs/36405097376)
 also completed on macOS ARM64, Ubuntu x64, and Windows x64. Each runner used
 the same pinned Qwen GGUF (SHA-256 `ca59ca7f13d0e15a8cfa77bd17e65d24f6844b554a7b6c12e07a5f89ff76844e`),
 the five prompt IDs above, eight matching output tokens, a two-thread cap,
@@ -348,9 +348,9 @@ cross-OS leaderboard or a long-generation performance verdict.
 
 | GitHub runner | Synapse wall / RSS | dotLLM wall / RSS | LLamaSharp wall / RSS | llama.cpp wall / RSS |
 |---|---:|---:|---:|---:|
-| macOS 15 ARM64 | 3,769.5 ms / 554.6 MiB | 2,993.8 ms / 1,166.3 MiB | 1,249.4 ms / 1,266.4 MiB | 1,058.6 ms / 1,204.4 MiB |
-| Ubuntu 24.04 x64 | 3,488.3 ms / 565.5 MiB | 2,031.7 ms / 1,174.3 MiB | 770.1 ms / 760.4 MiB | 656.4 ms / 724.3 MiB |
-| Windows Server 2025 x64 | 3,626.5 ms / 550.9 MiB | 2,275.9 ms / 1,152.8 MiB | 1,105.0 ms / 596.1 MiB | 984.6 ms / 574.6 MiB |
+| macOS 15 ARM64 | 2,543.4 ms / 554.9 MiB | 2,879.7 ms / 1,166.0 MiB | 1,046.1 ms / 1,263.2 MiB | 978.4 ms / 1,195.4 MiB |
+| Ubuntu 24.04 x64 | 2,814.6 ms / 565.2 MiB | 1,620.6 ms / 1,173.6 MiB | 646.0 ms / 760.3 MiB | 534.9 ms / 724.5 MiB |
+| Windows Server 2025 x64 | 3,502.1 ms / 550.8 MiB | 2,424.1 ms / 1,152.8 MiB | 1,092.4 ms / 596.0 MiB | 1,013.9 ms / 574.7 MiB |
 
 All four continuations matched on each runner. The table shows medians of
 whole-process wall and peak resident set; native/managed allocations and mmap
@@ -365,9 +365,69 @@ LLamaSharp/direct llama.cpp after a shared prefix. Synapse currently emits
 token IDs without a repo-owned decoder, so its 32-token text parity cannot
 yet be asserted. These 32-token timings are **not** a four-engine speed result.
 
+### Longer-request and dialogue diagnostics
+
+The locked [128-token single request](benchmarks/scenarios/capitals-single-long.json)
+and [France/Paris → USA → UK three-turn dialogue](benchmarks/scenarios/capitals-france-us-uk-3-turns.json)
+exercise generation and growing context beyond the eight-token smoke test.
+The [CPU single-request raw data](benchmarks/results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-capitals-single-128-diagnostic.json)
+and [CPU dialogue raw data](benchmarks/results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-capitals-3turn-diagnostic.json)
+are **one local measured round without warm-ups**, using the same pinned GGUF
+and four fresh CPU processes per turn. Earlier answers are locked into each
+later prompt; this is *not* a KV-cache test. Quality is unreviewed, and the
+third-turn native/LLamaSharp completions stopped before 64 tokens. These are
+diagnostics, not a paired speed verdict. The new performance workflow requests
+one warm-up and three measured rounds per OS; it has not yet produced CI data.
+The raw baseline text also contains factual errors and capped/truncated
+answers (for example, incorrect locations for Paris), so these samples are
+not eligible for a quality-qualified ranking. Exact local verification status
+and limitations are recorded in the [diagnostic evidence note](benchmarks/results/2026-09-28-long-dialogue-and-mlx-evidence.md).
+
+| CPU subject | Single 128: TTFT / wall ms | Single output tok/s incl. wall | Dialogue turn 3: prompt / output tokens | Turn 3: TTFT / wall ms | Turn 3 CPU ms / peak RSS MiB |
+|---|---:|---:|---:|---:|---:|
+| Synapse | 423.7 / 1,819.1 | 70.4 | 274 / 64 | 1,390.6 / 2,216.6 | 4,289.6 / 573.9 |
+| dotLLM | 8,121.6 / 21,822.6 | 5.9 | 274 / 64 | 29,592.2 / 36,786.3 | 70,102.1 / 1,544.9 |
+| LLamaSharp | 137.3 / 2,108.2 | 60.7 | 274 / 58 | 472.5 / 1,873.4 | 2,898.0 / 1,274.2 |
+| native llama.cpp | n/a / 1,928.0 | 66.4 | 274 / 61 | n/a / 1,849.8 | 2,946.4 / 1,263.2 |
+
+Native llama.cpp's CLI does not expose comparable load or TTFT phases here;
+`n/a` is not zero. CPU time can exceed wall time when several cores run. Peak
+RSS counts the whole subject process, including managed and native memory;
+the complete per-turn phase and token tables are reproducible from the raw
+files with `report-dialogue --input <file>`.
+
+For a **separate Metal/MLX cohort**, the verified prebuilt
+[SwiftLM `b795` release](https://github.com/SharpAI/SwiftLM/releases/tag/b795)
+ran [Qwen2.5 0.5B MLX 8-bit](https://huggingface.co/mlx-community/Qwen2.5-0.5B-Instruct-8bit)
+on the same Mac. The 53,329,610-byte archive SHA-256 is
+`2ed6b5539b24c5267931d46ea9973775b7d2a9b5ee2f82109afab60f9603675e`;
+the model weight SHA-256 is
+`3dd0b6c2983ac5fe35f60ba260b1c7c35e4c38f17f3d5139d0bb477924e7aef4`.
+No local Swift build or Python was used. The
+[MLX single-request raw data](benchmarks/results/2026-09-28-m2-pro-mlx-qwen2.5-0.5b-8bit-capitals-single-128-diagnostic.json)
+and [MLX dialogue raw data](benchmarks/results/2026-09-28-m2-pro-mlx-qwen2.5-0.5b-8bit-capitals-3turn-diagnostic.json)
+contain one warm-up and three measured requests per turn to a resident server.
+Medians are per column; outputs remain quality-unreviewed.
+
+| MLX request | Prompt / output tokens | TTFT ms | Decode tok/s | Request wall ms | Process CPU ms | Peak RSS / Mac footprint MiB | Observed cache-hit tokens |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Single, 128 | 78 / 128 | 13.8 | 225.5 | 576.5 | 419.2 | 655.6 / 607.9 | 78 |
+| Dialogue turn 1 | 77 / 64 | 14.2 | 226.5 | 292.2 | 215.6 | 651.9 / 602.3 | 77 |
+| Dialogue turn 2 | 178 / 64 | 40.5 | 225.1 | 320.4 | 228.4 | 651.9 / 615.3 | 77 |
+| Dialogue turn 3 | 293 / 64 | 42.3 | 222.7 | 325.6 | 234.7 | 651.9 / 620.0 | 178 |
+
+The first fresh-server dialogue request, excluded from medians, had 88.0 ms
+TTFT and no observed cache hit. Subsequent hits come from the pinned server's
+logs; these measurements do not isolate a causal cache speedup. The MLX wall
+time excludes one-time model load (629.1 ms in the dialogue run), whereas the
+CPU process wall includes load. RSS and macOS physical footprint are different
+views of the process, **not additive**; GPU allocation is not separately
+measured. Different weights, chat template, resident-server lifecycle, and
+Metal acceleration make cross-cohort speed ranking invalid.
+
 | Catalog model / architecture | Synapse | dotLLM | LLamaSharp | native llama.cpp | MLX | ONNX Runtime |
 |---|---|---|---|---|---|---|
-| Qwen2.5 0.5B Q8_0 · Qwen2 | D8 + D32 IDs | D8 + D32 mismatch | D8 + D32 | D8 + D32 + D128 | NR | NR |
+| Qwen2.5 0.5B Q8_0 · Qwen2 | D8 + D32 IDs + D64 + D128 | D8 + D32 mismatch + D64 + D128 | D8 + D32 + D64 + D128 | D8 + D32 + D64 + D128 | D64 + D128 (separate 8-bit Metal weights) | NR |
 | SmolLM2 135M BF16 · Llama | NR | NR | NR | NR | NR | NR |
 | Qwen3 0.6B Q8_0 · Qwen3 | NR | NR | NR | NR | NR | NR |
 | Mamba 130M F32 · SSM | NR | NR | NR | NR | NR | NR |
@@ -385,8 +445,8 @@ coverage matrix does not substitute made-up numbers for those future tables.
 Only Qwen GGUF currently runs through Synapse's inference path. Other catalog
 packages have different architectures and/or SafeTensors/embedding formats;
 the existence of a pinned download is not evidence of executable inference.
-MLX is a candidate Python-free native/Swift Apple Silicon baseline and ONNX
-Runtime GenAI is a candidate C# baseline using a separately pinned ONNX model.
+MLX is now a measured Python-free prebuilt Swift/Metal baseline; ONNX Runtime
+GenAI is a candidate C# baseline using a separately pinned ONNX model.
 Their GPU/format/precision cohorts will not be silently mixed with CPU GGUF.
 
 Raw measured samples and binary/model fingerprints are stored in
@@ -462,7 +522,8 @@ docs/                        architecture, ADRs, features, commands, task regist
 | [dotLLM](https://github.com/kkokosa/dotLLM) | Pure-.NET correctness/performance competitor and architecture study | GPL-3.0; pinned checkout and separate process only |
 | [LLamaSharp](https://github.com/SciSharp/LLamaSharp) | Required llama.cpp-backed CPU benchmark | MIT; benchmark-project package 0.27.0 |
 | [llama.cpp](https://github.com/ggml-org/llama.cpp) | GGUF/quantization reference and direct native baseline | MIT; external CPU process pinned at `b29c606e2` |
-| [MLX Swift LM](https://github.com/ml-explore/mlx-swift-lm) | Candidate Python-free Apple Silicon/Metal baseline | External subject planned; no measurement yet |
+| [MLX Swift LM](https://github.com/ml-explore/mlx-swift-lm) | Apple Silicon/Metal implementation family used by the MLX ecosystem | Upstream design/reference; its example CLI has no official release binary |
+| [SwiftLM](https://github.com/SharpAI/SwiftLM) | Prebuilt native Swift/MLX Metal benchmark subject | MIT; external server only, release `b795` archive SHA-256 pinned; no Swift build or Python |
 | [ONNX Runtime GenAI](https://onnxruntime.ai/docs/genai/api/csharp.html) | Candidate C# ONNX-format baseline | Preview API; verified ONNX package and measurement pending |
 | [dotnet/diagnostics](https://github.com/dotnet/diagnostics) | CLR heap, GC counters, and traces for managed allocation diagnosis | Separate profiling runs, never the clean timing baseline |
 | [samply](https://github.com/mstange/samply) | Mac/Linux CPU stack sampling across native hotspots | Separate profiling runs; not a memory allocation collector |
@@ -473,7 +534,7 @@ docs/                        architecture, ADRs, features, commands, task regist
 | [ML.NET](https://github.com/dotnet/machinelearning) and [Microsoft.Extensions.AI](https://learn.microsoft.com/dotnet/ai/ichatclient) | `CausalLMPipelineChatClient`, tokenizers, and `IChatClient` pipeline/API design references | Not an inference backend or dependency today |
 | [TUnit](https://github.com/thomhurst/TUnit) | Behavior tests on Microsoft.Testing.Platform | Test dependency 1.70.1 |
 | [Rust](https://github.com/rust-lang/rust) | Native acceleration language for measured hot paths | Pinned toolchain 1.98.1 |
-| [Qwen2.5 GGUF](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF), [SmolLM2](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct), [Mamba](https://huggingface.co/state-spaces/mamba-130m-hf) | Pinned correctness and architecture fixtures | Model licenses recorded per catalog entry; downloaded outside Git |
+| [Qwen2.5 GGUF](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF), [Qwen2.5 MLX 8-bit](https://huggingface.co/mlx-community/Qwen2.5-0.5B-Instruct-8bit), [SmolLM2](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct), [Mamba](https://huggingface.co/state-spaces/mamba-130m-hf) | Pinned correctness and architecture fixtures | Model licenses recorded per catalog entry; downloaded outside Git; MLX and GGUF are separate precision cohorts |
 | [FlyWire connectome](https://doi.org/10.1038/s41586-024-07558-y) | Coarse graph/region inspiration for FlyBrain activation waves | Research inspiration, not implementation code |
 | [Mixture-of-Depths](https://arxiv.org/abs/2404.02258), [Router-Tuning](https://github.com/CASE-Lab-UMD/Router-Tuning-Mixture-of-Depths), [LayerSkip](https://github.com/facebookresearch/LayerSkip) | Conditional-depth, trained-routing, and self-speculative research directions | No dense-layer skipping without model/evidence support |
 | [BitNet b1.58](https://arxiv.org/abs/2402.17764), [BitNet 2B4T](https://huggingface.co/microsoft/bitnet-b1.58-2B-4T) | Absmean ternary rule; a target for native import of models trained ternary | Research reference; bitnet.cpp's Python tooling is not used |

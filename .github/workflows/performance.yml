@@ -111,6 +111,33 @@ jobs:
             --input "${RUNNER_TEMP}/synapse-benchmark.json" \
             --summary "${GITHUB_STEP_SUMMARY}" --require-quality
 
+      - name: Run longer single-request and three-turn CPU diagnostics
+        shell: bash
+        run: |
+          common=(
+            --model "${SYNAPSE_MODEL_ROOT}/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.gguf"
+            --synapse-executable "${GITHUB_WORKSPACE}/src/Synapse.Cli/bin/Release/net10.0/synapse${{ matrix.executable_suffix }}"
+            --dotllm-executable "${GITHUB_WORKSPACE}/_external/dotLLM/src/DotLLM.Cli/bin/Release/net10.0/DotLLM.Cli${{ matrix.executable_suffix }}"
+            --dotllm-version d88040451d7db56e5dfef9d5754ad0955b0f7fe5
+            --llamacpp-executable "${GITHUB_WORKSPACE}/_external/llama.cpp/${{ matrix.llama_binary_directory }}/llama-completion${{ matrix.executable_suffix }}"
+            --llamacpp-version b29c606e28a01b1bc8c1351026a0fa6e616bf6c4
+            --threads 2 --warmups 1 --measurements 3
+          )
+          runner="experiments/Synapse.ReferenceBenchmarks/bin/Release/net10.0/Synapse.ReferenceBenchmarks.dll"
+          dotnet "$runner" dialogue "${common[@]}" \
+            --scenario benchmarks/scenarios/capitals-single-long.json \
+            --max-tokens 128 --output "${RUNNER_TEMP}/synapse-single.json"
+          dotnet "$runner" dialogue "${common[@]}" \
+            --scenario benchmarks/scenarios/capitals-france-us-uk-3-turns.json \
+            --max-tokens 64 --output "${RUNNER_TEMP}/synapse-dialogue.json"
+
+      - name: Summarize longer CPU diagnostics
+        shell: bash
+        run: |
+          runner="experiments/Synapse.ReferenceBenchmarks/bin/Release/net10.0/Synapse.ReferenceBenchmarks.dll"
+          dotnet "$runner" report-dialogue --input "${RUNNER_TEMP}/synapse-single.json" --summary "${GITHUB_STEP_SUMMARY}"
+          dotnet "$runner" report-dialogue --input "${RUNNER_TEMP}/synapse-dialogue.json" --summary "${GITHUB_STEP_SUMMARY}"
+
       - name: Preserve raw per-round evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -118,4 +145,93 @@ jobs:
           name: performance-${{ matrix.runtime_identifier }}
           path: ${{ runner.temp }}/synapse-benchmark.json
           if-no-files-found: error
+          retention-days: 30
+
+      - name: Preserve longer CPU raw evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: performance-long-${{ matrix.runtime_identifier }}
+          path: |
+            ${{ runner.temp }}/synapse-single.json
+            ${{ runner.temp }}/synapse-dialogue.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  mlx-metal:
+    name: macOS 15 ARM64 MLX Metal (separate cohort)
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+      SYNAPSE_MODEL_ROOT: ${{ github.workspace }}/artifacts/models
+    steps:
+      - name: Checkout Synapse
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Build C# benchmark runner and model fetcher
+        run: |
+          dotnet restore Synapse.slnx --locked-mode
+          dotnet build Synapse.slnx --configuration Release --no-restore
+
+      - name: Restore verified MLX model cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ${{ env.SYNAPSE_MODEL_ROOT }}
+          key: synapse-mlx-model-macos-arm64-${{ hashFiles('models/catalog.json') }}
+
+      - name: Fetch pinned MLX 8-bit Qwen model
+        shell: bash
+        run: dotnet run --project src/Synapse.Cli --configuration Release --no-build -- model fetch --id qwen2.5-0.5b-instruct-mlx-8bit --output "${SYNAPSE_MODEL_ROOT}"
+
+      - name: Download verified prebuilt SwiftLM MLX binary
+        shell: bash
+        run: |
+          mkdir -p "${RUNNER_TEMP}/swiftlm"
+          curl --fail --location --silent --show-error \
+            --output "${RUNNER_TEMP}/SwiftLM-b795-macos-arm64.tar.gz" \
+            https://github.com/SharpAI/SwiftLM/releases/download/b795/SwiftLM-b795-macos-arm64.tar.gz
+          printf '%s  %s\n' \
+            '2ed6b5539b24c5267931d46ea9973775b7d2a9b5ee2f82109afab60f9603675e' \
+            "${RUNNER_TEMP}/SwiftLM-b795-macos-arm64.tar.gz" | shasum -a 256 -c -
+          tar -xzf "${RUNNER_TEMP}/SwiftLM-b795-macos-arm64.tar.gz" -C "${RUNNER_TEMP}/swiftlm"
+
+      - name: Run isolated MLX Metal single-request and three-turn diagnostics
+        shell: bash
+        run: |
+          runner="experiments/Synapse.ReferenceBenchmarks/bin/Release/net10.0/Synapse.ReferenceBenchmarks.dll"
+          common=(
+            --binary "${RUNNER_TEMP}/swiftlm/SwiftLM" --binary-version b795
+            --model "${SYNAPSE_MODEL_ROOT}/qwen2.5-0.5b-instruct-mlx-8bit"
+            --warmups 1 --measurements 3
+          )
+          dotnet "$runner" mlx "${common[@]}" --port 15414 \
+            --scenario benchmarks/scenarios/capitals-single-long.json \
+            --max-tokens 128 --output "${RUNNER_TEMP}/mlx-single.json"
+          dotnet "$runner" mlx "${common[@]}" --port 15414 \
+            --scenario benchmarks/scenarios/capitals-france-us-uk-3-turns.json \
+            --max-tokens 64 --output "${RUNNER_TEMP}/mlx-dialogue.json"
+
+      - name: Summarize MLX Metal diagnostics
+        shell: bash
+        run: |
+          runner="experiments/Synapse.ReferenceBenchmarks/bin/Release/net10.0/Synapse.ReferenceBenchmarks.dll"
+          dotnet "$runner" report-dialogue --input "${RUNNER_TEMP}/mlx-single.json" --summary "${GITHUB_STEP_SUMMARY}"
+          dotnet "$runner" report-dialogue --input "${RUNNER_TEMP}/mlx-dialogue.json" --summary "${GITHUB_STEP_SUMMARY}"
+
+      - name: Preserve MLX Metal raw evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: performance-mlx-osx-arm64
+          path: |
+            ${{ runner.temp }}/mlx-single.json
+            ${{ runner.temp }}/mlx-dialogue.json
+          if-no-files-found: warn
           retention-days: 30

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "capitals-single-long",
+  "kind": "locked-chat",
+  "system": "Answer carefully and concisely. Distinguish sovereign states from cities, and do not invent facts.",
+  "turns": [
+    {
+      "user": "For a traveler, explain the capitals of France, the United States, and the United Kingdom. Give each country-capital pair, one useful geographic or civic detail for each, and finish with a three-line recap in that order.",
+      "lockedAssistant": "France — Paris; United States — Washington, D.C.; United Kingdom — London."
+    }
+  ]
+}
