@@ -63,8 +63,10 @@ runs A–K.
 Each model and scenario ran in a fresh process. The model stayed loaded for
 1 warm-up and 3 measured requests; every request was a new chat session with
 the full transcript. Context was capped at 1,024 tokens (see below). Greedy
-decoding, answer quality not reviewed. AC power; other desktop apps were open
-(load average about 3.4).
+decoding. AC power; other desktop apps were open (load average about 3.4).
+The raw schema still says `quality_unreviewed`; the manual review below was
+performed afterward from the preserved text and reasoning fields and does not
+retroactively change measurement eligibility.
 
 128-token answer (`capitals-single-long`), median of 3:
 
@@ -99,6 +101,29 @@ turn 3, median of 3:
   stopped at 99 tokens.
 - Prompt token counts differ because each model has its own tokenizer and
   chat template.
+
+### Manual output review
+
+No model/device variant fully satisfied the 128-token instruction. This makes
+the throughput table useful for runtime diagnosis, not for a quality-adjusted
+model ranking.
+
+| Variant | Review of the deterministic measured output |
+|---|---|
+| Qwen2.5 0.5B CPU | Incorrect and incomplete: it names all three capitals, but calls Fort Knox the federal headquarters and misidentifies Paris landmarks; it hits the 128-token cap before the recap. |
+| Qwen2.5 0.5B WebGPU | Mostly factual but incomplete: it stops at 99 tokens without the requested three-line recap. |
+| Qwen3 0.6B CPU | Incorrect and incomplete: all 128 tokens are reasoning, it emits no final answer, and the reasoning calls Paris, London, and Madrid France's capitals. |
+| Phi-3.5-mini CPU | Incorrect and incomplete: it corrupts Washington, D.C., places Mount Rushmore near it, and reaches the cap during the recap. |
+| Phi-4-mini CPU | The three main country-capital sections are substantially correct, but the generated recap is malformed and truncated at the cap. |
+| Mistral 7B v0.2 CPU | The France section is correct, but the output reaches the cap during the United States section before covering the United Kingdom or recap. |
+| DeepSeek-R1 7B CPU | Incomplete: all 128 tokens are reasoning and no final answer is emitted, although the reasoning recalls the three capitals. |
+
+The three-turn outputs have the same constraint: every CPU turn reaches its
+64-token cap. DeepSeek-R1 and Qwen3 remain reasoning-only. Phi-3.5, Phi-4, and
+Mistral contain mostly correct briefing content but truncate sections; the
+Qwen2.5 variants additionally contain errors such as placing Paris in the
+center or south of France and describing Washington transit as free. No
+instruction-compliance claim is made from those dialogue timings.
 
 **Context cap.** Every Foundry package sets its context length to the model's
 full window, and ONNX Runtime GenAI reserves the KV memory for that whole

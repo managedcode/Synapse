@@ -133,6 +133,16 @@ files plus two package-default probes). The full .NET suite passed 189/189
 with the local dotLLM and Homebrew llama.cpp `b29c606e2` subjects. The 15
 hosted Foundry jobs and the `verify.yml` anchor fetch have not run.
 
+Public-results checkpoint (2026-09-28): README and benchmark documentation
+claims are now scoped to the raw evidence. The native CPU result is presented as an
+eight-token diagnostic (102% of llama.cpp at two threads, 114% at eight), the
+older long-prompt gap is not attributed to the new batched-prefill build, and
+the manually reviewed Foundry outputs are reported as quality-ineligible: no
+model/device variant fully completed the 128-token instruction. Performance
+diagnostics now trigger on every push to `main` as well as manual dispatch.
+This does not close `TASK-BMK-001`, `TASK-BMK-002`, or any CPU task; fresh
+hosted evidence is still required.
+
 Local direct-native evidence: pinned Homebrew llama.cpp `b29c606e2` reproduced
 the Qwen prompt token IDs and continuation, three focused real-process native
 regressions passed, and raw 8/128-token samples plus a separate `llama-bench`

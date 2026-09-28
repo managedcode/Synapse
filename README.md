@@ -39,13 +39,13 @@ Details: [`docs/Architecture.md`](docs/Architecture.md).
 
 | Question | Answer |
 |---|---|
-| Does Synapse write as fast as **llama.cpp**? | **Yes.** 102% of its speed on 2 threads, 114% on 8 threads. |
-| Is a whole short request faster? | **Yes, 3.2× faster.** The model loads almost instantly. |
-| Does it use less memory? | **Yes, 2.3× less.** |
-| Does it start answering fast? | **Short prompts: yes. Long prompts: no, about 3× slower.** Main thing to fix. |
+| Does Synapse write as fast as **llama.cpp**? | **In the 8-token smoke, yes.** The native kernel reached 102% of llama.cpp at 2 threads and 114% at 8 threads. |
+| Is a whole short request faster? | **In that smoke, 3.2× faster.** Synapse's median fresh-process wall time was 216 ms versus 690 ms. |
+| Does it use less memory? | **In that smoke, 2.3× less peak RSS.** 555 MiB versus 1,256 MiB. |
+| Does it start answering fast? | **For the 5-token prompt, yes.** The older 274-token run was about 3× slower to first token; the new batched-prefill path still needs the same long test. |
 | Is it as fast as **MLX** on the Apple GPU? | **No.** MLX writes 225 tokens/s on the GPU. Synapse has no GPU code yet. |
-| How does **Microsoft Foundry Local** do? | **A separate test, 6 models.** With its own ONNX weights on about 6 cores, Qwen2.5 0.5B writes 231 tokens/s and the 7B models 22–25 tokens/s. |
-| Is it faster than the other .NET engine, dotLLM? | **Yes, 14× faster.** |
+| How does **Microsoft Foundry Local** do? | **Fast, but quality-limited in this test.** With separate ONNX weights on about 6 cores, Qwen2.5 0.5B reached 231 tokens/s and the 7B models 22–25 tokens/s; none of the 7 model/device variants fully completed the 128-token instruction. |
+| Is it faster than the other .NET engine, dotLLM? | **In the same 8-token smoke, 14× faster.** |
 
 ### Where it is tested
 
@@ -68,6 +68,20 @@ Details: [`docs/Architecture.md`](docs/Architecture.md).
 
 ![Synapse vs the reference engines on a MacBook Pro M2 Pro](docs/images/benchmark.svg)
 
+What the result says:
+
+- The Rust kernel produced the same eight tokens as llama.cpp in every
+  measured round and reached 136.6 versus 133.7 decode tokens/s at two
+  threads, then 190.6 versus 167.2 at eight threads.
+- The portable SIMD C# kernel reached 124.4 tokens/s at two threads, or 88%
+  of llama.cpp's 141.8. The Rust boundary is therefore useful in this measured
+  hotspot, while the C# path remains the tested portable implementation.
+- This is three warm-ups plus five measurements of an eight-token answer. It
+  proves short parity and supplies a diagnostic speed signal; it is not the
+  30-pair release verdict and does not establish long-answer quality.
+- The published long-prompt gap comes from an older build. Batched prefill is
+  implemented now, but its fresh GitHub long-answer result is still pending.
+
 ### GitHub Actions, committed code
 
 ![GitHub Actions performance run on macOS, Ubuntu, and Windows](docs/images/github-actions.svg)
@@ -88,14 +102,20 @@ Details: [`docs/Architecture.md`](docs/Architecture.md).
   up front (Phi-3.5-mini: 98 GiB, 12 s to the first token).
 - On GitHub, every runner and model pair is a separate job, and a model runs
   only where its file fits in half the RAM.
+- Manual review of the preserved 128-token outputs found no fully compliant
+  result among the seven model/device variants. Qwen3 and DeepSeek-R1 spent the
+  budget on reasoning and emitted no final answer; Qwen2.5 CPU and Phi-3.5
+  contained factual errors; Phi-4, Mistral, and Qwen2.5 WebGPU left required
+  sections or the three-line recap incomplete. These bars measure throughput,
+  not answer quality, and are never ranked against the GGUF or MLX cohorts.
 
 ### What to improve, and where
 
 | | Problem | Fix | Where |
 |---|---|---|---|
-| 🔴 | Long prompts: first token about 3× slower | Read the prompt in batches (task CPU.2) | `Qwen2CpuExecutor.Prefill` |
+| 🔴 | Older long-prompt run: first token about 3× slower | Rerun the same matrix on the new batched-prefill path | `performance.yml` |
 | 🔴 | No GPU | Metal kernels | not started |
-| 🟡 | GitHub still measures the old scalar build | Commit the new kernels, rerun the performance workflow | `.github/workflows/performance.yml` |
+| 🟡 | Hosted evidence for the new kernels is pending | Complete and review the current performance workflow | `.github/workflows/performance.yml` |
 | 🟡 | Takes token IDs, not text | Tokenizer and chat templates | not started |
 | 🟡 | Only Qwen2 runs | More model families | `src/Synapse.Runtime/Features/TextGeneration` |
 | 🟢 | Speed, memory, startup | Confirm with the 30-run release gate | `experiments/Synapse.ReferenceBenchmarks` |

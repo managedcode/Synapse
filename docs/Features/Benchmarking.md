@@ -61,8 +61,9 @@ the functional suite on macOS ARM64, Ubuntu x64, and Windows x64; it does not
 run the measured matrix or enforce speed thresholds. Existing recorded JSON
 tests report formatting and mismatch rejection without running performance
 samples inside TUnit.
-`performance.yml` is a separate manually dispatched three-OS CPU matrix. It
-fetches only the pinned Qwen smoke GGUF, builds the pinned competitors, runs
+`performance.yml` is a separate three-OS CPU matrix that runs on every push
+to `main` and supports manual dispatch. It fetches only the pinned Qwen smoke
+GGUF, builds the pinned competitors, runs
 three warm-ups plus five measured fresh-process rounds with a two-thread cap,
 and uploads unmodified per-round JSON for each runner. The C# `report --input
 <raw.json> [--summary <path>] [--require-quality]` command renders workload, model digest,
@@ -197,8 +198,13 @@ cohorts. Weights are unchanged.
 
 Limits: the SDK does not expose ONNX Runtime thread settings, so this cohort
 is not thread-capped. Its weights and quantization differ from GGUF Q8_0 and
-MLX 8-bit, so it is never ranked against those cohorts. Answer quality is
-unreviewed, and reasoning text is stored apart from answer text.
+MLX 8-bit, so it is never ranked against those cohorts. Raw evidence retains
+the original `quality_unreviewed` status and stores reasoning apart from
+answer text. A later manual documentation review found that none of the seven
+local model/device variants fully completed the 128-token instruction: two
+were reasoning-only, two contained material factual errors, and the remaining
+three omitted or truncated required sections. That review is descriptive and
+does not make the run eligible for a quality-adjusted verdict.
 
 ### Requirements
 

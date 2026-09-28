@@ -138,3 +138,16 @@ Date: 2026-09-27. Status: accepted for the bootstrap slice.
   model, explicit download, raw JSON per job.
 - Rejected: reusing one session per scenario (hidden KV reuse), the OpenAI
   client (no TTFT), and adding the SDK to the existing runner (RID leak).
+
+## 2026-09-28 public benchmark interpretation
+
+- Scope every public CPU claim to the preserved eight-token diagnostic: the
+  native backend reached 102% of llama.cpp at two threads and 114% at eight,
+  with exact eight-token parity. This is not a long-answer or 30-pair verdict.
+- Treat the existing 274-token first-token gap as evidence from the older
+  pre-batched-prefill build. The implementation changed; only a fresh run can
+  confirm whether the bottleneck moved.
+- Review Foundry output separately from throughput. The manual review found
+  reasoning-only, factually wrong, and truncated answers; none of the seven
+  model/device variants completed the 128-token instruction. Keep the raw
+  evidence status unchanged and publish the review as a descriptive layer.

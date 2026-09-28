@@ -37,13 +37,13 @@ invalid. A missing platform metric remains null with its scope recorded.
 
 Functional CI and performance evidence are separate workflows. Functional
 TUnit checks can validate rendering against recorded raw evidence, but do not
-run the measured matrix or assert throughput. The manually
-dispatched performance workflow runs its own macOS/Linux/Windows matrix and
-retains every measured round as an artifact with a descriptive report. An
-output mismatch fails the job after writing the report, while the raw artifact
-is still uploaded. Hosted
-runners are variable hardware, so their results are never pooled across OSes
-or compared to the owner's Mac as a release winner verdict.
+run the measured matrix or assert throughput. The performance workflow runs
+automatically for every push to `main` and also supports manual dispatch. It
+runs its own macOS/Linux/Windows matrix and retains every measured round as an
+artifact with a descriptive report. An output mismatch fails the job after
+writing the report, while the raw artifact is still uploaded. Hosted runners
+are variable hardware, so their results are never pooled across OSes or
+compared to the owner's Mac as a release winner verdict.
 
 ## Consequences
 
