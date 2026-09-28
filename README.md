@@ -156,13 +156,16 @@ GitHub Actions runs the real model download, digest checks, managed Synapse,
 dotLLM, and LLamaSharp smoke tests on macOS ARM64 and Ubuntu x64, followed by
 the Rust format/lint/test gates.
 
-The current local checkpoint passes 62/62 Release tests. It includes scalar
+The current local checkpoint passes 68/68 Release tests. It includes scalar
 reference linear/bias, causal grouped-query attention, RMSNorm, SiLU,
 element-wise math, stable Softmax, and both RoPE layouts, with FP64 oracle and
-masking tests; Qwen generation does not yet
-execute from this IR reference path. A post-change eight-token parity smoke
-produced the same Synapse token IDs and baseline text shown in the measured
-table; its one-shot timings are
+masking tests. A first verified, fixed-shape, FP32-storage/FP64-accumulator
+interpreter now executes tiny Linear and RMSNorm→SiLU graphs directly from
+Model IR and rejects conditional/stateful/unsupported graphs. Qwen generation
+does not yet execute from this IR path. A post-change eight-token parity smoke
+on this Mac produced Synapse IDs `12095,13,1084,374,279,7772,3283,304`
+and the same ` Paris. It is the largest city in` text from dotLLM and
+LLamaSharp. Its one-shot timings are
 not mixed into the recorded 3-warm-up/5-measurement evidence.
 
 ## Repository map

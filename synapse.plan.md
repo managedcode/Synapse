@@ -42,8 +42,10 @@ normative product scope.
 - [ ] Execute Qwen2 from the IR, add Execution IR/lifetime planning, and
   complete the scalar numerical oracle. Initial C# reference linear/bias,
   causal GQA, RMSNorm, SiLU, element-wise, Softmax, and RoPE operators now have
-  FP64 oracle/masking tests (62/62 local Release gate); the graph interpreter
-  and remaining ops are open.
+  FP64 oracle/masking tests. A first tiny fixed-shape dense graph interpreter
+  executes from verified IR with declared FP64 accumulation and fail-closed
+  preflight; 68/68 local Release tests pass. The Qwen graph interpreter,
+  scheduler, and remaining ops are open.
 - [ ] C# paged KV ownership, rollback, and ZoneTree prefix metadata.
 - [ ] Repo-owned tokenizer plus pinned SmolLM/Qwen import and text generation.
 - [ ] .NET SDK, worker IPC, bounded streaming, and cancellation.

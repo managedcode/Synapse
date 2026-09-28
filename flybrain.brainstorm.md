@@ -69,6 +69,13 @@ Hypotheses that need evidence before any claim:
 
 ## Decisions proposed
 
+The first F1 interpreter increment executes a verified, fixed-shape, FP32,
+always-active tiny graph from explicit caller tensors. This isolates IR
+execution from the existing Qwen-specific decode loop while testing actual
+linear and normalization math. It must reject conditional/stateful/quantized
+graphs before evaluating any node; those contracts need the region scheduler
+and typed state implementation rather than an accidental dense fallback.
+
 1. Make the Model IR the thing that runs before adding any skipping. Today it
    is built and verified, but the Qwen2 executor ignores it.
 2. Split eligibility into decision, provenance, and skip semantics (ADR-003).

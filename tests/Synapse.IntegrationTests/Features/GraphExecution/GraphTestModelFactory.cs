@@ -11,17 +11,19 @@ internal static class GraphTestModelFactory
 
     public static ModelGraph CreateLinearGraph(
         TensorShape outputShape,
-        ValueId? conditionalPredicate = null)
+        ValueId? conditionalPredicate = null,
+        NumericType? numericType = null)
     {
+        var numeric = numericType ?? Fp32;
         var input = new GraphValue(
             new ValueId(1),
             new TensorShape(ShapeDimension.Fixed(4)),
-            Fp32);
+            numeric);
         var weights = new GraphValue(
             new ValueId(2),
             new TensorShape(ShapeDimension.Fixed(3), ShapeDimension.Fixed(4)),
-            Fp32);
-        var output = new GraphValue(new ValueId(3), outputShape, Fp32);
+            numeric);
+        var output = new GraphValue(new ValueId(3), outputShape, numeric);
         var nodes = new[]
         {
             new GraphNode(new NodeId(1), GraphOperationKind.Input, outputs: [input.Id]),

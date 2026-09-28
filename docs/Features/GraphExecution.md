@@ -70,12 +70,19 @@ are F1 work.
 The first F1 scalar reference operators now compute row-major linear/bias,
 causal grouped-query attention, RMSNorm, SiLU, element-wise Add/Multiply,
 stable Softmax, and NeoX/interleaved RoPE with FP64 intermediates and FP32
-outputs. The
-attention path reads only valid positions at or before the query position;
+outputs. The attention path reads only valid positions at or before the query position;
 `AllKeysMasked`, active non-finite values, and FP32 overflow are typed failures
 that leave the output unchanged. `NumericalPolicy` names the small-tensor FP32,
-FP16, and BF16 tolerance contracts. The remaining operators and an interpreter
-that executes graph nodes are still pending.
+FP16, and BF16 tolerance contracts. A first `GraphReferenceInterpreter`
+increment executes a verified, single-entry, fixed-shape, stateless,
+always-active Model IR graph in node order. It accepts explicit FP32 input and
+weight payloads, copies them before execution, and supports Linear, RMSNorm,
+Add, Multiply, SiLU, and Softmax through scalar reference operators. Its
+current numerical mode is FP32 storage/compute with declared FP64 accumulation;
+other precision modes, conditional regions, state effects, symbolic shapes,
+and unsupported ops fail before node execution. A one-million-element-per-
+tensor safety bound keeps this correctness bridge small. Qwen execution from
+IR, additional operations, and the region scheduler remain pending.
 
 This represents the `what executes` axis. Execution IR will add kernels,
 layouts, lifetimes, memory spaces, and precision. Deployment plans will bind
@@ -120,3 +127,6 @@ reader, and proves provenance changes the canonical fingerprint.
 an independent FP64 calculation, causal future-value isolation, the typed
 all-masked error, RMSNorm/SiLU values, stable large-logit softmax, both RoPE
 layouts, and non-mutating shape errors.
+`GraphReferenceInterpreterTests` executes real tiny Linear and RMSNorm→SiLU
+graphs and rejects unsupported operators, conditional regions, FP32
+accumulation, and short weight payloads.

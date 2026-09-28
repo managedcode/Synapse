@@ -182,6 +182,16 @@ exponentiation. RoPE supports both NeoX half-pair and interleaved adjacent-pair
 layouts with explicit position and theta. Each numerical output rounds once
 to FP32 after a fixed-order FP64 calculation.
 
+The first interpreter increment consumes a verified fixed-shape Model IR with
+explicit caller input tensors and copied FP32 tensor payloads. This
+increment accepts only graph values declaring FP64 accumulation (the current
+reference-operator contract); FP32 accumulation requires a separate exact
+path, not an implicit precision substitution. It executes
+only the supported always-active node kinds in producer order. A conditional
+region, state effect, quantized operator, or unknown operation fails before
+any graph work; there is no silent fallback to the Qwen-specific loop. This
+tiny dense path is a correctness bridge toward the complete F1 interpreter.
+
 ## Alternatives rejected
 
 - Keep one `ExecutionEligibility` union. It forces provenance and runtime
