@@ -36,10 +36,12 @@ shared libraries, runtime heaps, and driver memory make that subtraction
 invalid. A missing platform metric remains null with its scope recorded.
 
 Functional CI and performance evidence are separate workflows. Functional
-tests may make short real-process quality and schema assertions but do not
-assert throughput or use long generation as a performance proxy. The manually
+TUnit checks can validate rendering against recorded raw evidence, but do not
+run the measured matrix or assert throughput. The manually
 dispatched performance workflow runs its own macOS/Linux/Windows matrix and
-retains every measured round as an artifact with a descriptive report. Hosted
+retains every measured round as an artifact with a descriptive report. An
+output mismatch fails the job after writing the report, while the raw artifact
+is still uploaded. Hosted
 runners are variable hardware, so their results are never pooled across OSes
 or compared to the owner's Mac as a release winner verdict.
 

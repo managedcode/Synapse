@@ -35,4 +35,30 @@ public sealed class DiagnosticMatrixReportTests
         await Assert.That(report).Contains("peak RSS MiB");
         await Assert.That(report).Contains("Measured rounds: 5");
     }
+
+    [Test]
+    public async Task IneligibleRawEvidenceFailsPerformanceQualityGate()
+    {
+        var root = FindRepositoryRoot();
+        var evidence = Path.Combine(root, "benchmarks", "results",
+            "2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-32tok-quality-divergence-final.json");
+        var start = new ProcessStartInfo("dotnet")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        start.ArgumentList.Add(Path.Combine(AppContext.BaseDirectory, "Synapse.ReferenceBenchmarks.dll"));
+        start.ArgumentList.Add("report");
+        start.ArgumentList.Add("--input");
+        start.ArgumentList.Add(evidence);
+        start.ArgumentList.Add("--require-quality");
+        using var process = Process.Start(start)
+            ?? throw new InvalidOperationException("Matrix report process did not start.");
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(30));
+        await Assert.That(process.ExitCode).IsEqualTo(3).Because(await error);
+        await Assert.That(await output).Contains("ineligible_quality_mismatch");
+    }
 }

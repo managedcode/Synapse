@@ -129,11 +129,15 @@ gate and remote CI are not verified. No `TASK-BMK-001` release claim is closed.
 CI separation follow-up: Ubuntu `verify` on `3bbd5ee` ran 73 tests with one
 failure because a functional assertion required a platform-specific 32-token
 dotLLM divergence; the same test timed out after five minutes on hosted macOS.
-The quality-gate regression now uses an impossible expected token in an
-eight-token run, and the performance measurements are in a distinct
-manual Mac/Linux/Windows Actions workflow with raw artifacts and a C# report.
+The measured matrix is now removed from TUnit entirely: tests use recorded raw
+evidence for report and quality-gate behavior. Performance measurements are
+in a distinct manual Mac/Linux/Windows Actions workflow with raw artifacts
+and a C# report.
 The report behavior test was red (unknown `report` command) before the renderer
-was added. Three-OS CI execution, artifact publication, and the statistical
-release gate remain unverified until the new run completes.
+was added; the quality gate was separately red (usage exit 2) before its exit-3
+implementation. The first three-OS performance run (`9567d06`) passed and
+published three raw artifacts; Windows and Ubuntu verify passed while hosted
+Mac verify was still running at this checkpoint. The quality-gate follow-up
+and statistical release gate remain unverified until new runs complete.
 - [ ] Execute Qwen2 from the verified region IR instead of the parallel shadow
   loop, following `flybrain.plan.md` F0/F1 and accepted ADR-003.

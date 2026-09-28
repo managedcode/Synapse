@@ -68,8 +68,9 @@ Date: 2026-09-27. Status: accepted for the bootstrap slice.
 
 - Keep functional `verify` fast and assertion-oriented. A long, exact Qwen
   continuation is not portable evidence of a quality regression when CPU
-  kernels choose a different valid sequence; test rejection with an impossible
-  reference token instead.
+  kernels choose a different valid sequence. Validate report and quality-gate
+  behavior from preserved raw evidence in TUnit; run the real matrix only in
+  the performance workflow.
 - Dispatch performance independently on macOS, Linux, and Windows. Preserve
   each runner's raw process samples and render a descriptive summary of the
   workload and medians. Hosted-runner results form separate hardware cohorts;

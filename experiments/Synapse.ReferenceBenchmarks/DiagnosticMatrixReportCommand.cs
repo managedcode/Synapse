@@ -9,10 +9,13 @@ internal static class DiagnosticMatrixReportCommand
 
     public static async Task<int> RunAsync(string[] arguments)
     {
-        if (arguments.Length is not (2 or 4) || arguments[0] != "--input" ||
-            (arguments.Length == 4 && arguments[2] != "--summary"))
+        var requireQuality = arguments.LastOrDefault() == "--require-quality";
+        var optionLength = arguments.Length - (requireQuality ? 1 : 0);
+        if (optionLength is not (2 or 4) || arguments[0] != "--input" ||
+            (optionLength == 4 && arguments[2] != "--summary"))
         {
-            Console.Error.WriteLine("Usage: report --input <matrix.json> [--summary <github-step-summary>]");
+            Console.Error.WriteLine("Usage: report --input <matrix.json> " +
+                "[--summary <github-step-summary>] [--require-quality]");
             return 2;
         }
 
@@ -22,9 +25,16 @@ internal static class DiagnosticMatrixReportCommand
             using var document = await JsonDocument.ParseAsync(stream).ConfigureAwait(false);
             var report = Render(document.RootElement);
             Console.Write(report);
-            if (arguments.Length == 4)
+            if (optionLength == 4)
             {
                 await File.AppendAllTextAsync(arguments[3], report).ConfigureAwait(false);
+            }
+
+            if (requireQuality && document.RootElement.GetProperty("status").GetString() !=
+                "measured_diagnostic_no_statistical_verdict")
+            {
+                Console.Error.WriteLine("Performance evidence is ineligible because quality did not match.");
+                return 3;
             }
 
             return 0;

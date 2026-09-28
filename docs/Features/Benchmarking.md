@@ -57,18 +57,22 @@ the 30-pair randomized release benchmark, and 8-token decode timing remains
 too short for an optimization win claim.
 
 GitHub Actions keeps correctness and performance separate. `verify.yml` runs
-the functional suite on macOS ARM64, Ubuntu x64, and Windows x64; its matrix
-smoke checks short-output quality and schema, not speed thresholds.
+the functional suite on macOS ARM64, Ubuntu x64, and Windows x64; it does not
+run the measured matrix or enforce speed thresholds. Existing recorded JSON
+tests report formatting and mismatch rejection without running performance
+samples inside TUnit.
 `performance.yml` is a separate manually dispatched three-OS CPU matrix. It
 fetches only the pinned Qwen smoke GGUF, builds the pinned competitors, runs
 three warm-ups plus five measured fresh-process rounds with a two-thread cap,
 and uploads unmodified per-round JSON for each runner. The C# `report --input
-<raw.json> [--summary <path>]` command renders workload, model digest,
+<raw.json> [--summary <path>] [--require-quality]` command renders workload, model digest,
 platform, quality, median process wall time, peak RSS, Mac footprint, and
-reported decode phase into the GitHub job summary. Each runner is a distinct
+reported decode phase into the GitHub job summary. The quality flag fails a
+job when output diverges, while the raw artifact is retained. Each runner is a distinct
 cohort; this eight-token diagnostic neither replaces long generation nor
-passes the 30-pair release benchmark gate. A run has not been verified until
-its actual Actions job and artifact succeed.
+passes the 30-pair release benchmark gate. The first actual Actions run on
+`9567d06` passed all three performance jobs and published three raw artifacts;
+the quality-gate CLI change still requires a fresh workflow run.
 
 Two 10-turn modes use `benchmarks/scenarios/travel-planner-10-turns.json`:
 

@@ -109,9 +109,10 @@ jobs:
         run: |
           dotnet experiments/Synapse.ReferenceBenchmarks/bin/Release/net10.0/Synapse.ReferenceBenchmarks.dll report \
             --input "${RUNNER_TEMP}/synapse-benchmark.json" \
-            --summary "${GITHUB_STEP_SUMMARY}"
+            --summary "${GITHUB_STEP_SUMMARY}" --require-quality
 
       - name: Preserve raw per-round evidence
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: performance-${{ matrix.runtime_identifier }}
