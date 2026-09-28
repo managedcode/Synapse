@@ -12,15 +12,10 @@ public enum ReferenceNumericalFailure
 }
 
 /// <summary>A typed failure that leaves the caller's output buffer unchanged.</summary>
-public sealed class ReferenceNumericalException : ArithmeticException
+/// <remarks>Creates a numerical failure with its stable code.</remarks>
+public sealed class ReferenceNumericalException(ReferenceNumericalFailure failure, string message) : ArithmeticException(message)
 {
-    /// <summary>Creates a numerical failure with its stable code.</summary>
-    public ReferenceNumericalException(ReferenceNumericalFailure failure, string message)
-        : base(message)
-    {
-        Failure = failure;
-    }
 
     /// <summary>Stable numerical failure category.</summary>
-    public ReferenceNumericalFailure Failure { get; }
+    public ReferenceNumericalFailure Failure { get; } = failure;
 }

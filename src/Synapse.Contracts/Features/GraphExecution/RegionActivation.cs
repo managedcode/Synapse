@@ -66,7 +66,7 @@ public sealed record BypassOutputs : SkipSemantics
     public BypassOutputs(IEnumerable<ValueBypass> map)
     {
         ArgumentNullException.ThrowIfNull(map);
-        Map = Array.AsReadOnly<ValueBypass>([.. map]);
+        Map = Array.AsReadOnly([.. map]);
     }
 
     /// <summary>One mapping for every declared region output.</summary>

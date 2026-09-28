@@ -284,6 +284,41 @@ noncommercial research evidence.
   100 steady-state tokens).
 - [ ] F6.3 Two-node evidence on H-DUAL-LAN. Report capacity and latency
   separately.
+- [ ] F6.4 Attention-head sharding with Orleans placement (experimental,
+  TASK-CLS-006). Owner request 2026-09-28: place attention heads on different
+  workers through Orleans.
+  - IR: split an attention region into KV-head-group sub-regions. Each group
+    gets its query/KV slice, its own KV state slot, and its attention. The
+    groups are joined either by `Concat` before `o_proj`, or by a row-parallel
+    `o_proj` plus `Merge(Add)`. No new operation is needed, and each KV slot
+    keeps one owner per `(session, epoch, branch)`.
+  - Local first: head-group sub-regions run in parallel on threads, which is
+    hypothesis 5 in `kv-performance.plan.md`. Measure that before going across
+    processes.
+  - Across workers: each worker owns one KV-head group for its layers. Every
+    layer then needs the input hidden vector broadcast and the partial
+    projection reduced, which is at least one round trip per layer per token.
+    The F6.1 layer-range pipeline needs one hop per stage per token. As
+    arithmetic, not measurement: 24 layers × 1 round trip × an assumed 100 µs
+    RTT is 2.4 ms per token before any compute.
+  - Limit: the split cannot exceed the number of KV heads. Qwen2.5-0.5B and
+    Qwen2.5-Coder-1.5B have 2, so they allow at most 2 shards. The expected
+    value is KV memory capacity for long contexts or large models, not
+    single-sequence latency; this is a hypothesis to measure.
+  - Alternative for long context: shard KV by position (page ranges). Each
+    worker returns online-softmax partials (max, sum, and weighted value, i.e.
+    head dimension + 2 floats per query head), and one worker combines them.
+    For Qwen2.5-0.5B that is 14 × 66 × 4 B ≈ 3.7 KiB per layer. Compare both
+    splits on the same long-context workload.
+  - Orleans holds only the placement: `HeadShardPlacementGrain` (§4) maps each
+    head group or position range to a worker incarnation, with a lease and
+    epoch. Per-token traffic goes worker to worker over the data plane. A
+    grain per head per step would be 14 heads × 24 layers = 336 grain calls
+    per token for the 0.5B model, which violates INV-012.
+  - Tests: `HeadShardedTokensEqualSingleProcess`, `KvShardHasSingleOwner`,
+    `StaleShardOwnerRejected`, `NoGrainCallsInSteadyStateDecode`.
+  - Gate G09: correctness first; capacity and latency are reported separately,
+    and a latency win is claimed only with paired evidence.
 
 ### F7. Precision per region (TASK-QNT-001..004, then TASK-PRE-001..004)
 
@@ -321,6 +356,7 @@ noncommercial research evidence.
 | `SessionGrain` | SessionId | Owner worker, epoch, durability mode, plan hash | Create, cancel, recover, replan at a safe point |
 | `RegionPlacementGrain` | (model fingerprint, placement ID) | Region range → worker incarnation, leases, residency summary | Deployment, failure, replan |
 | `WorkerRegistryGrain` | WorkerId | Capabilities, incarnation, health | Worker start/stop/health |
+| `HeadShardPlacementGrain` | (placement ID, layer range, KV-head group or position range) | Shard → worker incarnation, lease, epoch, KV bytes | Shard placement, failure, replan (F6.4) |
 
 The activation wave never goes through a grain. Workers forward packets
 directly using the plan fixed for the session epoch. A stale epoch or wrong
@@ -369,6 +405,15 @@ wave as a token × region heatmap from this file.
   fixture.
 - D5: Choose the residency mechanism in ADR-005 (owned buffers vs.
   mmap+madvise).
+- D6 direction 2026-09-28: the hot KV implementation (layout, kernel, and
+  language) is chosen by the pre-registered measurement in
+  `kv-performance.plan.md`. ZoneTree keeps KV metadata and competes only for
+  the cold tier. The verdict must land before F4.1 and F6.
+- D7 direction 2026-09-28: concurrent requests, on-the-fly importance-aware
+  precision with automatic restore, the heterogeneous Orleans cluster, and
+  format import follow `elastic-inference.plan.md`. Its E1 building blocks
+  (Q4 and ternary codecs, sensitivity, budget selector, placement planner) are
+  implemented and tested but not yet wired into execution. F7 uses them.
 
 ## 8. Research references (checked 2026-09-27)
 

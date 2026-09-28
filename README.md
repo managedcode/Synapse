@@ -2,11 +2,84 @@
 
 [![verify](https://github.com/managedcode/Synapse/actions/workflows/verify.yml/badge.svg)](https://github.com/managedcode/Synapse/actions/workflows/verify.yml)
 
-Synapse is a local-first inference engine written in C#/.NET, with Rust reserved
-for measured hot paths. The product owns model import, typed graph execution,
-memory and KV state, scheduling, quantization, sampling, direct worker transfer,
-and benchmark evidence. dotLLM, LLamaSharp, and later direct llama.cpp are
-competitors in the harness, never hidden Synapse backends.
+**Synapse is a local-first, graph-native LLM inference engine for .NET.** It runs
+models on one machine without any server or network. The same runtime is meant
+to scale across a cluster of different machines (an Apple Silicon Mac, an
+NVIDIA box, an ordinary PC), with Orleans coordinating and tensors moving
+directly between workers.
+
+Synapse owns the whole path: model import, a typed graph of the model, graph
+execution, memory and KV state, scheduling, quantization, sampling, worker
+transfer, and benchmark evidence. dotLLM, LLamaSharp, and native llama.cpp are
+competitors measured by the harness. They are never hidden Synapse backends.
+
+## The idea
+
+Most engines treat a model as a fixed stack of layers and try to make each
+matrix multiply faster. Synapse also optimizes **how much of the model has to
+run and be resident** for a given request.
+
+- **Model = graph of coarse regions.** An embedding, each attention block, each
+  MLP block, each MoE expert, and the output head are regions with explicit
+  inputs, outputs, weights, and state. This is the FlyBrain idea, borrowed
+  loosely from how a fly brain's connectome routes signals through a few active
+  areas.
+- **Inference = an activation wave.** Only the regions a request actually needs
+  execute. A region may be skipped only with proof: a graph predicate, the
+  model's own trained router (as in MoE), or an evaluated approximation
+  profile. A label such as `CSharp` or `Reasoning` never authorizes skipping,
+  and dense checkpoints stay dense.
+- **Four independent decisions per request:** *what* runs (regions), *which
+  weights* are resident in memory (demand loading), *where* each region runs
+  (device or worker), and *at what precision* (encoding per tensor).
+- **Important weights keep full precision; unimportant ones may be
+  approximate.** Importance is measured as the output error an approximation
+  causes on real activations. Precision can drop as low as ternary where
+  measurement allows. It returns automatically when it matters: a
+  full-precision pass verifies approximate drafts, and freed memory promotes
+  the most important demoted tensors first.
+- **One model across heterogeneous machines.** Layer ranges are placed on
+  devices according to measured speed, memory, and supported kernels. Orleans
+  holds only control state (sessions, leases, epochs, placement). The hidden
+  state crosses between workers directly (3.5 KiB per token for Qwen2.5-0.5B);
+  tensors never go through grains.
+- **Evidence first.** Every speed, memory, or quality claim needs raw paired
+  measurements. `not_run` never counts as `passed`.
+
+## Built with
+
+| Layer | Technology | Role |
+|---|---|---|
+| Runtime, graph IR, reference kernels, SDK, CLI | C# / .NET 10 (`net10.0`, nullable, warnings as errors) | The first and permanent portable path; the numerical oracle |
+| Optimized hot paths | Rust 1.98 (edition 2024) | Kernels, allocator, hot KV, or transfer, only after a paired profile shows the C# path is the bottleneck |
+| GPU kernels | Metal, CUDA (planned) | Behind the same region and precision contracts |
+| Cluster control plane | Microsoft Orleans (planned D3) | Sessions, leases, epochs, placement, recovery; no tensor traffic |
+| Durable local state | ZoneTree | Package and cache metadata, prefix index, journals, evidence index |
+| Tests | TUnit on Microsoft.Testing.Platform | Real components and real models; no mocks |
+| Forbidden | Python, Node.js | Not used for build, runtime, conversion, tests, or benchmarks |
+
+## What works today, and what is planned
+
+| Capability | Status | Where |
+|---|---|---|
+| Managed Qwen2 Q8_0 inference (24 layers: RMSNorm, Q8_0 GEMV, GQA, RoPE, KV, SwiGLU, greedy), with an 8-token continuation identical to dotLLM, LLamaSharp, and native llama.cpp | **Working** | `src/Synapse.Runtime/Features/TextGeneration` |
+| Typed Model IR and verifier: regions, derived boundaries, explicit operation attributes and position, `Context` symbol, graph fingerprint, weight byte ranges, ADR-003 activation contract | **Working** | `src/Synapse.Contracts`, `Features/GraphExecution` |
+| Scalar reference interpreter from Model IR (tiny fixed-shape graphs) | **In progress**; Qwen does not execute from IR yet | `Features/GraphExecution/Reference` |
+| Pinned model catalog and verified download | **Working** | `models/catalog.json`, `synapse model` |
+| Source-format decoders (F32/F64/F16/BF16, FP8 E4M3/E5M2, GGUF Q4_0–Q8_0, Q2_K–Q6_K, Q8_K, IQ4_NL/IQ4_XS, TQ1_0/TQ2_0, MXFP4), diffed against ggml's own decoders | **Implemented**, not yet wired into tensor reads | `Features/ModelPackages/SourceFormats` |
+| On-the-fly quantization: symmetric 2–8-bit codecs with any group size, ternary, activation-aware importance, budget selector with automatic promotion | **Implemented**, not yet wired into execution | `Features/Quantization` |
+| Heterogeneous placement planner (up to 4 devices, KV reservation, precision per stage, latency or throughput objective) | **Implemented** on supplied profiles; no Orleans yet | `Features/ExecutionPlanning` |
+| Region scheduler that executes and skips regions; region kernels | Planned (F1) | `flybrain.plan.md` |
+| Weight residency and demand loading under a memory budget | Planned (F2) | `flybrain.plan.md` |
+| Paged hot KV chosen by measurement (C# vs Rust) | Planned | `kv-performance.plan.md` |
+| Speculative decoding and exact precision escalation | Planned (F4, E5) | `flybrain.plan.md`, `elastic-inference.plan.md` |
+| Real MoE expert routing and expert paging (OLMoE) | Planned (F5) | `flybrain.plan.md` |
+| Concurrent sessions with region-level batching | Planned (E7) | `elastic-inference.plan.md` |
+| Orleans cluster: multi-process, then two nodes | Planned (F6, E8) | `flybrain.plan.md`, `elastic-inference.plan.md` |
+| Repo-owned tokenizer and chat templates; the CLI takes token IDs today | Planned | `synapse.plan.md` |
+| Metal and CUDA kernels | Planned | `synapse.plan.md` |
+
+### Current checkpoint in detail
 
 The first executable slice is real: Synapse loads the pinned
 Qwen2.5-0.5B-Instruct Q8_0 GGUF, verifies a 26-region dense Model IR, and runs
@@ -28,21 +101,60 @@ Its eight-token continuation matches dotLLM and LLamaSharp.
 ## Architecture
 
 ```mermaid
-flowchart LR
-    SDK[".NET SDK / CLI"] --> LOCAL["Local execution\n(no Orleans or network)"]
-    SDK --> ORL["Orleans request + control plane\nplanned D3"]
-    ORL --> PLAN["leases · epochs · placement\nregion and weight-group coordination"]
-    PLAN -. "control only" .-> W1["Worker A\ncoarse graph regions"]
-    PLAN -. "control only" .-> W2["Worker B\ncoarse graph regions"]
-    W1 <-->|"direct bounded tensor transfer"| W2
-    LOCAL --> EXEC["Typed Model IR → Execution IR"]
-    W1 --> EXEC
-    W2 --> EXEC
-    EXEC --> CS["C# portable/reference kernels"]
-    EXEC --> RS["Rust / native kernels\nonly after profiling"]
-    EXEC --> KV["hot KV + bounded residency"]
-    KV --> ZT["ZoneTree\nmetadata · prefix index · journal · evidence"]
-    EXEC --> PKG["verified local model packages"]
+flowchart TB
+    APP(["Application · .NET SDK · CLI"])
+
+    LOCAL["Local mode<br/>in-process · offline<br/>no Orleans, no network"]
+    ORL["Orleans control plane<br/>sessions · leases · epochs<br/>placement · planned D3"]
+
+    subgraph DATA["Data plane · direct bounded frames, never through grains"]
+        direction LR
+        WA["Worker A<br/>layers 0 … k"] <==>|"hidden state<br/>position · epoch"| WB["Worker B<br/>layers k … n"]
+    end
+
+    subgraph RT["Synapse runtime · the same code in-process and in every worker"]
+        IR["Model IR<br/>WHAT may execute<br/>regions · eligibility · state"]
+        EX["Execution IR<br/>HOW and at which PRECISION<br/>kernels · layouts · lifetimes"]
+        DP["Deployment plan<br/>WHERE each region runs<br/>device · worker · epoch"]
+        WAVE["Activation-wave scheduler<br/>coarse regions<br/>skip only with proof"]
+        CS["C# reference kernels<br/>portable oracle"]
+        RS["Rust · Metal · CUDA<br/>only after profiling"]
+        RES["Weight residency<br/>importance-aware precision"]
+        KV["Hot KV<br/>one fenced owner"]
+    end
+
+    subgraph ST["Local durable state"]
+        PKG["Model packages<br/>pinned catalog · SHA-256"]
+        ZT["ZoneTree<br/>metadata · prefix index · journal"]
+    end
+
+    APP -->|"local"| LOCAL
+    APP -->|"cluster"| ORL
+    ORL -. "control only" .-> DATA
+    LOCAL --> IR
+    DATA -->|"each worker runs"| IR
+    IR --> EX --> DP --> WAVE
+    WAVE --> CS & RS & RES & KV
+    RES --> PKG
+    KV --> ZT
+
+    classDef entry fill:#1f6feb,stroke:#1f6feb,color:#ffffff
+    classDef control fill:#fff4e5,stroke:#d97706,color:#3b2600
+    classDef data fill:#e7f5ff,stroke:#1c7ed6,color:#0b2a44
+    classDef ir fill:#f3f0ff,stroke:#7048e8,color:#1f1147
+    classDef exec fill:#ebfbee,stroke:#2f9e44,color:#0b3316
+    classDef store fill:#f1f3f5,stroke:#868e96,color:#212529
+
+    class APP entry
+    class ORL control
+    class LOCAL,WA,WB data
+    class IR,EX,DP ir
+    class WAVE,CS,RS,RES,KV exec
+    class PKG,ZT store
+
+    style DATA fill:transparent,stroke:#1c7ed6,stroke-dasharray:6 4
+    style RT fill:transparent,stroke:#7048e8,stroke-width:2px
+    style ST fill:transparent,stroke:#868e96
 ```
 
 The four independent decisions are: what graph regions are mathematically
@@ -57,6 +169,63 @@ optimized owner of a kernel, allocator, hot-KV operation, or transfer path only
 after a paired profile shows that the managed path is the bottleneck. See
 [`docs/Architecture.md`](docs/Architecture.md) and the reviewed FlyBrain plan
 in [`flybrain.plan.md`](flybrain.plan.md).
+
+## Precision: demote what does not matter, restore what does
+
+These building blocks are implemented and tested, but not yet wired into
+execution. See [`docs/Features/Quantization.md`](docs/Features/Quantization.md).
+
+1. **Any source format in.** A model arrives in its own encoding (BF16
+   SafeTensors, GGUF Q8_0, Q4_K, and so on). `SourceFormats` decodes it to FP32
+   reference values. An unsupported type fails at import with its ggml name,
+   never silently.
+2. **Any target precision out.** `syn.q{2..8}.symmetric.g{8..1024}.v1` covers
+   every width from 2 to 8 bits with any group size. `syn.ternary.absmean.g64.v1`
+   uses the BitNet b1.58 absmean rule per group. Each has a scalar reference
+   encoder, decoder, and matrix-vector product.
+3. **Measure importance.** For each tensor, `PrecisionCandidates.Measure`
+   quantizes on the fly with every candidate codec. It records the stored bytes
+   and the relative output error `||(W − Q(W))X||² / ||WX||²` on calibration
+   activations `X`. The error is weighted by activations, so a column that real
+   inputs never use costs almost nothing to approximate.
+4. **Fit a budget.** `PrecisionBudgetSelector` starts every tensor at source
+   precision and demotes the least important first, down the ladder source → q8
+   → q6 → q4 → q3 → q2/ternary, until the device's memory budget fits.
+   - It respects the device's supported kernels and pinned tensors.
+   - It requires an explicit approximation opt-in.
+   - It returns a `ProfileHash` that identifies the effective weights for plan
+     and KV cache keys.
+5. **Restore automatically.** The demotion order does not depend on the budget.
+   More memory therefore restores the most important demoted tensors first, and
+   `Diff` lists exactly what to reload. The planned exact mode drafts with the
+   approximate profile and verifies with full precision, so the committed output
+   equals the full model's greedy output.
+
+A caveat, with evidence recorded in
+[`elastic-inference.plan.md`](elastic-inference.plan.md):
+- Plain post-training quantization of a trained model to ternary collapses
+  quality.
+- BitNet models reach 1.58 bits because they are *trained* ternary.
+- Ternary in Synapse is therefore only for tensors that measurement shows to
+  be insensitive, behind verification or a quality gate, plus native import of
+  models trained ternary.
+
+## Spreading one model over different machines
+
+`HeterogeneousPlacementPlanner` splits the layer regions of a model into
+contiguous stages over up to four devices. The devices can differ in memory,
+measured weight-streaming speed, dispatch overhead, and supported encodings.
+- Each stage reserves KV for the requested context.
+- Each stage gets the highest importance-aware precision that fits.
+- `Latency` minimizes one request's step time, which tends to keep the model on
+  the fastest device that fits.
+- `Throughput` balances a pipeline serving many parallel requests. In the tests,
+  a 3× faster device receives 9 of 12 layers.
+
+Orleans will run this planner when workers join or leave, store the plan with
+an epoch, and hold the leases. Workers then pass the hidden state directly to
+each other. See
+[`docs/Features/ExecutionPlanning.md`](docs/Features/ExecutionPlanning.md).
 
 ## Model packages, not model blobs in Git
 
@@ -169,6 +338,27 @@ sample counts, executable/model hashes, and each subject's original result.
 Profilers are run separately so their overhead does not contaminate this
 table.
 
+The separate [GitHub Actions performance run](https://github.com/managedcode/Synapse/actions/runs/36403943949)
+also completed on macOS ARM64, Ubuntu x64, and Windows x64. Each runner used
+the same pinned Qwen GGUF (SHA-256 `ca59ca7f13d0e15a8cfa77bd17e65d24f6844b554a7b6c12e07a5f89ff76844e`),
+the five prompt IDs above, eight matching output tokens, a two-thread cap,
+three warm-ups, and five measured fresh-process rounds. The run publishes one
+raw JSON artifact per OS; these are **separate hardware cohorts**, not a
+cross-OS leaderboard or a long-generation performance verdict.
+
+| GitHub runner | Synapse wall / RSS | dotLLM wall / RSS | LLamaSharp wall / RSS | llama.cpp wall / RSS |
+|---|---:|---:|---:|---:|
+| macOS 15 ARM64 | 3,769.5 ms / 554.6 MiB | 2,993.8 ms / 1,166.3 MiB | 1,249.4 ms / 1,266.4 MiB | 1,058.6 ms / 1,204.4 MiB |
+| Ubuntu 24.04 x64 | 3,488.3 ms / 565.5 MiB | 2,031.7 ms / 1,174.3 MiB | 770.1 ms / 760.4 MiB | 656.4 ms / 724.3 MiB |
+| Windows Server 2025 x64 | 3,626.5 ms / 550.9 MiB | 2,275.9 ms / 1,152.8 MiB | 1,105.0 ms / 596.1 MiB | 984.6 ms / 574.6 MiB |
+
+All four continuations matched on each runner. The table shows medians of
+whole-process wall and peak resident set; native/managed allocations and mmap
+residency are included in RSS. The separate performance workflow saves the
+full raw rounds, workloads, hashes, and memory diagnostics, while `verify.yml`
+reports only correctness tests. Its quality gate fails a mismatched performance
+run without discarding raw evidence.
+
 The [32-token quality diagnostic](benchmarks/results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-32tok-quality-divergence-final.json)
 is `ineligible_quality_mismatch`: dotLLM's continuation diverged from
 LLamaSharp/direct llama.cpp after a shared prefix. Synapse currently emits
@@ -229,11 +419,15 @@ dotnet run --project src/Synapse.Cli --configuration Release -- generate \
   --tokens 785,6722,315,9625,374 --max-tokens 8 --context-size 512 --threads 12
 ```
 
-GitHub Actions runs the real model download, digest checks, managed Synapse,
-dotLLM, and LLamaSharp smoke tests on macOS ARM64 and Ubuntu x64, followed by
-the Rust format/lint/test gates.
-
-The current local checkpoint passes 68/68 Release tests. It includes scalar
+The [verify workflow](https://github.com/managedcode/Synapse/actions/workflows/verify.yml)
+runs real-model TUnit, .NET build, and Rust format/lint/test on macOS ARM64,
+Ubuntu x64, and Windows x64. It does **not** run the measured performance
+matrix; that lives in the separate
+[performance workflow](https://github.com/managedcode/Synapse/actions/workflows/performance.yml).
+The latest local Release run on 2026-09-28 passed 134/134 tests with the
+pinned dotLLM and native llama.cpp executables available. Without those
+executables, required reference smoke tests fail instead of silently skipping.
+The suite includes scalar
 reference linear/bias, causal grouped-query attention, RMSNorm, SiLU,
 element-wise math, stable Softmax, and both RoPE layouts, with FP64 oracle and
 masking tests. A first verified, fixed-shape, FP32-storage/FP64-accumulator
@@ -249,7 +443,8 @@ not mixed into the recorded 3-warm-up/5-measurement evidence.
 
 ```text
 src/Synapse.Contracts/       typed graph, execution, session, and protocol contracts
-src/Synapse.Runtime/         model readers, graph verifier, managed kernels, inference
+src/Synapse.Runtime/         model readers, graph verifier, managed kernels, inference,
+                             source-format decoders, quantization, placement planning
 src/Synapse.Cli/             doctor, model catalog/fetch, and generation commands
 native/                      Rust workspace for profiled acceleration boundaries
 experiments/                 isolated external benchmark runners
@@ -281,7 +476,18 @@ docs/                        architecture, ADRs, features, commands, task regist
 | [Qwen2.5 GGUF](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF), [SmolLM2](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct), [Mamba](https://huggingface.co/state-spaces/mamba-130m-hf) | Pinned correctness and architecture fixtures | Model licenses recorded per catalog entry; downloaded outside Git |
 | [FlyWire connectome](https://doi.org/10.1038/s41586-024-07558-y) | Coarse graph/region inspiration for FlyBrain activation waves | Research inspiration, not implementation code |
 | [Mixture-of-Depths](https://arxiv.org/abs/2404.02258), [Router-Tuning](https://github.com/CASE-Lab-UMD/Router-Tuning-Mixture-of-Depths), [LayerSkip](https://github.com/facebookresearch/LayerSkip) | Conditional-depth, trained-routing, and self-speculative research directions | No dense-layer skipping without model/evidence support |
+| [BitNet b1.58](https://arxiv.org/abs/2402.17764), [BitNet 2B4T](https://huggingface.co/microsoft/bitnet-b1.58-2B-4T) | Absmean ternary rule; a target for native import of models trained ternary | Research reference; bitnet.cpp's Python tooling is not used |
+| [QSpec](https://arxiv.org/abs/2410.11305) | Low-precision draft verified by high precision, which keeps the output unchanged | Design reference for exact precision escalation |
+| [BiLLM](https://arxiv.org/abs/2402.04291), [SpQR](https://arxiv.org/abs/2306.03078), [PTQ1.61](https://arxiv.org/abs/2502.13179) | Keep salient weights at higher precision; evidence that plain ternary post-training quantization collapses quality | Research reference |
+| [OLMoE](https://huggingface.co/allenai/OLMoE-1B-7B-0924-Instruct-GGUF), [MoE offloading](https://arxiv.org/abs/2312.17238) | Real MoE fixture for exact expert routing; LRU and speculative expert prefetch | Planned F5; Apache-2.0 model |
 
-Delivery state and remaining work are tracked factually in
-[`synapse.plan.md`](synapse.plan.md); accepted public region semantics are in
-[`ADR-003`](docs/ADR/ADR-003-flybrain-region-execution-semantics.md).
+## Plans and design documents
+
+| Document | Content |
+|---|---|
+| [`synapse.plan.md`](synapse.plan.md) | Master delivery state, factual only |
+| [`flybrain.plan.md`](flybrain.plan.md) | Regions, activation waves, residency, speculation, MoE, Orleans placement (F0–F8) |
+| [`elastic-inference.plan.md`](elastic-inference.plan.md) | Parallel requests, adaptive precision with automatic restore, heterogeneous cluster, format import (E1–E10) |
+| [`kv-performance.plan.md`](kv-performance.plan.md) | Choosing the hot KV implementation (C# vs Rust) by pre-registered measurement |
+| [`docs/Architecture.md`](docs/Architecture.md), [`docs/ADR/`](docs/ADR/) | Architecture and decisions; region semantics are in [`ADR-003`](docs/ADR/ADR-003-flybrain-region-execution-semantics.md) |
+| [`docs/Features/`](docs/Features/) | Per-slice behavior and acceptance mapping |
