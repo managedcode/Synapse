@@ -121,12 +121,57 @@ llama.cpp remains far ahead in TTFT and decode. Synapse TTFT varied from 304.8
 to 574.2 ms, so scheduling stability is an explicit optimization target. The
 formal benchmark gate still requires 30 paired measurements, a thread-scaling
 sweep, the locked 10-turn growing-context dialogue, cache hit/miss workloads,
-embeddings, and direct llama.cpp. Energy is
+and embeddings. Energy is
 `not_run_missing_privilege`: `/usr/bin/powermetrics` requires superuser access,
 and missing energy data is never reported as zero.
 
+Direct native `llama.cpp` 0.4.1 (`b29c606e2`) now passes the same Qwen prompt
+token IDs and eight-token continuation. It was measured separately, not
+interleaved with the three-subject run above, so it is **not a fourth paired
+row** in that table. After three warm-ups, five fresh-process native runs had
+median process wall 566.2 ms and max observed RSS 1,208.3 MiB. The native CLI
+reported median prompt-eval 14.9 ms and eval 57.9 ms (120.84 eval tok/s).
+These are native internal phases, **not** comparable load, TTFT, or end-to-end
+generation measurements; those fields remain `null`. For a 128-token output,
+five measured native completion runs ranged from 47.28 to 99.40 internal eval
+tok/s (median 80.73), with identical generated text. This large spread is a
+reason to avoid a winner claim while the Mac also runs other development work.
+One later repeat exceeded 90 seconds for the same 128-token limit and was
+terminated; it is not folded into the five successful samples.
+Separately, native `llama-bench` reported 115.36 ± 5.94 tok/s for five
+128-token repetitions; [its own methodology](https://github.com/ggml-org/llama.cpp/blob/master/tools/llama-bench/README.md)
+excludes tokenization and sampling, so it is a kernel diagnostic, not a
+completion-process result.
+
+| Catalog model / architecture | Synapse | dotLLM | LLamaSharp | native llama.cpp | MLX | ONNX Runtime |
+|---|---|---|---|---|---|---|
+| Qwen2.5 0.5B Q8_0 · Qwen2 | D8 | D8 | D8 | D8 + D128 | NR | NR |
+| SmolLM2 135M BF16 · Llama | NR | NR | NR | NR | NR | NR |
+| Qwen3 0.6B Q8_0 · Qwen3 | NR | NR | NR | NR | NR | NR |
+| Mamba 130M F32 · SSM | NR | NR | NR | NR | NR | NR |
+| Phi-3 Mini 3.8B Q4 · Phi3 | NR | NR | NR | NR | NR | NR |
+| DeepSeek-R1 Distill 1.5B BF16 · Qwen2 | NR | NR | NR | NR | NR | NR |
+| Ministral 3 3B Q4 · Mistral3 | NR | NR | NR | NR | NR | NR |
+| all-MiniLM-L6-v2 F32 · BERT embedding | NR | NR | NR | NR | NR | NR |
+| BGE-small-en-v1.5 F32 · BERT embedding | NR | NR | NR | NR | NR | NR |
+
+`D8`/`D128` mean measured diagnostic output lengths, not formal benchmark
+victories; `NR` means no compatible measurement yet, not zero performance.
+Each newly qualified model will receive the same load/TTFT/generation/decode/
+CPU/memory comparison table in its own hardware and precision cohort; the
+coverage matrix does not substitute made-up numbers for those future tables.
+Only Qwen GGUF currently runs through Synapse's inference path. Other catalog
+packages have different architectures and/or SafeTensors/embedding formats;
+the existence of a pinned download is not evidence of executable inference.
+MLX is a candidate Python-free native/Swift Apple Silicon baseline and ONNX
+Runtime GenAI is a candidate C# baseline using a separately pinned ONNX model.
+Their GPU/format/precision cohorts will not be silently mixed with CPU GGUF.
+
 Raw measured samples and binary/model fingerprints are stored in
 [`benchmarks/results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-smoke.json`](benchmarks/results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-smoke.json).
+The [native llama.cpp diagnostic samples](benchmarks/results/2026-09-28-m2-pro-native-llamacpp-qwen2.5-0.5b-q8_0-diagnostic.json)
+include the separate 8/128-token completion repeats, kernel microbenchmark,
+model digest, and binary fingerprints.
 The locked dialogue and embedding workloads are in `benchmarks/scenarios/`.
 
 ## Build, test, and run
@@ -189,7 +234,9 @@ docs/                        architecture, ADRs, features, commands, task regist
 |---|---|---|
 | [dotLLM](https://github.com/kkokosa/dotLLM) | Pure-.NET correctness/performance competitor and architecture study | GPL-3.0; pinned checkout and separate process only |
 | [LLamaSharp](https://github.com/SciSharp/LLamaSharp) | Required llama.cpp-backed CPU benchmark | MIT; benchmark-project package 0.27.0 |
-| [llama.cpp](https://github.com/ggml-org/llama.cpp) | GGUF/quantization reference and required direct native baseline | MIT; direct runner is still pending |
+| [llama.cpp](https://github.com/ggml-org/llama.cpp) | GGUF/quantization reference and direct native baseline | MIT; external CPU process pinned at `b29c606e2` |
+| [MLX Swift LM](https://github.com/ml-explore/mlx-swift-lm) | Candidate Python-free Apple Silicon/Metal baseline | External subject planned; no measurement yet |
+| [ONNX Runtime GenAI](https://onnxruntime.ai/docs/genai/api/csharp.html) | Candidate C# ONNX-format baseline | Preview API; verified ONNX package and measurement pending |
 | [ZoneTree](https://github.com/ZoneTree/ZoneTree) | Durable cache metadata, prefix indexes, journals, evidence indexes | MIT; runtime package 1.9.8 |
 | [Microsoft Orleans](https://github.com/dotnet/orleans) | Request/control plane, leases, epochs, placement, recovery | Planned D3 dependency; never tensor/KV transport |
 | [Aspire](https://github.com/dotnet/aspire) | Multi-process topology, health, telemetry, test orchestration | Added only with the first real distributed topology |

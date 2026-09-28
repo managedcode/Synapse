@@ -25,6 +25,7 @@ internal static class ReferenceBenchmarkCommand
             {
                 "dotllm" => await RunDotLlmAsync(options).ConfigureAwait(false),
                 "llamasharp" => await RunLlamaSharpAsync(options).ConfigureAwait(false),
+                "llamacpp" => await LlamaCppSubject.RunAsync(options).ConfigureAwait(false),
                 _ => throw new UnreachableException(),
             };
             Console.WriteLine(JsonSerializer.Serialize(result, BenchmarkJsonContext.Default.BenchmarkResult));
@@ -107,7 +108,8 @@ internal static class ReferenceBenchmarkCommand
             ProcessCpuMilliseconds: subjectCpu.TotalMilliseconds,
             AverageCpuCores: AverageCpuCores(subjectCpu, subjectTimer.Elapsed),
             WorkingSetAfterLoadBytes: workingSetAfterLoad,
-            MaximumObservedWorkingSetBytes: maximumObservedWorkingSet);
+            MaximumObservedWorkingSetBytes: maximumObservedWorkingSet,
+            MeasurementScope: "managed_wrapper_observed");
     }
 
     private static async Task<BenchmarkResult> RunDotLlmAsync(BenchmarkArguments options)
@@ -162,7 +164,8 @@ internal static class ReferenceBenchmarkCommand
             ProcessCpuMilliseconds: processMetrics.Cpu.TotalMilliseconds,
             AverageCpuCores: AverageCpuCores(processMetrics.Cpu, subjectTimer.Elapsed),
             WorkingSetAfterLoadBytes: null,
-            MaximumObservedWorkingSetBytes: processMetrics.MaximumObservedWorkingSetBytes);
+            MaximumObservedWorkingSetBytes: processMetrics.MaximumObservedWorkingSetBytes,
+            MeasurementScope: "dotllm_reported_plus_process_observed");
     }
 
     private static void AddDotLlmArguments(ProcessStartInfo startInfo, BenchmarkArguments options)
@@ -185,11 +188,12 @@ internal static class ReferenceBenchmarkCommand
 
     private static void PrintUsage() => Console.Error.WriteLine(
             "Usage: dotnet run --project experiments/Synapse.ReferenceBenchmarks -- " +
-            "<dotllm|llamasharp> --model <path.gguf> --prompt <text> " +
+            "<dotllm|llamasharp|llamacpp> --model <path.gguf> --prompt <text> " +
             "[--max-tokens 32] [--threads 8] [--backend cpu|metal] " +
-            "[--subject-executable <path>] [--subject-version <commit|version>]");
+            "[--subject-executable <path>] [--subject-version <commit|version>] " +
+            "[--expected-prompt-token-ids <comma-separated-ids>]");
 
-    private static double? AverageCpuCores(TimeSpan cpu, TimeSpan wall) => wall.TotalSeconds == 0
+    internal static double? AverageCpuCores(TimeSpan cpu, TimeSpan wall) => wall.TotalSeconds == 0
         ? null
         : cpu.TotalSeconds / wall.TotalSeconds;
 
@@ -198,7 +202,7 @@ internal static class ReferenceBenchmarkCommand
         assembly.GetName().Version?.ToString() ??
         "unknown";
 
-    private static async Task<ObservedProcessMetrics> ObserveProcessAsync(Process process)
+    internal static async Task<ObservedProcessMetrics> ObserveProcessAsync(Process process)
     {
         var cpu = TimeSpan.Zero;
         long? maximumObservedWorkingSetBytes = null;
@@ -237,11 +241,12 @@ internal sealed record BenchmarkArguments(
     int Threads,
     string Backend,
     string? SubjectExecutable,
-    string? SubjectVersion)
+    string? SubjectVersion,
+    int[]? ExpectedPromptTokenIds)
 {
     public static BenchmarkArguments? Parse(string[] args)
     {
-        if (args.Length < 5 || args[0] is not ("dotllm" or "llamasharp"))
+        if (args.Length < 5 || args[0] is not ("dotllm" or "llamasharp" or "llamacpp"))
         {
             return null;
         }
@@ -271,6 +276,21 @@ internal sealed record BenchmarkArguments(
             return null;
         }
 
+        int[]? expectedPromptTokenIds = null;
+        if (values.TryGetValue("--expected-prompt-token-ids", out var tokenIds))
+        {
+            var parts = tokenIds.Split(',', StringSplitOptions.TrimEntries);
+            expectedPromptTokenIds = new int[parts.Length];
+            for (var index = 0; index < parts.Length; index++)
+            {
+                if (!int.TryParse(parts[index], out expectedPromptTokenIds[index]) ||
+                    expectedPromptTokenIds[index] < 0)
+                {
+                    return null;
+                }
+            }
+        }
+
         return new BenchmarkArguments(
             args[0],
             modelPath,
@@ -279,7 +299,8 @@ internal sealed record BenchmarkArguments(
             threads,
             backend,
             values.GetValueOrDefault("--subject-executable"),
-            values.GetValueOrDefault("--subject-version"));
+            values.GetValueOrDefault("--subject-version"),
+            expectedPromptTokenIds);
     }
 
     private static int ReadPositiveInt(Dictionary<string, string> values, string key, int fallback) => !values.TryGetValue(key, out var value)
@@ -297,15 +318,20 @@ internal sealed record BenchmarkResult(
     int Threads,
     int GeneratedTokens,
     string Text,
-    double LoadMilliseconds,
+    double? LoadMilliseconds,
     double? TimeToFirstTokenMilliseconds,
-    double TotalGenerationMilliseconds,
+    double? TotalGenerationMilliseconds,
     double? DecodeTokensPerSecond,
     double SubjectWallMilliseconds,
     double ProcessCpuMilliseconds,
     double? AverageCpuCores,
     long? WorkingSetAfterLoadBytes,
-    long? MaximumObservedWorkingSetBytes);
+    long? MaximumObservedWorkingSetBytes,
+    string MeasurementScope,
+    int[]? PromptTokenIds = null,
+    double? NativePromptEvalMilliseconds = null,
+    double? NativeEvalMilliseconds = null,
+    double? NativeEvalTokensPerSecond = null);
 
 internal sealed record DotLlmResult(
     string Text,

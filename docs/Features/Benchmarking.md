@@ -1,6 +1,6 @@
 # Benchmarking
 
-The benchmark system launches Synapse, dotLLM, and LLamaSharp as isolated
+The benchmark system launches Synapse, dotLLM, LLamaSharp, and direct llama.cpp as isolated
 processes against a shared pinned GGUF and input-token manifest. A result is
 eligible only when model family/source, tokenizer, template, prompt tokens,
 context/output limits, sampling, hardware, thread count, power mode, and cache
@@ -37,7 +37,26 @@ The embedding scenario fixes documents, queries, batches, and repetitions.
 Both runners are still planned. Cache cold/warm state, prefix reuse, model
 residency, and session history must be explicit for every row.
 
-The direct llama.cpp process remains a required baseline even though
-LLamaSharp currently provides a llama.cpp-backed subject. Optional
+The direct llama.cpp process is now a real diagnostic baseline even though
+LLamaSharp already provides a llama.cpp-backed subject. Its native prompt-eval
+and eval phases are not remapped to load/TTFT/generation columns. The current
+five-sample native-only evidence is not paired with the earlier three-subject
+Mac run; a formal direct-native verdict still requires interleaved paired
+evidence. Optional
 mistral.rs/DwarfStar subjects are eligible only when their pinned model and
 no-Python execution path are compatible.
+
+The native smoke tests are early evidence toward `AC-BMK-004-1` /
+`TEST-BMK-004-1` (same workload) and `AC-PKG-006-3` / `TEST-PKG-006-3`
+(native binary consumes the verified GGUF). They do not satisfy the complete
+statistical/evidence contracts of `TASK-BMK-001` or `TASK-BMK-004`.
+
+MLX and ONNX Runtime GenAI are additional candidate subjects, not substitutes
+for the direct GGUF baseline. MLX may use an external native/Swift binary on
+Apple Silicon; `mlx-lm`'s Python CLI is ineligible under the repository rules.
+ONNX Runtime GenAI can be exercised from the C# benchmark project, but needs a
+verified ONNX model package. A Metal MLX run and a CPU GGUF run are different
+hardware cohorts; a separately exported or quantized ONNX/MLX model is a
+different weight/precision cohort unless quality and provenance qualify it.
+Unrun cells remain `not_run`, and neither subject is currently installed or
+measured by the CI benchmark matrix.

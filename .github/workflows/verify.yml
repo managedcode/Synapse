@@ -27,12 +27,13 @@ jobs:
             os: ubuntu-24.04
             runtime_identifier: linux-x64
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 35
     env:
       DOTNET_NOLOGO: true
       DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
       SYNAPSE_REQUIRED_RUNTIME_IDENTIFIER: ${{ matrix.runtime_identifier }}
       SYNAPSE_DOTLLM_VERSION: d88040451d7db56e5dfef9d5754ad0955b0f7fe5
+      SYNAPSE_LLAMACPP_VERSION: b29c606e28a01b1bc8c1351026a0fa6e616bf6c4
       SYNAPSE_MODEL_ROOT: ${{ github.workspace }}/artifacts/models
     steps:
       - name: Checkout
@@ -44,6 +45,14 @@ jobs:
           repository: kkokosa/dotLLM
           ref: d88040451d7db56e5dfef9d5754ad0955b0f7fe5
           path: _external/dotLLM
+          persist-credentials: false
+
+      - name: Checkout pinned native llama.cpp benchmark subject
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ggml-org/llama.cpp
+          ref: b29c606e28a01b1bc8c1351026a0fa6e616bf6c4
+          path: _external/llama.cpp
           persist-credentials: false
 
       - name: Install pinned .NET SDK
@@ -77,9 +86,22 @@ jobs:
       - name: Build pinned dotLLM benchmark subject
         run: dotnet build _external/dotLLM/src/DotLLM.Cli/DotLLM.Cli.csproj --configuration Release
 
+      - name: Build pinned CPU llama.cpp benchmark subjects
+        shell: bash
+        run: |
+          cmake -S _external/llama.cpp -B _external/llama.cpp/build \
+            -DCMAKE_BUILD_TYPE=Release -DGGML_METAL=OFF \
+            -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_SERVER=OFF
+          cmake --build _external/llama.cpp/build --config Release --parallel 4 \
+            --target llama-completion llama-bench
+
       - name: Register dotLLM smoke-test executable
         shell: bash
         run: echo "SYNAPSE_DOTLLM_EXECUTABLE=${GITHUB_WORKSPACE}/_external/dotLLM/src/DotLLM.Cli/bin/Release/net10.0/DotLLM.Cli" >> "${GITHUB_ENV}"
+
+      - name: Register native llama.cpp smoke-test executable
+        shell: bash
+        run: echo "SYNAPSE_LLAMACPP_EXECUTABLE=${GITHUB_WORKSPACE}/_external/llama.cpp/build/bin/llama-completion" >> "${GITHUB_ENV}"
 
       - name: Test .NET
         run: dotnet test Synapse.slnx --configuration Release --no-build

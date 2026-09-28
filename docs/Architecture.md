@@ -46,11 +46,12 @@ operators, profiles, or devices fail before generation with structured errors.
 
 ## External comparison boundary
 
-dotLLM and LLamaSharp are launched as separate benchmark subjects. They are
-not product backends and cannot satisfy Synapse correctness tests. Every
-comparison records their exact commit/package/native-binary fingerprint and
-uses the same compatible model inputs. dotLLM source is GPL-3.0 and is not
-copied into this MIT repository.
+dotLLM, LLamaSharp, and direct llama.cpp are launched as separate benchmark
+subjects. They are not product backends and cannot satisfy Synapse correctness
+tests. Every comparison records its exact commit/package/native-binary
+fingerprint and uses the same compatible model inputs. MLX and ONNX Runtime
+GenAI are candidate external subjects only in qualified hardware/weight-format
+cohorts. dotLLM source is GPL-3.0 and is not copied into this MIT repository.
 
 ## Initial vertical slice
 

@@ -30,3 +30,24 @@ Date: 2026-09-27. Status: accepted for the bootstrap slice.
   foundation.
 - Linking dotLLM into product code was rejected because it would make the
   baseline a hidden engine and create GPL distribution implications.
+
+## 2026-09-28 benchmark audit: direct native control
+
+- Add pinned `llama-completion` as a third external GGUF subject. Run it in a
+  fresh process with CPU-only flags, explicit prompt/context/thread/sampling
+  settings, and verify the actual prompt token IDs and continuation.
+- Preserve timing boundaries. Its reported prompt-eval and eval times are
+  internal native phases; startup/model load is measured only by process wall
+  time. Missing comparable load/TTFT fields are null, never zero or a renamed
+  native phase. `llama-bench` is a separate kernel-throughput diagnostic.
+- Use one model-by-subject coverage table for the whole pinned catalog. A model
+  without a successful compatible run shows `not_run` or `unsupported`, not an
+  extrapolated throughput value. An eight-token smoke is too short for a
+  performance verdict; add a longer-output diagnostic before formal 30-pair
+  evidence.
+- Add MLX and ONNX Runtime GenAI to the candidate set without a Python or Node
+  dependency. MLX's external Swift/native subject belongs to a macOS Metal
+  cohort; ONNX Runtime GenAI's C# subject requires a pinned ONNX package.
+  Neither may inherit the GGUF Q8_0 numbers: different model formats or
+  quantizations require weight provenance and a separate cohort unless
+  numerical/quality parity is demonstrated.

@@ -85,5 +85,22 @@ evaluated from raw paired runs; missing/incompatible baselines are
 - [ ] Turn the benchmark evidence JSON into the validated `TASK-BMK-001`
   schema/runner; add thread scaling, 30 paired runs, locked/live 10-turn,
   embeddings, cache states, and direct llama.cpp.
+- [ ] `TASK-BMK-001` direct-native checkpoint: add a failing real-process
+  Qwen parity test, implement a pinned CPU `llama-completion` subject with
+  explicit timing provenance, make macOS/Linux CI build and exercise it, record
+  raw short/long diagnostics, and show honest coverage for every catalog model.
+  This checkpoint does not close the statistical benchmark task.
+- [ ] `TASK-BMK-001` expansion after native GGUF control: qualify a no-Python
+  MLX Swift/native Mac Metal subject and a C# ONNX Runtime GenAI subject with
+  pinned packages, architecture/tokenizer/quality checks, and separate
+  hardware/precision cohorts before any cross-engine timing claim.
+
+Local direct-native evidence: pinned Homebrew llama.cpp `b29c606e2` reproduced
+the Qwen prompt token IDs and continuation, three focused real-process native
+regressions passed, and raw 8/128-token samples plus a separate `llama-bench`
+control are recorded. The full local 107-test suite passed before concurrent
+ModelPackages tests were added; the later 130-test run reported all test cases
+successful but the process exited 134 while loading ggml's in-process oracle.
+No benchmark task is verified, and the new CI native path has not run remotely.
 - [ ] Execute Qwen2 from the verified region IR instead of the parallel shadow
   loop, following `flybrain.plan.md` F0/F1 and accepted ADR-003.
