@@ -12,14 +12,18 @@ public static class ModelLoader
 
     /// <summary>Loads a supported local model without guessing its family from a filename.</summary>
     public static ITextGenerationModel Load(string modelPath, int contextSize = 512) =>
-        Load(modelPath, contextSize, Environment.ProcessorCount);
+        Load(modelPath, new ModelLoadOptions { ContextSize = contextSize });
 
     /// <summary>Loads a supported local model with an explicit CPU parallelism limit.</summary>
-    public static ITextGenerationModel Load(string modelPath, int contextSize, int maximumParallelism)
+    public static ITextGenerationModel Load(string modelPath, int contextSize, int maximumParallelism) =>
+        Load(modelPath, new ModelLoadOptions { ContextSize = contextSize, MaximumParallelism = maximumParallelism });
+
+    /// <summary>Loads a supported local model with explicit limits and CPU kernel backend.</summary>
+    public static ITextGenerationModel Load(string modelPath, ModelLoadOptions options)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelPath);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(contextSize);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumParallelism);
+        ArgumentNullException.ThrowIfNull(options);
+        options.Validate();
         if (!string.Equals(Path.GetExtension(modelPath), ".gguf", StringComparison.OrdinalIgnoreCase))
         {
             throw new NotSupportedException(
@@ -29,7 +33,7 @@ public static class ModelLoader
         var file = GgufFile.Open(modelPath);
         try
         {
-            return GgufModelFamilyRegistry.Resolve(file).Load(file, contextSize, maximumParallelism);
+            return GgufModelFamilyRegistry.Resolve(file).Load(file, options);
         }
         catch
         {

@@ -38,6 +38,15 @@
       "tests": ["TEST-BMK-001-1", "TEST-BMK-001-2", "TEST-BMK-001-3"]
     },
     {
+      "id": "TASK-BMK-002",
+      "requirement": "REQ-BMK-002",
+      "slice": "Benchmarking",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-BMK-001"],
+      "tests": ["TEST-BMK-002-1", "TEST-BMK-002-2", "TEST-BMK-002-3", "TEST-BMK-002-4", "TEST-BMK-002-5", "TEST-BMK-002-6"]
+    },
+    {
       "id": "TASK-PKG-001",
       "requirement": "REQ-PKG-001",
       "slice": "ModelPackages",
@@ -63,6 +72,51 @@
       "status": "in_progress",
       "dependsOn": ["TASK-BST-003"],
       "tests": ["TEST-GRF-001-1", "TEST-GRF-001-2", "TEST-GRF-001-3"]
+    },
+    {
+      "id": "TASK-CPU-001",
+      "requirement": "REQ-CPU-001",
+      "slice": "CpuKernels",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-GRF-001"],
+      "tests": ["TEST-CPU-001-1", "TEST-CPU-001-2", "TEST-CPU-001-3", "TEST-CPU-001-4"]
+    },
+    {
+      "id": "TASK-CPU-002",
+      "requirement": "REQ-CPU-002",
+      "slice": "CpuKernels",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-CPU-001"],
+      "tests": ["TEST-CPU-002-1"]
+    },
+    {
+      "id": "TASK-CPU-003",
+      "requirement": "REQ-CPU-003",
+      "slice": "CpuKernels",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-CPU-001"],
+      "tests": ["TEST-CPU-003-1", "TEST-CPU-003-2"]
+    },
+    {
+      "id": "TASK-CPU-004",
+      "requirement": "REQ-CPU-004",
+      "slice": "CpuKernels",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-CPU-001", "TASK-BMK-001"],
+      "tests": ["TEST-CPU-004-1"]
+    },
+    {
+      "id": "TASK-CPU-005",
+      "requirement": "REQ-CPU-005",
+      "slice": "CpuKernels",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-CPU-002"],
+      "tests": ["TEST-CPU-005-1", "TEST-CPU-005-2", "TEST-CPU-005-3"]
     },
     {
       "id": "TASK-WEB-001",

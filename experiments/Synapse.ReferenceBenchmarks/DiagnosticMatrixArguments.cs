@@ -7,6 +7,7 @@ internal sealed record DiagnosticMatrixArguments(
     int[] ExpectedTokenIds,
     string ExpectedText,
     string SynapseExecutable,
+    string SynapseBackend,
     string DotLlmExecutable,
     string DotLlmVersion,
     string LlamaCppExecutable,
@@ -38,6 +39,7 @@ internal sealed record DiagnosticMatrixArguments(
         var prompt = Required(values, "--prompt");
         var expectedText = Required(values, "--expected-text");
         var synapse = Required(values, "--synapse-executable");
+        var synapseBackend = values.GetValueOrDefault("--synapse-backend", "managed");
         var dotLlm = Required(values, "--dotllm-executable");
         var dotLlmVersion = Required(values, "--dotllm-version");
         var llamaCpp = Required(values, "--llamacpp-executable");
@@ -55,13 +57,14 @@ internal sealed record DiagnosticMatrixArguments(
             maxTokens is <= 0 or > 512 || threads is <= 0 or > 256 ||
             warmups is < 0 or > 10 || measurements is <= 0 or > 200 ||
             expectedIds.Length != maxTokens ||
+            synapseBackend is not ("reference" or "managed" or "native") ||
             !new[] { model, synapse, dotLlm, llamaCpp }.All(File.Exists))
         {
             return null;
         }
 
         return new DiagnosticMatrixArguments(
-            model!, prompt!, promptIds, expectedIds, expectedText!, synapse!,
+            model!, prompt!, promptIds, expectedIds, expectedText!, synapse!, synapseBackend,
             dotLlm!, dotLlmVersion!, llamaCpp!, llamaCppVersion!, maxTokens,
             threads, warmups, measurements, output!);
     }

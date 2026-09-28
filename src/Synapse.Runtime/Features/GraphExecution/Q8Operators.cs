@@ -9,6 +9,7 @@ internal static unsafe class Q8Operators
     private const int BlockBytes = 34;
     private const uint Q8Type = 8;
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static void ReadRow(
         GgufFile file,
         GgufTensorInfo tensor,
@@ -84,6 +85,7 @@ internal static unsafe class Q8Operators
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static void RmsNorm(
         ReadOnlySpan<float> input,
         ReadOnlySpan<float> weights,

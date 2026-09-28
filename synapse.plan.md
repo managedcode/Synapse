@@ -54,7 +54,11 @@ normative product scope.
   and verdicts. One 3-warm-up/5-measurement interleaved Mac run with raw
   samples exists; the required 30 paired samples and verdict logic do not.
 - [ ] CPU SIMD, Q4, Metal, and measured quality-preserving optimization; use
-  Rust only for a profiled managed hotspot.
+  Rust only for a profiled managed hotspot. In progress in
+  `cpu-kernels.plan.md` (ADR-006): the managed SIMD and Rust Q8_0 kernels,
+  worker pool, fused regions, batched prefill, and explicit
+  `reference|managed|native` backends are implemented and tested locally. Q4,
+  Metal, and remote CI evidence are still open.
 - [ ] Aspire/Orleans control plane, direct worker data plane, fencing, and
   multi-process then two-node recovery evidence.
 
@@ -110,6 +114,24 @@ evaluated from raw paired runs; missing/incompatible baselines are
   rounds, verifies the same pinned continuation, and writes immutable raw
   JSON with per-subject whole-process memory. This remains a smoke diagnostic
   until 30 paired measurements, locked dialogue, and schema validation land.
+- [ ] `TASK-BMK-002` Foundry Local subject (ADR-011): failing TUnit checks for
+  the runner-memory plan, invalid sets, the no-download refusal, real
+  streaming evidence, the separate-cohort report, and workflow isolation; then
+  the RID-isolated SDK 2.0.1 project, the Qwen/Phi/Mistral/DeepSeek model set,
+  a real local Mac run, and one CI job per runner and model. Do not mark
+  complete until the hosted jobs have run and uploaded raw evidence.
+
+Foundry Local checkpoint (2026-09-28): the eight new TUnit checks failed
+first, then passed; the later context-bound and system-prompt checks also
+failed before their implementation. A probe showed that every Foundry package
+preallocates FP32 KV for its full context window (Phi-3.5-mini: 98 GiB
+compressed footprint, 12.4 s first token), so the set caps `max_length` at
+1,024 and keeps both configs hashed. Mistral 7B v0.2 has no system role and
+uses `prepend-to-first-user`. Local Mac evidence covers all six CPU models and
+the Qwen2.5 WebGPU variant for the 128-token and three-turn scenarios (14 raw
+files plus two package-default probes). The full .NET suite passed 189/189
+with the local dotLLM and Homebrew llama.cpp `b29c606e2` subjects. The 15
+hosted Foundry jobs and the `verify.yml` anchor fetch have not run.
 
 Local direct-native evidence: pinned Homebrew llama.cpp `b29c606e2` reproduced
 the Qwen prompt token IDs and continuation, three focused real-process native
@@ -146,3 +168,20 @@ Mac verify was still running at this checkpoint. The quality-gate follow-up
 and statistical release gate remain unverified until new runs complete.
 - [ ] Execute Qwen2 from the verified region IR instead of the parallel shadow
   loop, following `flybrain.plan.md` F0/F1 and accepted ADR-003.
+- [ ] CPU kernel and concurrency checkpoint (`TASK-CPU-001..005`; ADR-006 and
+  ADR-007).
+  - Implemented:
+    - managed `Dp`/AVX2/portable kernels and the Rust `synapse-kernels`
+      cdylib;
+    - a persistent worker pool, fused regions, and batched prefill;
+    - an embedding-excluding page prefetch and allocation-free GGUF metadata
+      skipping;
+    - continuous batching of concurrent requests over per-request KV slots.
+  - The scalar path remains the `reference` backend.
+  - Local gates pass on ARM64. The x64 AVX2 managed and native paths passed
+    their suites in a `linux/amd64` container. AVX-VNNI has not run on
+    hardware, and no hosted Actions run of this change set exists.
+  - Every backend matches the eight-token continuation. At 32 tokens the
+    Q8-activation paths diverge at token 22, where the FP32 reference's own
+    top-2 margin is 0.0115 logits.
+  - ADR-009 fixes the Orleans cluster direction; it is not implemented.

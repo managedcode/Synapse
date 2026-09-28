@@ -5,6 +5,7 @@
   <ItemGroup>
     <PackageVersion Include="LLamaSharp" Version="0.27.0" />
     <PackageVersion Include="LLamaSharp.Backend.Cpu" Version="0.27.0" />
+    <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="2.0.1" />
     <PackageVersion Include="TUnit" Version="1.70.1" />
     <PackageVersion Include="ZoneTree" Version="1.9.8" />
   </ItemGroup>

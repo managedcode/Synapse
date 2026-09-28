@@ -89,6 +89,38 @@ internal sealed unsafe class GgufFile : IDisposable
         return _pointer + tensor.Offset;
     }
 
+    /// <summary>
+    /// Mapped address ranges covering every tensor payload except <paramref name="excludedTensors"/>. Adjacent
+    /// tensors separated only by alignment padding merge into one range.
+    /// </summary>
+    public IReadOnlyList<(nint Start, long Length)> GetTensorDataRanges(IReadOnlyCollection<string> excludedTensors)
+    {
+        ArgumentNullException.ThrowIfNull(excludedTensors);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        const long MaximumPadding = 64;
+        var ranges = new List<(long Offset, long End)>();
+        foreach (var tensor in Tensors.Values.OrderBy(tensor => tensor.Offset))
+        {
+            var end = tensor.Offset + tensor.ByteLength;
+            if (excludedTensors.Contains(tensor.Name))
+            {
+                ranges.Add((end, end));
+            }
+            else if (ranges.Count > 0 && tensor.Offset - ranges[^1].End <= MaximumPadding && ranges[^1].Offset != ranges[^1].End)
+            {
+                ranges[^1] = (ranges[^1].Offset, end);
+            }
+            else
+            {
+                ranges.Add((tensor.Offset, end));
+            }
+        }
+
+        return [.. ranges
+            .Where(range => range.End > range.Offset)
+            .Select(range => ((nint)(_pointer + range.Offset), range.End - range.Offset))];
+    }
+
     public float[] ReadFloat32Tensor(string name)
     {
         var tensor = GetRequiredTensor(name);

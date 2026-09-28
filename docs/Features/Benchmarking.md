@@ -140,3 +140,77 @@ Metal allocation is not independently measured; RSS and physical footprint
 must not be added. Both cohorts currently label answer quality unreviewed.
 The GitHub Actions MLX job downloads a SHA-256-verified prebuilt binary and
 content-verified model; it does not build Swift or use Python.
+
+## Foundry Local subject (ADR-011)
+
+Microsoft Foundry Local is measured by
+`experiments/Synapse.FoundryLocalBenchmarks`, a separate RID-specific C#
+project that references `Microsoft.AI.Foundry.Local` 2.0.1. It keeps the
+model loaded in one process and sends every locked-transcript request through
+a new streaming `ChatSession`. It records exact prompt and output token
+counts, TTFT, decode rate, request wall time, process CPU time, whole-process
+peak RSS, and macOS physical footprint. It also records the SDK and ONNX
+Runtime versions, the variant's execution provider, the package's
+`genai_config.json` search defaults, and the SHA-256 of every model file.
+
+The model set is `benchmarks/model-sets/foundry-local-families.json`:
+
+| Family | Alias | Catalog CPU variant | File MB | macOS 15 (7 GB) | Ubuntu / Windows (16 GB) |
+|---|---|---|---:|---|---|
+| Qwen | `qwen2.5-0.5b` | `qwen2.5-0.5b-instruct-generic-cpu:4` | 822 | scheduled | scheduled |
+| Qwen | `qwen3-0.6b` | `qwen3-0.6b-generic-cpu:4` | 593 | scheduled | scheduled |
+| Phi | `phi-3.5-mini` | `Phi-3.5-mini-instruct-generic-cpu:2` | 2,590 | scheduled | scheduled |
+| Phi | `phi-4-mini` | `Phi-4-mini-instruct-generic-cpu:5` | 4,915 | excluded, memory | scheduled |
+| Mistral | `mistral-7b-v0.2` | `mistralai-Mistral-7B-Instruct-v0-2-generic-cpu:3` | 4,167 | excluded, memory | scheduled |
+| DeepSeek | `deepseek-r1-7b` | `deepseek-r1-distill-qwen-7b-generic-cpu:4` | 6,584 | excluded, memory | scheduled |
+
+A model is scheduled only when its catalog file size is at most half of the
+runner's memory. "Scheduled" is a plan, not a measurement; a cell becomes
+evidence only after its job uploads raw JSON. MiniMax is absent: the Foundry
+catalog has none and current MiniMax checkpoints exceed every hosted runner.
+The DeepSeek entry is an R1 distillation into Qwen2 7B.
+
+Commands (`dotnet experiments/Synapse.FoundryLocalBenchmarks/bin/Release/net10.0/Synapse.FoundryLocalBenchmarks.dll`):
+
+- `plan --set <set.json> [--summary <path>]` prints a one-line GitHub matrix
+  with one entry per runner and model, and a coverage table with exclusions.
+- `fetch --set <set.json> --alias <alias> --cache <dir>` is the only command
+  that downloads. It also applies the set's context bound (below).
+- `run --set <set.json> --alias <alias> --cache <dir> --scenario <json>
+  --output <new.json> [--max-tokens 64] [--warmups 1] [--measurements 3]`
+  exits with code 4 if the variant is not cached.
+- `report --input <raw.json> [--summary <path>]` renders medians per turn.
+
+`performance.yml` runs a `foundry-local-plan` job, then one isolated
+`foundry-local` job per matrix entry. `verify.yml` fetches only the Qwen2.5
+0.5B anchor and runs the functional TUnit checks against it.
+
+Context bound: every Foundry package sets `search.max_length` to its full
+context window, and ONNX Runtime GenAI allocates an FP32 KV buffer for the
+whole window at the first request. With package defaults, Qwen3 0.6B reached
+4.9 GiB RSS and a 1.2 s first token on the Mac; Phi-3.5-mini (131,072 tokens)
+reached a 98 GiB compressed footprint and a 12.4 s first token. The set
+therefore declares `contextTokens: 1024`. `fetch` keeps the original config as
+`genai_config.original.json` and lowers only `max_length`; `run` refuses a
+model without that bound. This matches the 512-token context of the GGUF
+cohorts. Weights are unchanged.
+
+Limits: the SDK does not expose ONNX Runtime thread settings, so this cohort
+is not thread-capped. Its weights and quantization differ from GGUF Q8_0 and
+MLX 8-bit, so it is never ranked against those cohorts. Answer quality is
+unreviewed, and reasoning text is stored apart from answer text.
+
+### Requirements
+
+- `REQ-BMK-002`: Foundry Local is an isolated external benchmark subject with
+  a pinned SDK, a pinned multi-family model set that fits hosted runner
+  memory, explicit downloads, and raw per-job evidence.
+
+| Criterion | Test |
+|---|---|
+| `AC-BMK-002-1` the plan schedules each model only on runners where it fits the memory rule, emits one matrix entry per runner and model, and covers Qwen, Phi, Mistral, and DeepSeek | `TEST-BMK-002-1` `FoundryPlanSchedulesOneIsolatedJobPerRunnerAndModel` |
+| `AC-BMK-002-2` an invalid model set (duplicate alias, a model that fits no runner) is rejected | `TEST-BMK-002-2` `FoundryPlanRejectsInvalidModelSets` |
+| `AC-BMK-002-3` `run` refuses an uncached variant and downloads nothing | `TEST-BMK-002-3` `FoundryRunRefusesUncachedModelWithoutDownloading` |
+| `AC-BMK-002-4` a real run records provenance, the effective context bound and the package's original `max_length`, exact token counts, timing, CPU, and whole-process memory for every request; a model without the bound is refused | `TEST-BMK-002-4` `FoundryRunRecordsRealStreamingEvidence` |
+| `AC-BMK-002-5` the report renders a separate cohort with no cross-cohort ranking | `TEST-BMK-002-5` `FoundryReportRendersSeparateCohortFromRecordedEvidence` |
+| `AC-BMK-002-6` CI runs one Foundry job per plan entry and the functional suite fetches only the anchor model | `TEST-BMK-002-6` `WorkflowsIsolateFoundryLocalJobs` |

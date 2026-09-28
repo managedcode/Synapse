@@ -19,6 +19,7 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@300..800&family=JetBrains+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="styles.css">
+  <script>document.documentElement.classList.add("js")</script>
   <script type="module" src="site.js"></script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"Synapse","url":"https://synapse.managed-code.com/","codeRepository":"https://github.com/managedcode/Synapse","programmingLanguage":["C#","Rust"],"license":"https://opensource.org/license/mit"}</script>
 </head>
@@ -152,6 +153,21 @@
     </div>
     <p class="fine reveal">MacBook Pro, Apple M2 Pro, 32 GB. Qwen2.5 0.5B Instruct Q8_0, prompt “The capital of France is”, 8-token answer. Median of 5 runs after 3 warm-ups; all four engines wrote the same 8 tokens. Diagnostic runs, not the final 30-run release gate. <a href="https://github.com/managedcode/Synapse/blob/main/benchmarks/README.md">All runs and raw JSON ↗</a></p>
 
+    <article class="panel foundry reveal">
+      <div class="panel-top"><h3>Also measured · Microsoft Foundry Local · 6 models</h3></div>
+      <p class="panel-big">231<small>tokens/s, Qwen2.5 0.5B on the Mac CPU</small></p>
+      <ul class="bars">
+        <li class="fl"><span>Qwen2.5 0.5B</span><i><b style="--w:100%"></b></i><em>231.4</em></li>
+        <li class="fl"><span>Qwen3 0.6B</span><i><b style="--w:53.7%"></b></i><em>124.3</em></li>
+        <li class="fl"><span>Phi-3.5-mini</span><i><b style="--w:18.2%"></b></i><em>42.1</em></li>
+        <li class="fl"><span>Phi-4-mini</span><i><b style="--w:12.4%"></b></i><em>28.6</em></li>
+        <li class="fl"><span>Mistral 7B</span><i><b style="--w:10.9%"></b></i><em>25.2</em></li>
+        <li class="fl"><span>DeepSeek-R1 7B</span><i><b style="--w:9.5%"></b></i><em>22.0</em></li>
+      </ul>
+      <p class="unit">tokens per second · 128-token answer · a separate test: Microsoft's own ONNX weights on about 6 cores, not a head-to-head with the engines above · on GitHub each runner and model is its own job (15 planned, not run yet)</p>
+    </article>
+
+
     <div class="notyet reveal">
       <h3>Not there yet. We say so.</h3>
       <ul>
@@ -253,7 +269,7 @@
 
 <section class="section credits-sec" id="credits">
   <div class="wrap credits">
-    <div><h3>Compared against</h3><p><a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a>, <a href="https://github.com/ml-explore/mlx-swift-lm">MLX</a> via <a href="https://github.com/SharpAI/SwiftLM">SwiftLM</a>, <a href="https://github.com/SciSharp/LLamaSharp">LLamaSharp</a>, <a href="https://github.com/kkokosa/dotLLM">dotLLM</a> (GPL-3.0, run as a separate process only).</p></div>
+    <div><h3>Compared against</h3><p><a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a>, <a href="https://github.com/microsoft/Foundry-Local">Microsoft Foundry Local</a>, <a href="https://github.com/ml-explore/mlx-swift-lm">MLX</a> via <a href="https://github.com/SharpAI/SwiftLM">SwiftLM</a>, <a href="https://github.com/SciSharp/LLamaSharp">LLamaSharp</a>, <a href="https://github.com/kkokosa/dotLLM">dotLLM</a> (GPL-3.0, run as a separate process only).</p></div>
     <div><h3>Built with</h3><p><a href="https://github.com/dotnet/runtime">.NET</a>, <a href="https://github.com/rust-lang/rust">Rust</a>, <a href="https://github.com/ZoneTree/ZoneTree">ZoneTree</a>, <a href="https://github.com/dotnet/orleans">Orleans</a>, <a href="https://github.com/thomhurst/TUnit">TUnit</a>, <a href="https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF">Qwen2.5</a>, <a href="https://threejs.org">three.js</a> for this page.</p></div>
     <div><h3>Ideas from</h3><p><a href="https://doi.org/10.1038/s41586-024-07558-y">FlyWire connectome</a>, <a href="https://arxiv.org/abs/2404.02258">Mixture-of-Depths</a>, <a href="https://github.com/facebookresearch/LayerSkip">LayerSkip</a>, <a href="https://arxiv.org/abs/2312.17238">MoE offloading</a>, <a href="https://arxiv.org/abs/2402.17764">BitNet b1.58</a>, <a href="https://arxiv.org/abs/2402.04291">BiLLM</a>, <a href="https://arxiv.org/abs/2306.03078">SpQR</a>, <a href="https://arxiv.org/abs/2502.13179">PTQ1.61</a>, <a href="https://arxiv.org/abs/2410.11305">QSpec</a>.</p></div>
   </div>

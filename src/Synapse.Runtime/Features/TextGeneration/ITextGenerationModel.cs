@@ -11,11 +11,23 @@ public interface ITextGenerationModel : IDisposable
     /// <summary>Concrete runtime and numerical profile.</summary>
     string RuntimeProfile { get; }
 
+    /// <summary>Concrete kernel and instruction-set implementation selected at load.</summary>
+    string KernelImplementation { get; }
+
     /// <summary>Verified family-independent model graph.</summary>
     ModelGraph Graph { get; }
 
     /// <summary>Runs bounded greedy generation from token IDs.</summary>
     TextGenerationResult Generate(IReadOnlyList<int> promptTokens, int maximumNewTokens);
+
+    /// <summary>
+    /// Thread-safe greedy generation. Concurrent calls share batched forward steps on optimized backends and
+    /// produce the same tokens as independent calls (ADR-007).
+    /// </summary>
+    Task<TextGenerationResult> GenerateAsync(
+        IReadOnlyList<int> promptTokens,
+        int maximumNewTokens,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>Token-level output shared by every causal text family.</summary>

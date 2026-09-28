@@ -60,6 +60,9 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Install pinned Rust toolchain for the native kernel
+        run: rustup toolchain install 1.98.1 --profile minimal
+
       - name: Build Synapse benchmark and CLI
         run: |
           dotnet restore Synapse.slnx --locked-mode
@@ -97,6 +100,7 @@ jobs:
             --expected-token-ids "12095,13,1084,374,279,7772,3283,304" \
             --expected-text " Paris. It is the largest city in" \
             --synapse-executable "${GITHUB_WORKSPACE}/src/Synapse.Cli/bin/Release/net10.0/synapse${{ matrix.executable_suffix }}" \
+            --synapse-backend native \
             --dotllm-executable "${GITHUB_WORKSPACE}/_external/dotLLM/src/DotLLM.Cli/bin/Release/net10.0/DotLLM.Cli${{ matrix.executable_suffix }}" \
             --dotllm-version d88040451d7db56e5dfef9d5754ad0955b0f7fe5 \
             --llamacpp-executable "${GITHUB_WORKSPACE}/_external/llama.cpp/${{ matrix.llama_binary_directory }}/llama-completion${{ matrix.executable_suffix }}" \
@@ -175,6 +179,9 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Install pinned Rust toolchain for the native kernel
+        run: rustup toolchain install 1.98.1 --profile minimal
+
       - name: Build C# benchmark runner and model fetcher
         run: |
           dotnet restore Synapse.slnx --locked-mode
@@ -233,5 +240,99 @@ jobs:
           path: |
             ${{ runner.temp }}/mlx-single.json
             ${{ runner.temp }}/mlx-dialogue.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  foundry-local-plan:
+    name: Foundry Local plan (models that fit each runner)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+    steps:
+      - name: Checkout Synapse
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Build the isolated Foundry Local runner
+        run: |
+          dotnet restore experiments/Synapse.FoundryLocalBenchmarks --locked-mode
+          dotnet build experiments/Synapse.FoundryLocalBenchmarks --configuration Release --no-restore
+
+      - name: Expand the model set into one job per runner and model
+        id: plan
+        shell: bash
+        run: |
+          matrix="$(dotnet experiments/Synapse.FoundryLocalBenchmarks/bin/Release/net10.0/Synapse.FoundryLocalBenchmarks.dll plan \
+            --set benchmarks/model-sets/foundry-local-families.json --summary "${GITHUB_STEP_SUMMARY}")"
+          echo "matrix=${matrix}" >> "${GITHUB_OUTPUT}"
+
+  foundry-local:
+    name: Foundry Local · ${{ matrix.runner_name }} · ${{ matrix.alias }}
+    needs: foundry-local-plan
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.foundry-local-plan.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+      FOUNDRY_CACHE: ${{ github.workspace }}/artifacts/foundry-local
+      FOUNDRY_RUNNER: experiments/Synapse.FoundryLocalBenchmarks/bin/Release/net10.0/Synapse.FoundryLocalBenchmarks.dll
+    steps:
+      - name: Checkout Synapse
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Build the isolated Foundry Local runner
+        run: |
+          dotnet restore experiments/Synapse.FoundryLocalBenchmarks --locked-mode
+          dotnet build experiments/Synapse.FoundryLocalBenchmarks --configuration Release --no-restore
+
+      - name: Download only this job's model
+        shell: bash
+        run: dotnet "${FOUNDRY_RUNNER}" fetch --set benchmarks/model-sets/foundry-local-families.json --alias "${{ matrix.alias }}" --cache "${FOUNDRY_CACHE}"
+
+      - name: Measure single-request and three-turn scenarios in one fresh process each
+        shell: bash
+        run: |
+          common=(
+            --set benchmarks/model-sets/foundry-local-families.json
+            --alias "${{ matrix.alias }}" --cache "${FOUNDRY_CACHE}"
+            --runner-label "${{ matrix.runner_name }}" --warmups 1 --measurements 3
+          )
+          dotnet "${FOUNDRY_RUNNER}" run "${common[@]}" \
+            --scenario benchmarks/scenarios/capitals-single-long.json \
+            --max-tokens 128 --output "${RUNNER_TEMP}/foundry-single.json"
+          dotnet "${FOUNDRY_RUNNER}" run "${common[@]}" \
+            --scenario benchmarks/scenarios/capitals-france-us-uk-3-turns.json \
+            --max-tokens 64 --output "${RUNNER_TEMP}/foundry-dialogue.json"
+
+      - name: Summarize Foundry Local diagnostics
+        shell: bash
+        run: |
+          dotnet "${FOUNDRY_RUNNER}" report --input "${RUNNER_TEMP}/foundry-single.json" --summary "${GITHUB_STEP_SUMMARY}"
+          dotnet "${FOUNDRY_RUNNER}" report --input "${RUNNER_TEMP}/foundry-dialogue.json" --summary "${GITHUB_STEP_SUMMARY}"
+
+      - name: Preserve Foundry Local raw evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: foundry-local-${{ matrix.runner }}-${{ matrix.alias }}
+          path: |
+            ${{ runner.temp }}/foundry-single.json
+            ${{ runner.temp }}/foundry-dialogue.json
           if-no-files-found: warn
           retention-days: 30

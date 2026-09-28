@@ -181,6 +181,68 @@ session opt-in.
   links). In the tests the same two devices produce a 9/3 layer split for
   throughput and a single fast device for latency.
 
+### 3.1 Local continuous batching (implemented 2026-09-28, ADR-007)
+
+- The first form is whole-model steps, not yet region queues.
+  `Qwen2Model.GenerateAsync` enqueues a session on a dedicated scheduler
+  thread. Each session owns an FP32 KV slot, bounded by
+  `MaximumConcurrentSessions`.
+- Each step puts every decoding session's token first, then FIFO prompt
+  chunks. One forward pass serves the whole step. The vocabulary projection
+  reads its weights once for every row that needs logits.
+- Green tests on the owner's ARM64 Mac and in an amd64 container:
+  - `RaggedBatchMatchesIndependent`, for managed, native, and reference;
+  - `LongPrefillDoesNotStarveDecode`;
+  - `CancelledSlotReusedSafely`;
+  - KV parity tests `IncrementalDecodeMatchesFullPrefill`,
+    `GenerationRepeatsAfterLongerPrompt`, and
+    `LongPromptAcrossChunksMatchesSequential`.
+- A local diagnostic on the owner's M2 Pro used five identical 64-token
+  requests with the `native` backend. Aggregate output was about 430 tok/s
+  against about 150 tok/s for one request at eight threads. At two threads it
+  was about 162 against 118. The two-thread gain is small because the batched
+  int8 dot is compute-bound there. The next kernel step is register blocking
+  across tokens (4 rows × 4 tokens) or `i8mm` on CPUs that report it. These
+  numbers are not paired release evidence.
+- Remaining for E7:
+  - region-level queues;
+  - a registered maximum wait;
+  - admission through the reservation ledger;
+  - a latency SLO for decode under long prefills.
+
+### 3.2 How the batching engine distributes
+
+The topology decision is ADR-009. This follows `flybrain.plan.md` §4 and F6,
+and §5 below. It is a hypothesis
+list to measure, not a result.
+
+1. **Replicate before splitting.** A model that fits one worker (Qwen2.5-0.5B
+   is about 555 MiB resident) runs as independent replicas. Each worker owns
+   one model instance and one batching scheduler. The Orleans `SessionGrain`
+   routes each new session to a worker, then records only the worker
+   incarnation and the epoch. Throughput scales with workers, and steady-state
+   decode makes zero grain calls and zero network hops.
+2. **Route with affinity.** The router prefers a worker whose ZoneTree prefix
+   index already holds the session's prefix KV. After that it prefers the
+   worker with the most free KV slots, weighted by its measured
+   weight-streaming rate. `WorkerRegistryGrain` publishes that rate per kernel
+   (`managed-arm64-sdot`, `native-x64-avx2`, …). Moving KV is expensive, so
+   the router moves sessions, not KV.
+3. **Pipeline only when needed.** Use a layer-range pipeline (F6.1) only when
+   the weights or KV do not fit one worker. The step packet carries the whole
+   batch: every token's hidden vector (896 × 4 B for this model) plus
+   `(session, epoch, step, position, plan hash)`. Each stage owns the KV of
+   its layers for every session in the batch. Two batches in flight keep the
+   stages busy. Sampling happens at the last stage, and the sampled tokens
+   return to the first stage's scheduler.
+4. **Heterogeneous devices.** The planner's `Throughput` objective takes the
+   measured per-kernel GB/s and link profiles. A slow x64 node gets fewer
+   sessions or fewer layers. It never gets an encoding its kernels cannot
+   run.
+5. **Failure.** A stale epoch or plan hash is rejected at the receiver. A lost
+   worker loses its hot KV. The session re-prefills on a new owner unless a
+   durable snapshot exists. Exactly-once is not claimed.
+
 ## 4. Loading only what is needed
 
 This follows `flybrain.plan.md` F2 (tensor residency under a budget) and F5

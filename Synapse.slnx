@@ -8,6 +8,7 @@
     <Project Path="tests/Synapse.IntegrationTests/Synapse.IntegrationTests.csproj" />
   </Folder>
   <Folder Name="/experiments/">
+    <Project Path="experiments/Synapse.FoundryLocalBenchmarks/Synapse.FoundryLocalBenchmarks.csproj" />
     <Project Path="experiments/Synapse.ReferenceBenchmarks/Synapse.ReferenceBenchmarks.csproj" />
   </Folder>
 </Solution>

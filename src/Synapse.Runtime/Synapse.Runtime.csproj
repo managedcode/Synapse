@@ -9,4 +9,44 @@
     <ProjectReference Include="../Synapse.Contracts/Synapse.Contracts.csproj" />
     <PackageReference Include="ZoneTree" />
   </ItemGroup>
+
+  <!-- ADR-006: the Rust Q8_0 kernel is built with the pinned toolchain and shipped next to the assemblies. -->
+  <PropertyGroup>
+    <SynapseNativeRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..', 'native'))</SynapseNativeRoot>
+    <SynapseHomebrewCargo>/opt/homebrew/opt/rustup/bin/cargo</SynapseHomebrewCargo>
+    <SynapseCargo Condition="'$(SynapseCargo)' == '' and Exists('$(SynapseHomebrewCargo)')">$(SynapseHomebrewCargo)</SynapseCargo>
+    <SynapseCargo Condition="'$(SynapseCargo)' == ''">cargo</SynapseCargo>
+    <SynapseNativeKernelFile Condition="$([MSBuild]::IsOSPlatform('Windows'))">synapse_kernels.dll</SynapseNativeKernelFile>
+    <SynapseNativeKernelFile Condition="$([MSBuild]::IsOSPlatform('OSX'))">libsynapse_kernels.dylib</SynapseNativeKernelFile>
+    <SynapseNativeKernelFile Condition="'$(SynapseNativeKernelFile)' == ''">libsynapse_kernels.so</SynapseNativeKernelFile>
+    <SynapseNativeKernelPath>$(SynapseNativeRoot)target/release/$(SynapseNativeKernelFile)</SynapseNativeKernelPath>
+    <SynapseCargoCommand>"$(SynapseCargo)" build --release --locked --manifest-path "$(SynapseNativeRoot)Cargo.toml" -p synapse-kernels</SynapseCargoCommand>
+  </PropertyGroup>
+  <ItemGroup>
+    <SynapseNativeKernelInput Include="$(SynapseNativeRoot)synapse-kernels/**/*.rs" />
+    <SynapseNativeKernelInput Include="$(SynapseNativeRoot)synapse-kernels/Cargo.toml;$(SynapseNativeRoot)Cargo.toml;$(SynapseNativeRoot)Cargo.lock" />
+  </ItemGroup>
+  <Target
+    Name="BuildSynapseNativeKernels"
+    Inputs="@(SynapseNativeKernelInput)"
+    Outputs="$(SynapseNativeKernelPath)">
+    <Exec
+      Condition="'$(SynapseCargo)' == '$(SynapseHomebrewCargo)'"
+      Command="$(SynapseCargoCommand)"
+      EnvironmentVariables="PATH=/opt/homebrew/opt/rustup/bin:$(PATH)" />
+    <Exec Condition="'$(SynapseCargo)' != '$(SynapseHomebrewCargo)'" Command="$(SynapseCargoCommand)" />
+    <Touch Files="$(SynapseNativeKernelPath)" />
+  </Target>
+  <Target
+    Name="IncludeSynapseNativeKernels"
+    BeforeTargets="AssignTargetPaths"
+    DependsOnTargets="BuildSynapseNativeKernels">
+    <ItemGroup>
+      <None
+        Include="$(SynapseNativeKernelPath)"
+        Link="$(SynapseNativeKernelFile)"
+        CopyToOutputDirectory="PreserveNewest"
+        Visible="false" />
+    </ItemGroup>
+  </Target>
 </Project>

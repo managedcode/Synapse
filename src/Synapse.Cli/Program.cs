@@ -12,7 +12,7 @@ if (args.Length == 0)
 return args[0] switch
 {
     "doctor" => DoctorCommand.Run(args[1..]),
-    "generate" => GenerationCommand.Run(args[1..]),
+    "generate" => await GenerationCommand.RunAsync(args[1..]),
     "model" => await ModelCommand.RunAsync(args[1..]),
     _ => 2,
 };

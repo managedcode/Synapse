@@ -11,7 +11,7 @@ internal static class GgufHeaderReader
 
     public static GgufDescriptor Read(string path)
     {
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1 << 16);
         using var reader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true);
         ValidateHeader(reader);
         var tensorCount = ReadBoundedCount(reader, "tensor", 1_000_000);
@@ -162,10 +162,36 @@ internal static class GgufHeaderReader
 
         for (var index = 0; index < count; index++)
         {
-            _ = ReadValue(reader, elementType, depth);
+            if (elementType == 8)
+            {
+                SkipString(reader);
+            }
+            else
+            {
+                _ = ReadValue(reader, elementType, depth);
+            }
         }
 
         return null;
+    }
+
+    /// <summary>Validates and skips an unused metadata string without materializing it.</summary>
+    private static void SkipString(BinaryReader reader)
+    {
+        var length = reader.ReadUInt64();
+        if (length > 16 * 1024 * 1024)
+        {
+            throw new InvalidDataException($"GGUF string length {length} exceeds the safety limit.");
+        }
+
+        // ReadExactly throws EndOfStreamException for a truncated file; querying Length per string would
+        // cost one fstat call for each of the ~300k tokenizer entries.
+        var stream = reader.BaseStream;
+        Span<byte> discard = stackalloc byte[256];
+        for (var remaining = (int)length; remaining > 0; remaining -= discard.Length)
+        {
+            stream.ReadExactly(discard[..Math.Min(remaining, discard.Length)]);
+        }
     }
 
     private static bool TryGetFixedSize(uint type, out int size)

@@ -7,6 +7,10 @@ name = "synapse-core"
 version = "0.1.0"
 
 [[package]]
+name = "synapse-kernels"
+version = "0.1.0"
+
+[[package]]
 name = "synapse-runtime"
 version = "0.1.0"
 dependencies = [

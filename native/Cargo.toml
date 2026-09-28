@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
   "synapse-core",
+  "synapse-kernels",
   "synapse-runtime",
 ]
 
@@ -19,3 +20,7 @@ unsafe_code = "forbid"
 all = "deny"
 pedantic = "deny"
 nursery = "deny"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"

@@ -2,23 +2,32 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ManagedCode.Synapse.Runtime.Features.CpuKernels;
 using ManagedCode.Synapse.Runtime.Features.ModelLoading;
 
 namespace ManagedCode.Synapse.Cli.Features.TextGeneration;
 
 internal static class GenerationCommand
 {
-    public static int Run(IReadOnlyList<string> arguments)
+    public static async Task<int> RunAsync(IReadOnlyList<string> arguments)
     {
         var options = GenerationOptions.Parse(arguments);
         if (options is null)
         {
             Console.Error.WriteLine(
                 "Usage: synapse generate --model <model.gguf> --tokens <id,id,...> " +
-                "[--max-tokens <count>] [--context-size <count>] [--threads <count>]");
+                "[--max-tokens <count>] [--context-size <count>] [--threads <count>] " +
+                $"[--backend <{CpuKernelBackendNames.Usage}>] [--concurrent-requests <count>]");
             return 2;
         }
 
+        return options.ConcurrentRequests > 1
+            ? await ConcurrentGenerationCommand.RunAsync(options).ConfigureAwait(false)
+            : RunSingle(options);
+    }
+
+    private static int RunSingle(GenerationOptions options)
+    {
         try
         {
             using var process = Process.GetCurrentProcess();
@@ -28,8 +37,12 @@ internal static class GenerationCommand
             var loadTimer = Stopwatch.StartNew();
             using var model = ModelLoader.Load(
                 options.ModelPath,
-                options.ContextSize,
-                options.Threads);
+                new ModelLoadOptions
+                {
+                    ContextSize = options.ContextSize,
+                    MaximumParallelism = options.Threads,
+                    KernelBackend = options.Backend,
+                });
             loadTimer.Stop();
             process.Refresh();
             var workingSetAfterLoad = process.WorkingSet64;
@@ -51,6 +64,8 @@ internal static class GenerationCommand
                 result.Elapsed.TotalSeconds - result.TimeToFirstToken.TotalSeconds);
             var output = new GenerationOutput(
                 $"synapse-{model.RuntimeProfile}",
+                CpuKernelBackendNames.ToName(options.Backend),
+                model.KernelImplementation,
                 Path.GetFullPath(options.ModelPath),
                 result.PromptTokens,
                 result.GeneratedTokens,
@@ -84,12 +99,14 @@ internal static class GenerationCommand
         }
     }
 
-    private sealed record GenerationOptions(
+    internal sealed record GenerationOptions(
         string ModelPath,
         int[] Tokens,
         int MaximumTokens,
         int ContextSize,
-        int Threads)
+        int Threads,
+        CpuKernelBackend Backend,
+        int ConcurrentRequests)
     {
         public static GenerationOptions? Parse(IReadOnlyList<string> arguments)
         {
@@ -115,8 +132,17 @@ internal static class GenerationCommand
             var maximumTokens = ParsePositive(values.GetValueOrDefault("--max-tokens"), 1);
             var contextSize = ParsePositive(values.GetValueOrDefault("--context-size"), 512);
             var threads = ParsePositive(values.GetValueOrDefault("--threads"), Environment.ProcessorCount);
-            return tokens is { Length: > 0 } && maximumTokens > 0 && contextSize > 0 && threads > 0
-                ? new GenerationOptions(modelPath, tokens, maximumTokens, contextSize, threads)
+            var backend = CpuKernelBackend.Managed;
+            if (values.TryGetValue("--backend", out var backendName) &&
+                !CpuKernelBackendNames.TryParse(backendName, out backend))
+            {
+                return null;
+            }
+
+            var concurrentRequests = ParsePositive(values.GetValueOrDefault("--concurrent-requests"), 1);
+            return tokens is { Length: > 0 } && maximumTokens > 0 && contextSize > 0 && threads > 0 &&
+                concurrentRequests is > 0 and <= 64
+                ? new GenerationOptions(modelPath, tokens, maximumTokens, contextSize, threads, backend, concurrentRequests)
                 : null;
         }
 
@@ -146,6 +172,8 @@ internal static class GenerationCommand
 
 internal sealed record GenerationOutput(
     string Subject,
+    string KernelBackend,
+    string KernelImplementation,
     string ModelPath,
     IReadOnlyList<int> PromptTokens,
     IReadOnlyList<int> GeneratedTokens,

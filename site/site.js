@@ -49,9 +49,9 @@ const LAYERS = 12;                         // transformer blocks, plus one outpu
 const STATES = {
   hero: { wall: 0, cold: 0, split: 0, yaw: -0.5, zoom: 1 },
   wall: { wall: 1, cold: 0, split: 0, yaw: -0.3, zoom: 1.04 },
-  wave: { wall: 0, cold: 0, split: 0, yaw: -0.68, zoom: 1.08 },
+  wave: { wall: 0, cold: 0, split: 0, yaw: -0.62, zoom: 1.04 },
   cold: { wall: 0, cold: 1, split: 0, yaw: -0.9, zoom: 1.02 },
-  split: { wall: 0, cold: 0.45, split: 1, yaw: -0.22, zoom: 0.9 },
+  split: { wall: 0, cold: 0.45, split: 1, yaw: -0.18, zoom: 0.86 },
 };
 const OFFSETS = [[-1.25, 0.45, 0], [0, -0.45, 0], [1.25, 0.45, 0]];
 
@@ -89,7 +89,7 @@ const COMMON = /* glsl */`
   vec3 groupOffset() { return (aGroup < 0.5 ? uOff0 : aGroup < 1.5 ? uOff1 : uOff2) * uSplit; }
   float activation() {
     float d = aLayer / 12.0 - uFront;
-    float wave = max(exp(-d * d * 160.0), d < 0.0 ? 0.5 * exp(d * 3.5) : 0.0);
+    float wave = max(exp(-d * d * 120.0), d < 0.0 ? 0.7 * exp(d * 2.2) : 0.0);
     float a = mix(aSel * wave, aSel * 0.75, uReduce);
     float heat = 0.55 + 0.3 * sin(uTime * 2.6 + aSeed * 40.0);
     return max(a, uWall * max(heat, wave));
@@ -112,8 +112,8 @@ const POINT_VERTEX = `${COMMON}
     vec4 mv = modelViewMatrix * vec4(place(cold), 1.0);
     gl_Position = projectionMatrix * mv;
     vColor = mix(mix(vec3(0.66, 0.61, 0.56), vec3(0.33, 0.39, 0.52), cold), activeColor(), clamp(a, 0.0, 1.0));
-    vAlpha = mix(0.22, 0.05, cold) + a * 0.85;
-    gl_PointSize = (1.0 + a * 1.7) * (1.0 - 0.45 * cold) * (0.7 + aSeed * 0.6) * uPixel * 58.0 / -mv.z;
+    vAlpha = mix(0.34, 0.06, cold) + a * 0.9;
+    gl_PointSize = (1.0 + a * 1.7) * (1.0 - 0.45 * cold) * (0.7 + aSeed * 0.6) * uPixel * 105.0 / -mv.z;
   }`;
 const POINT_FRAGMENT = `
   varying vec3 vColor; varying float vAlpha;
@@ -128,7 +128,7 @@ const LINE_VERTEX = `${COMMON}
     float cold = uCold * (1.0 - aSel) * (1.0 - uWall);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(place(cold), 1.0);
     vColor = mix(vec3(0.7, 0.66, 0.6), activeColor(), clamp(a, 0.0, 1.0));
-    vAlpha = mix(0.06, 0.012, cold) + a * 0.42;
+    vAlpha = mix(0.09, 0.015, cold) + a * 0.65;
   }`;
 const LINE_FRAGMENT = `varying vec3 vColor; varying float vAlpha; void main() { gl_FragColor = vec4(vColor, vAlpha); }`;
 
@@ -196,7 +196,7 @@ async function startScene() {
   renderer.setPixelRatio(pixel);
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
-  camera.position.set(0, 0.5, 15);
+  camera.position.set(0, 0.5, 13);
   const rig = new THREE.Group();
   const model = new THREE.Group();
   rig.add(model);
@@ -250,8 +250,8 @@ async function startScene() {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     const wide = w > 760;
-    rig.position.set(wide ? 2.4 : 0, wide ? 0.1 : 2.3, wide ? 0 : -4);
-    rig.userData.scale = wide ? Math.min(1, w / 1400 + 0.25) : 0.95;
+    rig.position.set(wide ? 1.35 : 0, wide ? 0.1 : 2.5, wide ? 0 : -2);
+    rig.userData.scale = wide ? Math.min(0.84, w / 1600 + 0.05) : Math.min(0.9, (w / h) * 0.88);
   };
   addEventListener("resize", layout);
   layout();
@@ -259,15 +259,16 @@ async function startScene() {
   const mouse = { x: 0, y: 0, sx: 0, sy: 0 };
   addEventListener("pointermove", (e) => { mouse.x = (e.clientX / innerWidth) * 2 - 1; mouse.y = (e.clientY / innerHeight) * 2 - 1; }, { passive: true });
 
-  let visible = true;
-  new IntersectionObserver(([e]) => { visible = e.isIntersecting; }).observe(document.querySelector(".scrolly"));
+  const scrolly = document.querySelector(".scrolly");
 
-  const clock = new THREE.Clock();
-  const frame = () => {
+  let last = performance.now(), elapsed = 0;
+  const frame = (now) => {
     requestAnimationFrame(frame);
-    if (!visible || document.hidden) { clock.getDelta(); return; }
-    const dt = Math.min(clock.getDelta(), 0.05);
-    const t = reduceMotion ? 0 : clock.elapsedTime;
+    const dt = Math.min((now - last) / 1000, 0.05);
+    last = now;
+    if (scrolly.getBoundingClientRect().bottom < 0) return;
+    elapsed += dt;
+    const t = reduceMotion ? 0 : elapsed;
     const k = reduceMotion ? 1 : 1 - Math.exp(-dt * 2.4);
     for (const key of Object.keys(cur)) cur[key] += (target[key] - cur[key]) * k;
     if (!reduceMotion) {
@@ -290,7 +291,7 @@ async function startScene() {
     dustPoints.rotation.y = t * 0.01;
     renderer.render(scene, camera);
   };
-  frame();
+  requestAnimationFrame(frame);
 }
 
 startScene().catch(() => document.documentElement.classList.add("no-webgl"));

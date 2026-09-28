@@ -3,10 +3,12 @@
     <OutputType>Exe</OutputType>
     <IsTestProject>true</IsTestProject>
     <IsPackable>false</IsPackable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>ManagedCode.Synapse.IntegrationTests</RootNamespace>
     <AssemblyName>ManagedCode.Synapse.IntegrationTests</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../experiments/Synapse.FoundryLocalBenchmarks/Synapse.FoundryLocalBenchmarks.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../experiments/Synapse.ReferenceBenchmarks/Synapse.ReferenceBenchmarks.csproj" />
     <ProjectReference Include="../../src/Synapse.Cli/Synapse.Cli.csproj" />
     <ProjectReference Include="../../src/Synapse.Contracts/Synapse.Contracts.csproj" />

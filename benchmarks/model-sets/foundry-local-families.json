@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "id": "foundry-local-families",
+  "contextTokens": 1024,
+  "contextRule": "fetch lowers genai_config search.max_length to contextTokens, because ONNX Runtime GenAI preallocates the KV buffer for max_length. The original config is kept as genai_config.original.json.",
+  "memoryRule": "A model runs on a runner only when its CPU variant fileSizeMb is at most half of the runner memoryMb.",
+  "runners": [
+    { "id": "macos-15", "name": "macOS 15 ARM64 (Apple M1, 3 vCPU, 7 GB)", "memoryMb": 7168 },
+    { "id": "ubuntu-24.04", "name": "Ubuntu 24.04 x64 (4 vCPU, 16 GB)", "memoryMb": 16384 },
+    { "id": "windows-2025", "name": "Windows Server 2025 x64 (4 vCPU, 16 GB)", "memoryMb": 16384 }
+  ],
+  "models": [
+    {
+      "family": "qwen",
+      "alias": "qwen2.5-0.5b",
+      "note": "Anchor. Same base checkpoint as the GGUF and MLX cohorts, but different ONNX weights.",
+      "variants": [
+        { "device": "cpu", "id": "qwen2.5-0.5b-instruct-generic-cpu:4", "fileSizeMb": 822 },
+        { "device": "gpu", "id": "qwen2.5-0.5b-instruct-generic-gpu:4", "fileSizeMb": 700 }
+      ]
+    },
+    {
+      "family": "qwen",
+      "alias": "qwen3-0.6b",
+      "note": "Qwen3 architecture.",
+      "variants": [
+        { "device": "cpu", "id": "qwen3-0.6b-generic-cpu:4", "fileSizeMb": 593 },
+        { "device": "gpu", "id": "qwen3-0.6b-generic-gpu:2", "fileSizeMb": 529 }
+      ]
+    },
+    {
+      "family": "phi",
+      "alias": "phi-3.5-mini",
+      "note": "Largest Phi that fits the 7 GB macOS runner.",
+      "variants": [
+        { "device": "cpu", "id": "Phi-3.5-mini-instruct-generic-cpu:2", "fileSizeMb": 2590 },
+        { "device": "gpu", "id": "Phi-3.5-mini-instruct-generic-gpu:2", "fileSizeMb": 2211 }
+      ]
+    },
+    {
+      "family": "phi",
+      "alias": "phi-4-mini",
+      "note": "Current Phi generation.",
+      "variants": [
+        { "device": "cpu", "id": "Phi-4-mini-instruct-generic-cpu:5", "fileSizeMb": 4915 },
+        { "device": "gpu", "id": "Phi-4-mini-instruct-generic-gpu:5", "fileSizeMb": 3809 }
+      ]
+    },
+    {
+      "family": "mistral",
+      "alias": "mistral-7b-v0.2",
+      "note": "The only text-only Mistral in the Foundry catalog that fits a 16 GB runner. Its chat template has no system role.",
+      "systemPrompt": "prepend-to-first-user",
+      "variants": [
+        { "device": "cpu", "id": "mistralai-Mistral-7B-Instruct-v0-2-generic-cpu:3", "fileSizeMb": 4167 },
+        { "device": "gpu", "id": "mistralai-Mistral-7B-Instruct-v0-2-generic-gpu:2", "fileSizeMb": 4167 }
+      ]
+    },
+    {
+      "family": "deepseek",
+      "alias": "deepseek-r1-7b",
+      "note": "DeepSeek-R1 distilled into Qwen2.5 7B. Not native DeepSeek MLA or MoE. Emits reasoning text.",
+      "variants": [
+        { "device": "cpu", "id": "deepseek-r1-distill-qwen-7b-generic-cpu:4", "fileSizeMb": 6584 },
+        { "device": "gpu", "id": "deepseek-r1-distill-qwen-7b-generic-gpu:4", "fileSizeMb": 5713 }
+      ]
+    }
+  ]
+}

@@ -26,7 +26,7 @@ internal static partial class MlxBenchmarkCommand
                 throw new IOException($"MLX evidence already exists: {options.Output}");
             }
 
-            var turns = LockedDialogueCommand.ReadTurns(options.Scenario);
+            var turns = LockedChatScenario.Read(options.Scenario);
             var samples = await MeasureAsync(options, turns).ConfigureAwait(false);
             var evidence = new MlxEvidence("measured_metal_separate_weight_cohort_quality_unreviewed",
                 options.BinaryVersion,

@@ -6,5 +6,5 @@ internal interface IGgufModelFamilyAdapter
 {
     string Architecture { get; }
 
-    ITextGenerationModel Load(GgufFile file, int contextSize, int maximumParallelism);
+    ITextGenerationModel Load(GgufFile file, ModelLoadOptions options);
 }

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- ADR-011: the Foundry Local SDK forces a RuntimeIdentifier through its native
+       runtime package, so it lives in this isolated project and never flows onward. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RuntimeIdentifier>$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
+    <RuntimeIdentifiers>osx-arm64;linux-x64;win-x64</RuntimeIdentifiers>
+    <SelfContained>false</SelfContained>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AI.Foundry.Local" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../Synapse.ReferenceBenchmarks/LockedChatScenario.cs" Link="LockedChatScenario.cs" />
+    <Compile Include="../Synapse.ReferenceBenchmarks/ProcessMemorySampler.cs" Link="ProcessMemorySampler.cs" />
+  </ItemGroup>
+</Project>

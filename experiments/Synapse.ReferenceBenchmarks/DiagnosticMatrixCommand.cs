@@ -16,7 +16,8 @@ internal static class DiagnosticMatrixCommand
                 "--prompt-token-ids <ids> --expected-token-ids <ids> --expected-text <text> " +
                 "--synapse-executable <path> --dotllm-executable <path> --dotllm-version <sha> " +
                 "--llamacpp-executable <path> --llamacpp-version <sha> --output <new.json> " +
-                "[--max-tokens 8] [--threads 8] [--warmups 3] [--measurements 5]");
+                "[--max-tokens 8] [--threads 8] [--warmups 3] [--measurements 5] " +
+                "[--synapse-backend reference|managed|native]");
             return 2;
         }
 
@@ -63,6 +64,9 @@ internal static class DiagnosticMatrixCommand
             await HashFileAsync(options.ModelPath).ConfigureAwait(false),
             await HashFileAsync(typeof(DiagnosticMatrixCommand).Assembly.Location).ConfigureAwait(false),
             await HashFileAsync(options.SynapseExecutable).ConfigureAwait(false),
+            options.SynapseBackend,
+            await HashSiblingAsync(options.SynapseExecutable, "ManagedCode.Synapse.Runtime.dll").ConfigureAwait(false),
+            await HashSiblingAsync(options.SynapseExecutable, NativeKernelFileName).ConfigureAwait(false),
             await HashFileAsync(options.DotLlmExecutable).ConfigureAwait(false),
             await HashFileAsync(options.LlamaCppExecutable).ConfigureAwait(false),
             await HashFileAsync(typeof(LLama.LLamaWeights).Assembly.Location).ConfigureAwait(false),
@@ -149,6 +153,7 @@ internal static class DiagnosticMatrixCommand
         "--max-tokens", options.MaxTokens.ToString(System.Globalization.CultureInfo.InvariantCulture),
         "--context-size", "512",
         "--threads", options.Threads.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        "--backend", options.SynapseBackend,
     ];
 
     private static string[] ReferenceArguments(DiagnosticMatrixArguments options, string subject)
@@ -204,6 +209,17 @@ internal static class DiagnosticMatrixCommand
             ? null : result.GetProperty("peak_physical_footprint_bytes").GetInt64(),
         result.GetProperty("memory_sample_count").GetInt32());
 
+    private static string NativeKernelFileName =>
+        OperatingSystem.IsWindows() ? "synapse_kernels.dll"
+        : OperatingSystem.IsMacOS() ? "libsynapse_kernels.dylib"
+        : "libsynapse_kernels.so";
+
+    private static async Task<string?> HashSiblingAsync(string executable, string fileName)
+    {
+        var path = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(executable))!, fileName);
+        return File.Exists(path) ? await HashFileAsync(path).ConfigureAwait(false) : null;
+    }
+
     private static async Task<string> HashFileAsync(string path)
     {
         await using var stream = File.OpenRead(path);
@@ -216,6 +232,9 @@ internal sealed record DiagnosticMatrixEvidence(
     string ModelSha256,
     string RunnerSha256,
     string SynapseBinarySha256,
+    string SynapseBackend,
+    string? SynapseRuntimeSha256,
+    string? SynapseNativeKernelSha256,
     string DotLlmBinarySha256,
     string LlamaCppBinarySha256,
     string LlamaSharpAssemblySha256,

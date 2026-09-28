@@ -90,3 +90,51 @@ Date: 2026-09-27. Status: accepted for the bootstrap slice.
   Metal/MLX-format model stays a separate cohort from GGUF Q8_0; capture
   release digest and model revision and never infer quality/speed parity from
   the shared Qwen family name.
+
+## 2026-09-28 CPU kernels, concurrency, and cluster direction
+
+- The profile placed the gap in the scalar Q8_0 linear and in per-row
+  `Parallel.For`, not in model loading.
+  - Fix: Q8_0 activations with `sdot`/AVX2 kernels, a persistent pool, fused
+    regions, and batched prefill.
+  - The Rust kernel won the weight-pass microbenchmark at one and two threads.
+    Both kernels are memory-bound at eight.
+  - The FP32 `reference` path stays as the oracle.
+- A Q8-activation argmax flip at a 0.0115-logit near-tie is a numerical
+  cohort difference, not a bug. Long exact-continuation gates need
+  locked-continuation speed runs or an FP32-activation parity profile.
+- Concurrency comes from continuous batching inside one model instance
+  (ADR-007). Because decode is weight-bandwidth-bound, N requests share one
+  weight pass.
+- Cluster direction (ADR-009, owner): an Orleans cluster that nodes join,
+  with one immovable grain per request.
+  - Weights exist per node, per subset, or split per cluster.
+  - Balancing uses silo-metadata filters, a residency-aware custom placement
+    director, `ResourceOptimizedPlacement` as the fallback, and the
+    rebalancer only for control grains.
+  - New requests move to other nodes. Running requests and their KV do not.
+- Rejected:
+  - NativeAOT for hosts, because Orleans hosting is not a NativeAOT target.
+  - Migrating running request grains, because hot KV would be stranded.
+  - Splitting a model that fits one node across nodes, because it adds a
+    network hop per stage per token without adding capacity.
+
+## 2026-09-28 Foundry Local subject
+
+- Measure Microsoft Foundry Local through its C# SDK 2.0.1 in-process, not the
+  installed 0.8 CLI service. The SDK is current, MIT-licensed, and pinned by
+  NuGet lock files. It supports all three hosted-runner platforms.
+- Use `ChatSession` streaming. The OpenAI-style client buffers early chunks
+  and omits usage. Create a new session per request, because a session keeps
+  its turns.
+- Keep the SDK in its own RID-specific project. Its native package forces a
+  `RuntimeIdentifier`, which must not leak into the LLamaSharp runner or the
+  test host.
+- One model set covers Qwen, Phi, Mistral, and DeepSeek-R1-distill. The rule
+  "file size at most half of runner memory" keeps every scheduled job inside
+  a hosted runner. MiniMax is dropped: no catalog entry and no checkpoint that
+  fits.
+- Isolation is structural: one CI job per runner and model, one process per
+  model, explicit download, raw JSON per job.
+- Rejected: reusing one session per scenario (hidden KV reuse), the OpenAI
+  client (no TTFT), and adding the SDK to the existing runner (RID leak).
