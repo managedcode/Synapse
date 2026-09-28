@@ -6,4 +6,8 @@
     <PackageReference Include="LLamaSharp" />
     <PackageReference Include="LLamaSharp.Backend.Cpu" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The quality harness builds prompts with the repo tokenizer (ADR-014); engines still run as processes. -->
+    <ProjectReference Include="../../src/Synapse.Runtime/Synapse.Runtime.csproj" />
+  </ItemGroup>
 </Project>

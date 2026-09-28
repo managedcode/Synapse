@@ -7,16 +7,17 @@ namespace ManagedCode.Synapse.Runtime.Features.TextGeneration.Qwen2;
 /// Permanent oracle path: FP32 activations times dequantized Q8_0 weights in scalar loops, one prompt token
 /// at a time (ADR-006 <c>reference</c>).
 /// </summary>
-internal sealed class Qwen2ReferenceExecutor : IQwen2Executor
+internal sealed class Qwen2ReferenceExecutor : IDecoderExecutor
 {
     private readonly GgufFile _file;
     private readonly Qwen2Weights _weights;
-    private readonly Qwen2Dimensions _dimensions;
+    private readonly DecoderDimensions _dimensions;
     private readonly Qwen2Scratch _scratch;
     private readonly Qwen2KvCache _cache;
     private readonly ParallelOptions _parallelOptions;
+    private readonly RopeFrequencies _rope;
 
-    public Qwen2ReferenceExecutor(GgufFile file, Qwen2Weights weights, Qwen2Dimensions dimensions, int threads)
+    public Qwen2ReferenceExecutor(GgufFile file, Qwen2Weights weights, DecoderDimensions dimensions, int threads)
     {
         _file = file;
         _weights = weights;
@@ -29,20 +30,24 @@ internal sealed class Qwen2ReferenceExecutor : IQwen2Executor
             dimensions.ContextSize);
         _cache = new Qwen2KvCache(dimensions.LayerCount, dimensions.ContextSize, dimensions.KvWidth);
         _parallelOptions = new ParallelOptions { MaxDegreeOfParallelism = threads };
+        _rope = new RopeFrequencies(dimensions.HeadDimension, dimensions.RopeTheta, dimensions.RopeScaling);
     }
 
     public string RuntimeProfile => "reference-qwen2-q8_0";
 
     public string KernelImplementation => "reference-scalar-fp32";
 
-    public ReadOnlyMemory<float> Prefill(IReadOnlyList<int> tokens)
+    public ReadOnlyMemory<float> Prefill(IReadOnlyList<int> tokens, Action<int>? evaluated = null)
     {
         for (var index = 0; index < tokens.Count - 1; index++)
         {
             _ = Forward(tokens[index], index, computeLogits: false);
+            evaluated?.Invoke(index + 1);
         }
 
-        return Forward(tokens[^1], tokens.Count - 1, computeLogits: true);
+        var logits = Forward(tokens[^1], tokens.Count - 1, computeLogits: true);
+        evaluated?.Invoke(tokens.Count);
+        return logits;
     }
 
     public ReadOnlyMemory<float> Decode(int token, int position) => Forward(token, position, computeLogits: true);
@@ -81,8 +86,8 @@ internal sealed class Qwen2ReferenceExecutor : IQwen2Executor
         Q8Operators.AddBiasInPlace(_scratch.Key, weights.KeyBias);
         Q8Operators.AddBiasInPlace(_scratch.Value, weights.ValueBias);
         var headDimension = _dimensions.HeadDimension;
-        Qwen2Attention.ApplyRope(_scratch.Query, _dimensions.AttentionHeads, headDimension, position, _dimensions.RopeTheta);
-        Qwen2Attention.ApplyRope(_scratch.Key, _dimensions.KeyValueHeads, headDimension, position, _dimensions.RopeTheta);
+        Qwen2Attention.ApplyRope(_scratch.Query, _dimensions.AttentionHeads, headDimension, position, _rope);
+        Qwen2Attention.ApplyRope(_scratch.Key, _dimensions.KeyValueHeads, headDimension, position, _rope);
         _cache.Store(layer, position, _scratch.Key, _scratch.Value);
         Qwen2Attention.Execute(
             _cache,

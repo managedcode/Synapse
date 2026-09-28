@@ -1,5 +1,4 @@
 using ManagedCode.Synapse.IntegrationTests.Features.Benchmarking;
-using ManagedCode.Synapse.Runtime.Features.CpuKernels;
 using ManagedCode.Synapse.Runtime.Features.ModelLoading;
 using ManagedCode.Synapse.Runtime.Features.TextGeneration.Qwen2;
 
@@ -11,9 +10,9 @@ public sealed class OptimizedQwen2Tests
     private static readonly int[] ExpectedContinuation = [12095, 13, 1084, 374, 279, 7772, 3283, 304];
 
     [Test]
-    [Arguments(CpuKernelBackend.Managed, "managed-simd-qwen2-q8_0xq8_0")]
-    [Arguments(CpuKernelBackend.Native, "native-rust-qwen2-q8_0xq8_0")]
-    public async Task OptimizedBackendMatchesPinnedContinuation(CpuKernelBackend backend, string profile)
+    [Arguments(KernelBackend.Managed, "managed-simd-qwen2-q8_0xq8_0")]
+    [Arguments(KernelBackend.Native, "native-rust-qwen2-q8_0xq8_0")]
+    public async Task OptimizedBackendMatchesPinnedContinuation(KernelBackend backend, string profile)
     {
         foreach (var threads in new[] { 1, 3 })
         {
@@ -30,7 +29,7 @@ public sealed class OptimizedQwen2Tests
     [Test]
     public async Task ReferenceBackendRemainsAvailable()
     {
-        using var model = Load(CpuKernelBackend.Reference, 2);
+        using var model = Load(KernelBackend.Reference, 2);
 
         var result = model.Generate(ReferenceBenchmarkFixture.PromptTokens, 2);
 
@@ -41,9 +40,9 @@ public sealed class OptimizedQwen2Tests
     [Test]
     public async Task BatchedPrefillMatchesSequentialPrefill()
     {
-        using var sequential = Load(CpuKernelBackend.Managed, 2, prefillChunkTokens: 1);
-        using var paired = Load(CpuKernelBackend.Managed, 2, prefillChunkTokens: 2);
-        using var batched = Load(CpuKernelBackend.Managed, 2);
+        using var sequential = Load(KernelBackend.Managed, 2, prefillChunkTokens: 1);
+        using var paired = Load(KernelBackend.Managed, 2, prefillChunkTokens: 2);
+        using var batched = Load(KernelBackend.Managed, 2);
         int[] prompt = [.. ReferenceBenchmarkFixture.PromptTokens, 12095, 13, 1084];
 
         var expected = sequential.EvaluatePromptLogits(prompt);
@@ -57,8 +56,8 @@ public sealed class OptimizedQwen2Tests
     [Test]
     public async Task ManagedLogitsTrackReferenceLogits()
     {
-        using var reference = Load(CpuKernelBackend.Reference, 4);
-        using var managed = Load(CpuKernelBackend.Managed, 4);
+        using var reference = Load(KernelBackend.Reference, 4);
+        using var managed = Load(KernelBackend.Managed, 4);
 
         var expected = reference.EvaluatePromptLogits(ReferenceBenchmarkFixture.PromptTokens);
         var actual = managed.EvaluatePromptLogits(ReferenceBenchmarkFixture.PromptTokens);
@@ -69,7 +68,7 @@ public sealed class OptimizedQwen2Tests
         await Assert.That(largestError).IsLessThanOrEqualTo(range * 0.05f);
     }
 
-    private static Qwen2Model Load(CpuKernelBackend backend, int threads, int? prefillChunkTokens = null)
+    private static Qwen2Model Load(KernelBackend backend, int threads, int? prefillChunkTokens = null)
     {
         var options = new ModelLoadOptions
         {

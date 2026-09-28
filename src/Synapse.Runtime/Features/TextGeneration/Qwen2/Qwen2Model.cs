@@ -14,7 +14,7 @@ public sealed class Qwen2Model : ITextGenerationModel
 {
     private const int EndOfSequenceToken = 151645;
     private readonly GgufFile _file;
-    private readonly IQwen2Executor _executor;
+    private readonly IDecoderExecutor _executor;
     private readonly ContinuousBatchScheduler? _scheduler;
     private readonly object _executionGate = new();
 
@@ -22,7 +22,7 @@ public sealed class Qwen2Model : ITextGenerationModel
     {
         _file = file;
         Dimensions = Qwen2ModelComposition.ReadDimensions(file, options);
-        var pool = options.KernelBackend == CpuKernelBackend.Reference ? null : new CpuWorkerPool(options.MaximumParallelism);
+        var pool = options.KernelBackend == KernelBackend.Reference ? null : new CpuWorkerPool(options.MaximumParallelism);
         try
         {
             Qwen2ModelComposition.PrefetchWeights(file, pool);
@@ -80,7 +80,9 @@ public sealed class Qwen2Model : ITextGenerationModel
     public string Architecture => "qwen2";
 
     /// <inheritdoc />
-    public string RuntimeProfile => _executor.RuntimeProfile;
+    public string RuntimeProfile => _executor.RuntimeProfile +
+        (Dimensions.RopeScaling is { } scaling ? "+" + scaling.Name : string.Empty) +
+        (Dimensions.KvPages is { } pages ? "+" + pages.Name : string.Empty);
 
     /// <inheritdoc />
     public string KernelImplementation => _executor.KernelImplementation;
@@ -88,7 +90,7 @@ public sealed class Qwen2Model : ITextGenerationModel
     /// <summary>Verified portable dense graph corresponding to this loaded model.</summary>
     public ModelGraph Graph { get; }
 
-    internal Qwen2Dimensions Dimensions { get; }
+    internal DecoderDimensions Dimensions { get; }
 
     /// <summary>Loads a supported Qwen2 Q8_0 GGUF file through a read-only memory map.</summary>
     public static Qwen2Model Load(string modelPath, int contextSize = 512) =>
@@ -118,13 +120,23 @@ public sealed class Qwen2Model : ITextGenerationModel
     internal static Qwen2Model Load(GgufFile file, ModelLoadOptions options) => new(file, options);
 
     /// <summary>Runs greedy generation on the direct session; serialized with every other caller.</summary>
-    public TextGenerationResult Generate(IReadOnlyList<int> promptTokens, int maximumNewTokens)
+    public TextGenerationResult Generate(IReadOnlyList<int> promptTokens, int maximumNewTokens) =>
+        Generate(promptTokens, maximumNewTokens, progress: null);
+
+    /// <inheritdoc />
+    public TextGenerationResult Generate(
+        IReadOnlyList<int> promptTokens,
+        int maximumNewTokens,
+        IProgress<GenerationProgress>? progress)
     {
         ValidatePrompt(promptTokens, maximumNewTokens, allowEmptyOutput: false);
         lock (_executionGate)
         {
             var timer = Stopwatch.StartNew();
-            var logits = _executor.Prefill(promptTokens);
+            var promptCount = promptTokens.Count;
+            var logits = _executor.Prefill(
+                promptTokens,
+                progress is null ? null : evaluated => progress.Report(new(evaluated, promptCount, 0, timer.Elapsed)));
             var generated = new List<int>(maximumNewTokens);
             var timeToFirstToken = TimeSpan.Zero;
             for (var index = 0; index < maximumNewTokens; index++)
@@ -132,6 +144,7 @@ public sealed class Qwen2Model : ITextGenerationModel
                 var token = GreedySampling.ArgMax(logits.Span);
                 generated.Add(token);
                 timeToFirstToken = index == 0 ? timer.Elapsed : timeToFirstToken;
+                progress?.Report(new(promptCount, promptCount, generated.Count, timer.Elapsed));
                 if (token == EndOfSequenceToken || index + 1 == maximumNewTokens)
                 {
                     break;
@@ -154,6 +167,24 @@ public sealed class Qwen2Model : ITextGenerationModel
         return _scheduler is not null
             ? _scheduler.EnqueueAsync(promptTokens, maximumNewTokens, cancellationToken)
             : Task.Run(() => Generate(promptTokens, maximumNewTokens), cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public TokenScores Score(IReadOnlyList<int> tokens, int firstScoredPosition, IProgress<GenerationProgress>? progress)
+    {
+        ValidatePrompt(tokens, 0, allowEmptyOutput: true);
+        ArgumentOutOfRangeException.ThrowIfNegative(firstScoredPosition);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(firstScoredPosition, tokens.Count - 2);
+        lock (_executionGate)
+        {
+            var timer = Stopwatch.StartNew();
+            var evaluatedTotal = tokens.Count - 1;
+            return TokenScoring.Score(
+                _executor,
+                tokens,
+                firstScoredPosition,
+                progress is null ? null : evaluated => progress.Report(new(evaluated, evaluatedTotal, 0, timer.Elapsed)));
+        }
     }
 
     /// <inheritdoc />

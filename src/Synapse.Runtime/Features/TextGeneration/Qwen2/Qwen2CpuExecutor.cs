@@ -9,11 +9,11 @@ namespace ManagedCode.Synapse.Runtime.Features.TextGeneration.Qwen2;
 /// regions per layer, and batched steps whose tokens may belong to different KV slots (ADR-007). Every token
 /// runs the same per-token math whatever else shares its step.
 /// </summary>
-internal sealed class Qwen2CpuExecutor : IQwen2Executor, IBatchDecoder
+internal sealed class Qwen2CpuExecutor : IDecoderExecutor, IBatchDecoder
 {
     private readonly GgufFile _file;
     private readonly Qwen2Weights _weights;
-    private readonly Qwen2Dimensions _dimensions;
+    private readonly DecoderDimensions _dimensions;
     private readonly Qwen2CpuLayer[] _layers;
     private readonly Q8Matrix _output;
     private readonly CpuWorkerPool _pool;
@@ -31,11 +31,11 @@ internal sealed class Qwen2CpuExecutor : IQwen2Executor, IBatchDecoder
     public Qwen2CpuExecutor(
         GgufFile file,
         Qwen2Weights weights,
-        Qwen2Dimensions dimensions,
+        DecoderDimensions dimensions,
         Q8MatrixKernel kernel,
         string runtimeProfile,
         CpuWorkerPool pool,
-        Qwen2CpuCapacity capacity)
+        DecoderStepCapacity capacity)
     {
         _file = file;
         _weights = weights;
@@ -49,7 +49,9 @@ internal sealed class Qwen2CpuExecutor : IQwen2Executor, IBatchDecoder
         _slots = new Qwen2KvSlots(dimensions, capacity.SessionSlots);
         _batch = new BatchToken[capacity.StepTokens];
         _prefillTokens = capacity.PrefillTokens;
-        _rope = new Qwen2RopeTable(dimensions.HeadDimension, dimensions.RopeTheta, dimensions.ContextSize);
+        _rope = new Qwen2RopeTable(
+            new RopeFrequencies(dimensions.HeadDimension, dimensions.RopeTheta, dimensions.RopeScaling),
+            dimensions.ContextSize);
         _attention = new Qwen2CpuAttention(dimensions, _slots, _batch, _scratch, pool);
         _qkv = new Qwen2QkvWork(kernel, _scratch);
         _residual = new Qwen2ResidualWork(kernel, _scratch.Hidden, pool.ThreadCount);
@@ -67,7 +69,9 @@ internal sealed class Qwen2CpuExecutor : IQwen2Executor, IBatchDecoder
 
     public int VocabularySize => _dimensions.VocabularySize;
 
-    public ReadOnlyMemory<float> Prefill(IReadOnlyList<int> tokens)
+    public int LogitsRowCapacity => _scratch.LogitsRows;
+
+    public ReadOnlyMemory<float> Prefill(IReadOnlyList<int> tokens, Action<int>? evaluated = null)
     {
         for (var start = 0; start < tokens.Count; start += _prefillTokens)
         {
@@ -79,6 +83,7 @@ internal sealed class Qwen2CpuExecutor : IQwen2Executor, IBatchDecoder
             }
 
             Forward(_batch.AsSpan(0, count));
+            evaluated?.Invoke(start + count);
         }
 
         return LogitsRow(0);
@@ -227,14 +232,4 @@ internal sealed class Qwen2CpuExecutor : IQwen2Executor, IBatchDecoder
             activations.Quantize(index, rows.AsSpan(index * activations.Columns, activations.Columns));
         }
     }
-}
-
-/// <summary>Step and slot bounds derived from <c>ModelLoadOptions</c> (ADR-007).</summary>
-internal sealed record Qwen2CpuCapacity(int StepTokens, int PrefillTokens, int SessionSlots, int LogitsRows)
-{
-    public static Qwen2CpuCapacity Create(int prefillChunkTokens, int contextSize, int maximumSessions) => new(
-        Math.Max(Math.Min(prefillChunkTokens, contextSize), maximumSessions),
-        Math.Min(prefillChunkTokens, contextSize),
-        maximumSessions + 1,
-        maximumSessions);
 }

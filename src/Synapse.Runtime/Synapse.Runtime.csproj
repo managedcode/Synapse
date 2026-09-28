@@ -10,7 +10,8 @@
     <PackageReference Include="ZoneTree" />
   </ItemGroup>
 
-  <!-- ADR-006: the Rust Q8_0 kernel is built with the pinned toolchain and shipped next to the assemblies. -->
+  <!-- ADR-006 and ADR-012: the Rust CPU kernel and GPU libraries are built with the pinned toolchain and shipped
+       next to the assemblies. -->
   <PropertyGroup>
     <SynapseNativeRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..', 'native'))</SynapseNativeRoot>
     <SynapseHomebrewCargo>/opt/homebrew/opt/rustup/bin/cargo</SynapseHomebrewCargo>
@@ -20,22 +21,27 @@
     <SynapseNativeKernelFile Condition="$([MSBuild]::IsOSPlatform('OSX'))">libsynapse_kernels.dylib</SynapseNativeKernelFile>
     <SynapseNativeKernelFile Condition="'$(SynapseNativeKernelFile)' == ''">libsynapse_kernels.so</SynapseNativeKernelFile>
     <SynapseNativeKernelPath>$(SynapseNativeRoot)target/release/$(SynapseNativeKernelFile)</SynapseNativeKernelPath>
-    <SynapseCargoCommand>"$(SynapseCargo)" build --release --locked --manifest-path "$(SynapseNativeRoot)Cargo.toml" -p synapse-kernels</SynapseCargoCommand>
+    <SynapseNativeGpuFile Condition="$([MSBuild]::IsOSPlatform('Windows'))">synapse_gpu.dll</SynapseNativeGpuFile>
+    <SynapseNativeGpuFile Condition="$([MSBuild]::IsOSPlatform('OSX'))">libsynapse_gpu.dylib</SynapseNativeGpuFile>
+    <SynapseNativeGpuFile Condition="'$(SynapseNativeGpuFile)' == ''">libsynapse_gpu.so</SynapseNativeGpuFile>
+    <SynapseNativeGpuPath>$(SynapseNativeRoot)target/release/$(SynapseNativeGpuFile)</SynapseNativeGpuPath>
+    <SynapseCargoCommand>"$(SynapseCargo)" build --release --locked --manifest-path "$(SynapseNativeRoot)Cargo.toml" -p synapse-kernels -p synapse-gpu</SynapseCargoCommand>
   </PropertyGroup>
   <ItemGroup>
     <SynapseNativeKernelInput Include="$(SynapseNativeRoot)synapse-kernels/**/*.rs" />
+    <SynapseNativeKernelInput Include="$(SynapseNativeRoot)synapse-gpu/**/*.rs;$(SynapseNativeRoot)synapse-gpu/**/*.metal;$(SynapseNativeRoot)synapse-gpu/Cargo.toml" />
     <SynapseNativeKernelInput Include="$(SynapseNativeRoot)synapse-kernels/Cargo.toml;$(SynapseNativeRoot)Cargo.toml;$(SynapseNativeRoot)Cargo.lock" />
   </ItemGroup>
   <Target
     Name="BuildSynapseNativeKernels"
     Inputs="@(SynapseNativeKernelInput)"
-    Outputs="$(SynapseNativeKernelPath)">
+    Outputs="$(SynapseNativeKernelPath);$(SynapseNativeGpuPath)">
     <Exec
       Condition="'$(SynapseCargo)' == '$(SynapseHomebrewCargo)'"
       Command="$(SynapseCargoCommand)"
       EnvironmentVariables="PATH=/opt/homebrew/opt/rustup/bin:$(PATH)" />
     <Exec Condition="'$(SynapseCargo)' != '$(SynapseHomebrewCargo)'" Command="$(SynapseCargoCommand)" />
-    <Touch Files="$(SynapseNativeKernelPath)" />
+    <Touch Files="$(SynapseNativeKernelPath);$(SynapseNativeGpuPath)" />
   </Target>
   <Target
     Name="IncludeSynapseNativeKernels"
@@ -45,6 +51,11 @@
       <None
         Include="$(SynapseNativeKernelPath)"
         Link="$(SynapseNativeKernelFile)"
+        CopyToOutputDirectory="PreserveNewest"
+        Visible="false" />
+      <None
+        Include="$(SynapseNativeGpuPath)"
+        Link="$(SynapseNativeGpuFile)"
         CopyToOutputDirectory="PreserveNewest"
         Visible="false" />
     </ItemGroup>

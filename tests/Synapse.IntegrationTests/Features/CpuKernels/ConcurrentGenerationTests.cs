@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using ManagedCode.Synapse.IntegrationTests.Features.Benchmarking;
-using ManagedCode.Synapse.Runtime.Features.CpuKernels;
 using ManagedCode.Synapse.Runtime.Features.ModelLoading;
 using ManagedCode.Synapse.Runtime.Features.TextGeneration;
 using ManagedCode.Synapse.Runtime.Features.TextGeneration.Qwen2;
@@ -20,12 +19,12 @@ public sealed class ConcurrentGenerationTests
     ];
 
     [Test]
-    [Arguments(CpuKernelBackend.Managed)]
-    [Arguments(CpuKernelBackend.Native)]
-    [Arguments(CpuKernelBackend.Reference)]
-    public async Task RaggedBatchMatchesIndependent(CpuKernelBackend backend)
+    [Arguments(KernelBackend.Managed)]
+    [Arguments(KernelBackend.Native)]
+    [Arguments(KernelBackend.Reference)]
+    public async Task RaggedBatchMatchesIndependent(KernelBackend backend)
     {
-        var newTokens = backend == CpuKernelBackend.Reference ? 3 : 10;
+        var newTokens = backend == KernelBackend.Reference ? 3 : 10;
         using var model = Load(backend, maximumSessions: 5);
         var independent = Prompts.Select(prompt => model.Generate(prompt, newTokens).GeneratedTokens).ToArray();
 
@@ -46,7 +45,7 @@ public sealed class ConcurrentGenerationTests
     {
         var shortPrompt = Prompts[0];
         int[] longPrompt = [.. Enumerable.Range(0, 150).Select(index => Prompts[1][index % Prompts[1].Length])];
-        using var model = Load(CpuKernelBackend.Managed, maximumSessions: 2, contextSize: 192);
+        using var model = Load(KernelBackend.Managed, maximumSessions: 2, contextSize: 192);
         var steps = new ConcurrentQueue<BatchStepTrace>();
         model.BatchStepCompleted += steps.Enqueue;
 
@@ -66,9 +65,9 @@ public sealed class ConcurrentGenerationTests
     }
 
     [Test]
-    [Arguments(CpuKernelBackend.Managed)]
-    [Arguments(CpuKernelBackend.Native)]
-    public async Task CancelledSlotReusedSafely(CpuKernelBackend backend)
+    [Arguments(KernelBackend.Managed)]
+    [Arguments(KernelBackend.Native)]
+    public async Task CancelledSlotReusedSafely(KernelBackend backend)
     {
         using var model = Load(backend, maximumSessions: 1);
         var expected = model.Generate(Prompts[2], 6).GeneratedTokens;
@@ -95,7 +94,7 @@ public sealed class ConcurrentGenerationTests
         await Assert.That(slots[Prompts[2].Length]).IsEqualTo(slots[Prompts[4].Length]);
     }
 
-    private static Qwen2Model Load(CpuKernelBackend backend, int maximumSessions, int contextSize = 64) =>
+    private static Qwen2Model Load(KernelBackend backend, int maximumSessions, int contextSize = 64) =>
         (Qwen2Model)ModelLoader.Load(
             ReferenceBenchmarkFixture.GetModelPath(),
             new ModelLoadOptions

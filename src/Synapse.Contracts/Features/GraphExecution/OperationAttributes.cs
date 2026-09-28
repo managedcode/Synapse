@@ -20,10 +20,12 @@ public enum RotaryLayout
 /// <param name="Theta">Positive rotary frequency base.</param>
 /// <param name="HeadDimension">Coordinates in one attention head.</param>
 /// <param name="Layout">Coordinate-pairing layout.</param>
+/// <param name="Scaling">Explicit context-extension profile, or <see langword="null"/> for unscaled RoPE (ADR-013).</param>
 public sealed record RopeAttributes(
     float Theta,
     int HeadDimension,
-    RotaryLayout Layout) : GraphOperationAttributes;
+    RotaryLayout Layout,
+    RopeScaling? Scaling = null) : GraphOperationAttributes;
 
 /// <summary>Attention-mask semantics.</summary>
 public enum AttentionMaskKind

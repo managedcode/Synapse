@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "kind": "passkey-control-diagnostic",
+  "recordedOn": "2026-09-28",
+  "host": "owner MacBook Pro, Apple M2 Pro (19-core GPU), 32 GB, macOS 27",
+  "subject": "llama.cpp llama-completion 0.4.1 (b29c606e2, Homebrew), Metal",
+  "command": "llama-completion -m qwen2.5-0.5b-instruct-q8_0.gguf -f prompt.txt -c 131072 -n 12 --temp 0 -s 0 -ngl 99 -fa on --rope-scaling yarn --rope-scale 4 --yarn-orig-ctx 32768 -no-cnv --no-display-prompt",
+  "scenario": "passkey-qwen2.5, key 68317 at depth 0.1, 500 fillers before and 4496 after",
+  "promptTextSha256": "dbf038309ebf1d62f43f9e1ac4f74681dfcecd73235c6a780516950f3b99d344",
+  "promptTokenIdsSha256": "9d94e457138d58a37ceaa26221054e1ce8d5bf268acb18b66bbd15de4429360a",
+  "promptTokens": 119991,
+  "promptTokenIdsIdenticalToSynapse": true,
+  "output": " The grass is green. The sky is blue. The sun",
+  "containsAnswer": false,
+  "promptEvalMilliseconds": 288020.20,
+  "promptTokensPerSecond": 416.60,
+  "decodeMillisecondsPerToken": 20.86,
+  "decodeTokensPerSecond": 47.94,
+  "timeLPeakMemoryFootprintBytes": 1954515680,
+  "kvCache": "llama.cpp default (F16)",
+  "note": "Same token IDs as the Synapse run that answered only 6; both engines miss the 10%-depth key at 120k, which points to the model under YaRN x4, not to either engine."
+}

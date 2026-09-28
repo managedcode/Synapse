@@ -182,7 +182,8 @@
         "type": "Project",
         "dependencies": {
           "LLamaSharp": "[0.27.0, )",
-          "LLamaSharp.Backend.Cpu": "[0.27.0, )"
+          "LLamaSharp.Backend.Cpu": "[0.27.0, )",
+          "ManagedCode.Synapse.Runtime": "[1.0.0, )"
         }
       },
       "LLamaSharp": {

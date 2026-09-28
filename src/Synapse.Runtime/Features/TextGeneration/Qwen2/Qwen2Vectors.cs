@@ -36,7 +36,7 @@ internal static class Qwen2Vectors
 }
 
 /// <summary>Per-session KV slots, allocated on first use. Slot 0 serves the direct synchronous path.</summary>
-internal sealed class Qwen2KvSlots(Qwen2Dimensions dimensions, int slotCount)
+internal sealed class Qwen2KvSlots(DecoderDimensions dimensions, int slotCount)
 {
     private readonly Qwen2KvCache?[] _slots = new Qwen2KvCache?[slotCount];
 

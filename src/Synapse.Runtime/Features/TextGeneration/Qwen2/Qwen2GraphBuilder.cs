@@ -20,7 +20,8 @@ internal static class Qwen2GraphBuilder
         int hiddenSize,
         int feedForwardSize,
         int keyValueWidth,
-        int maximumContextSize)
+        int maximumContextSize,
+        RopeScaling? ropeScaling)
     {
         var context = new Qwen2GraphBuildContext();
         var hidden = AddInputRegion(context, file, hiddenSize, out var token);
@@ -34,7 +35,11 @@ internal static class Qwen2GraphBuilder
         }
 
         var headDimension = hiddenSize / attentionHeads;
-        var ropeTheta = file.GetRequiredSingle("qwen2.rope.freq_base");
+        var rope = new RopeAttributes(
+            file.GetRequiredSingle("qwen2.rope.freq_base"),
+            headDimension,
+            RotaryLayout.NeoX,
+            ropeScaling);
         var normalizationEpsilon = file.GetRequiredSingle("qwen2.attention.layer_norm_rms_epsilon");
 
         for (var layer = 0; layer < layerCount; layer++)
@@ -52,7 +57,7 @@ internal static class Qwen2GraphBuilder
                 attentionHeads,
                 keyValueHeads,
                 headDimension,
-                ropeTheta,
+                rope,
                 normalizationEpsilon);
         }
 

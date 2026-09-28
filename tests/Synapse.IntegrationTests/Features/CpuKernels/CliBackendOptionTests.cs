@@ -29,7 +29,7 @@ public sealed class CliBackendOptionTests
         var (exitCode, _, error) = await RunCliAsync("--backend", "gpu-magic");
 
         await Assert.That(exitCode).IsEqualTo(2);
-        await Assert.That(error).Contains("--backend <reference|managed|native>");
+        await Assert.That(error).Contains("--backend <reference|managed|native|metal|cuda>");
     }
 
     [Test]
@@ -60,7 +60,7 @@ public sealed class CliBackendOptionTests
         await Assert.That(error).Contains("[--concurrent-requests <count>]");
     }
 
-    private static async Task<(int ExitCode, string Output, string Error)> RunCliAsync(params string[] extra)
+    internal static async Task<(int ExitCode, string Output, string Error)> RunCliAsync(params string[] extra)
     {
         var startInfo = new ProcessStartInfo
         {

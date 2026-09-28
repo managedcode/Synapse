@@ -9,6 +9,10 @@ Observed on `H-APPLE-DEV` on 2026-09-27:
   AppHost slice begins. The package line selected from current official
   releases is 13.5.4, not the older 13.4 design-pack observation.
 - ZoneTree 1.9.8 and TUnit 1.70.1 are centrally pinned.
+- Rust `synapse-gpu` (ADR-012) pins `objc2` 0.6.4 (MIT), `objc2-foundation` and
+  `objc2-metal` 0.3.2 (Zlib, Apache-2.0, or MIT), which are macOS-only, and
+  `libloading` 0.9.0 (ISC). No NVIDIA SDK is a build dependency: CUDA and NVRTC
+  load at runtime when present.
 
 The primary development and qualification target is Apple Silicon macOS
 (`osx-arm64`). GitHub Actions uses the standard `macos-15` ARM64 runner for

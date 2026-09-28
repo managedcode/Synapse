@@ -1,0 +1,291 @@
+{
+  "schemaVersion": 1,
+  "kind": "perplexity-parity-diagnostic",
+  "recordedOn": "2026-09-28",
+  "host": "owner MacBook Pro, Apple M2 Pro (19-core GPU), 32 GB, macOS 27",
+  "decision": "ADR-015",
+  "model": "qwen2.5-0.5b-instruct-q8_0.gguf (sha256 ca59ca7f13d0e15a8cfa77bd17e65d24f6844b554a7b6c12e07a5f89ff76844e)",
+  "corpus": {
+    "name": "corpus-all (b090e95 md+cs+rs)",
+    "textSha256": "a3963e413220b2b6fde33b7be360bd55589e69a6429855434adcec174db279c3",
+    "tokens": 255478,
+    "tokenIdsSha256": "a390b5e82b0d9027aece2a931569f0cab48a6cab167e90fcd84d3d5c24dd3577",
+    "tokenIdsIdenticalToLlamaTokenize": true
+  },
+  "protocol": "llama-perplexity: floor(n/n_ctx) chunks capped by --chunks, empty cache per chunk, score positions n_ctx/2..n_ctx-2, no BOS; FP32 max-subtracted log-softmax with FP64 sum",
+  "commands": {
+    "llamaMetal": "llama-perplexity -m <model> -f corpus-all.txt -c <n_ctx> --chunks <k> -ngl 99 -fa on --no-escape",
+    "llamaCpu": "llama-perplexity -m <model> -f corpus-all.txt -c 4096 --chunks 2 -ngl 0 -dev none --no-op-offload -t 8 --no-escape",
+    "synapse": "synapse score --model <model> --text-file corpus-all.txt --context-size <n_ctx> --chunks <k> --backend <metal|native> [--kv-precision f16] [--scoring-rows 64|512] --scores-output <trace>"
+  },
+  "reference": "llama.cpp llama-perplexity 0.4.1 (b29c606e2, Homebrew); Metal default KV F16",
+  "runs": [
+    {
+      "context": 4096,
+      "chunks": 2,
+      "device": "CPU, 8 threads",
+      "llamaCpp": {
+        "kvPrecision": "f16",
+        "cumulativePerplexity": [
+          11.9786,
+          11.3889
+        ],
+        "perplexity": 11.3889,
+        "perplexityError": 0.53708
+      },
+      "synapse": [
+        {
+          "subject": "synapse-native-rust-qwen2-q8_0xq8_0",
+          "kvPrecision": "f32",
+          "scoringRowsPerStep": 64,
+          "cumulativePerplexity": [
+            11.983958367584988,
+            11.38967003799501
+          ],
+          "perplexity": 11.38967003799501,
+          "perplexityError": 0.5372130978044076,
+          "greedyAccuracy": 0.5363947239863215,
+          "scoredTokens": 4094,
+          "tokensSha256": "a390b5e82b0d9027aece2a931569f0cab48a6cab167e90fcd84d3d5c24dd3577",
+          "scoringSeconds": 41.7327843
+        }
+      ]
+    },
+    {
+      "context": 4096,
+      "chunks": 16,
+      "device": "Metal",
+      "llamaCpp": {
+        "kvPrecision": "f16",
+        "cumulativePerplexity": [
+          12.0025,
+          11.3900,
+          12.4068,
+          15.3768,
+          18.6603,
+          19.9846,
+          22.8535,
+          22.4189,
+          23.5670,
+          24.9010,
+          21.6620,
+          19.5287,
+          16.8410,
+          15.1307,
+          13.7103,
+          12.7728
+        ],
+        "perplexity": 12.7728,
+        "perplexityError": 0.22304
+      },
+      "synapse": [
+        {
+          "subject": "synapse-metal-qwen2-q8_0xf32",
+          "kvPrecision": "f32",
+          "scoringRowsPerStep": 64,
+          "cumulativePerplexity": [
+            12.003767359263481,
+            11.390093797481148,
+            12.406726102998743,
+            15.376728149544732,
+            18.65954564608183,
+            19.98310575473675,
+            22.852123283691895,
+            22.417931205524923,
+            23.56625662594484,
+            24.900145508040847,
+            21.66136536198599,
+            19.528163882727327,
+            16.84047586916605,
+            15.130189110168585,
+            13.709913214319096,
+            12.772422122887333
+          ],
+          "perplexity": 12.772422122887333,
+          "perplexityError": 0.22303795762825424,
+          "greedyAccuracy": 0.5368832437713728,
+          "scoredTokens": 32752,
+          "tokensSha256": "a390b5e82b0d9027aece2a931569f0cab48a6cab167e90fcd84d3d5c24dd3577",
+          "scoringSeconds": 62.80387109999999
+        },
+        {
+          "subject": "synapse-metal-qwen2-q8_0xf32-kvf16",
+          "kvPrecision": "f16",
+          "scoringRowsPerStep": 64,
+          "cumulativePerplexity": [
+            12.00384344982461,
+            11.38997655209017,
+            12.406502924540138,
+            15.376460929896966,
+            18.659258842850576,
+            19.982727730696745,
+            22.85155366708644,
+            22.41765457746495,
+            23.566060180906746,
+            24.89985259808746,
+            21.661107079327145,
+            19.527901560834287,
+            16.840260576954265,
+            15.130011144496956,
+            13.709800104457118,
+            12.772339572332779
+          ],
+          "perplexity": 12.772339572332779,
+          "perplexityError": 0.2230341163995498,
+          "greedyAccuracy": 0.536852711284807,
+          "scoredTokens": 32752,
+          "tokensSha256": "a390b5e82b0d9027aece2a931569f0cab48a6cab167e90fcd84d3d5c24dd3577",
+          "scoringSeconds": 62.563080799999994
+        }
+      ]
+    },
+    {
+      "context": 16384,
+      "chunks": 8,
+      "device": "Metal",
+      "llamaCpp": {
+        "kvPrecision": "f16",
+        "cumulativePerplexity": [
+          16.6285,
+          18.5045,
+          13.6953,
+          9.4766,
+          11.9764,
+          9.2326,
+          7.8480,
+          6.8868
+        ],
+        "perplexity": 6.8868,
+        "perplexityError": 0.07806
+      },
+      "synapse": [
+        {
+          "subject": "synapse-metal-qwen2-q8_0xf32",
+          "kvPrecision": "f32",
+          "scoringRowsPerStep": 64,
+          "cumulativePerplexity": [
+            16.627190651140694,
+            18.503978824223896,
+            13.69528195843411,
+            9.476424716929625,
+            11.975984256234277,
+            9.232265362505236,
+            7.847846443032489,
+            6.8867033897257315
+          ],
+          "perplexity": 6.8867033897257315,
+          "perplexityError": 0.07805801113046662,
+          "greedyAccuracy": 0.6374221706751313,
+          "scoredTokens": 65528,
+          "tokensSha256": "a390b5e82b0d9027aece2a931569f0cab48a6cab167e90fcd84d3d5c24dd3577",
+          "scoringSeconds": 205.4330806
+        },
+        {
+          "subject": "synapse-metal-qwen2-q8_0xf32-kvf16",
+          "kvPrecision": "f16",
+          "scoringRowsPerStep": 64,
+          "cumulativePerplexity": [
+            16.627543057700482,
+            18.504219001866712,
+            13.695576595944303,
+            9.47662482225234,
+            11.976347256416757,
+            9.232516466751358,
+            7.848011521527107,
+            6.88679310366734
+          ],
+          "perplexity": 6.88679310366734,
+          "perplexityError": 0.07805957997632697,
+          "greedyAccuracy": 0.6374526919790013,
+          "scoredTokens": 65528,
+          "tokensSha256": "a390b5e82b0d9027aece2a931569f0cab48a6cab167e90fcd84d3d5c24dd3577",
+          "scoringSeconds": 203.70467560000003
+        }
+      ]
+    },
+    {
+      "context": 32768,
+      "chunks": 7,
+      "device": "Metal",
+      "llamaCpp": {
+        "kvPrecision": "f16",
+        "cumulativePerplexity": [
+          22.8364,
+          8.3077,
+          6.4764,
+          5.3242,
+          4.5837,
+          4.2404,
+          3.9687
+        ],
+        "perplexity": 3.9687,
+        "perplexityError": 0.02922,
+        "secondsPerPass": 29.11
+      },
+      "synapse": [
+        {
+          "subject": "synapse-metal-qwen2-q8_0xf32",
+          "kvPrecision": "f32",
+          "scoringRowsPerStep": 64,
+          "cumulativePerplexity": [
+            22.834266208417002,
+            8.30717031639485,
+            6.4760323000759605,
+            5.323955499462921,
+            4.58350376661696,
+            4.240281034750882,
+            3.9685593108292783
+          ],
+          "perplexity": 3.9685593108292783,
+          "perplexityError": 0.029221954878299712,
+          "greedyAccuracy": 0.7213923840915234,
+          "scoredTokens": 114681,
+          "tokensSha256": "a390b5e82b0d9027aece2a931569f0cab48a6cab167e90fcd84d3d5c24dd3577",
+          "scoringSeconds": 548.594637
+        },
+        {
+          "subject": "synapse-metal-qwen2-q8_0xf32-kvf16",
+          "kvPrecision": "f16",
+          "scoringRowsPerStep": 512,
+          "cumulativePerplexity": [
+            22.835596808565175,
+            8.307369852433581,
+            6.4762644184719615,
+            5.324085196433842,
+            4.583593430264508,
+            4.240354079632459,
+            3.968621392198257
+          ],
+          "perplexity": 3.968621392198257,
+          "perplexityError": 0.02922252753388026,
+          "greedyAccuracy": 0.7213836642512709,
+          "scoredTokens": 114681,
+          "tokensSha256": "a390b5e82b0d9027aece2a931569f0cab48a6cab167e90fcd84d3d5c24dd3577",
+          "scoringSeconds": 380.9918813
+        }
+      ]
+    }
+  ],
+  "synapseFp32VersusFp16Traces": [
+    {
+      "context": 4096,
+      "positions": 32752,
+      "greedyAgreement": 0.99933,
+      "meanAbsNllDifference": 0.00128,
+      "maxAbsNllDifference": 0.0498
+    },
+    {
+      "context": 16384,
+      "positions": 65528,
+      "greedyAgreement": 0.99927,
+      "meanAbsNllDifference": 0.00117,
+      "maxAbsNllDifference": 0.0512
+    }
+  ],
+  "limitations": [
+    "Single diagnostic runs; no paired statistics.",
+    "Peak memory of llama-perplexity (11.8 GB at 32k) reflects that tool keeping every logit row of the window, not inference memory; it is not compared.",
+    "Synapse scoring with 64-row steps is slower than a prefill (549 s at 32k against about 204 s for llama-perplexity); 512-row steps took 381 s. Scoring speed is not an inference claim.",
+    "YaRN contexts (64k, 120k) were dropped when the owner capped this round at 32k."
+  ]
+}

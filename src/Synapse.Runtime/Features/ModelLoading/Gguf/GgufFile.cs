@@ -1,8 +1,9 @@
 using System.IO.MemoryMappedFiles;
+using ManagedCode.Synapse.Runtime.Features.TextGeneration;
 
 namespace ManagedCode.Synapse.Runtime.Features.ModelLoading.Gguf;
 
-internal sealed unsafe class GgufFile : IDisposable
+internal sealed unsafe class GgufFile : IDisposable, IMappedWeights
 {
     private const uint Float32Type = 0;
     private readonly MemoryMappedFile _mapping;
@@ -14,13 +15,17 @@ internal sealed unsafe class GgufFile : IDisposable
         string sourceFile,
         IReadOnlyDictionary<string, object> metadata,
         IReadOnlyDictionary<string, GgufTensorInfo> tensors,
+        IReadOnlyDictionary<string, GgufArrayReference> arrays,
         MemoryMappedFile mapping,
         MemoryMappedViewAccessor view,
-        byte* pointer)
+        byte* pointer,
+        long length)
     {
         SourceFile = sourceFile;
+        Length = length;
         Metadata = metadata;
         Tensors = tensors;
+        Arrays = arrays;
         _mapping = mapping;
         _view = view;
         _pointer = pointer;
@@ -28,9 +33,25 @@ internal sealed unsafe class GgufFile : IDisposable
 
     public string SourceFile { get; }
 
+    /// <summary>Bytes in the mapped file.</summary>
+    public long Length { get; }
+
+    /// <summary>Page-aligned address of file offset zero; valid until disposal.</summary>
+    public byte* BasePointer
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return _pointer;
+        }
+    }
+
     public IReadOnlyDictionary<string, object> Metadata { get; }
 
     public IReadOnlyDictionary<string, GgufTensorInfo> Tensors { get; }
+
+    /// <summary>Metadata arrays located but not materialized at open (for example the tokenizer vocabulary).</summary>
+    public IReadOnlyDictionary<string, GgufArrayReference> Arrays { get; }
 
     public static GgufFile Open(string path)
     {
@@ -50,9 +71,11 @@ internal sealed unsafe class GgufFile : IDisposable
             Path.GetFileName(fullPath),
             descriptor.Metadata,
             descriptor.Tensors,
+            descriptor.Arrays,
             mapping,
             view,
-            pointer);
+            pointer,
+            new FileInfo(fullPath).Length);
     }
 
     public string GetRequiredString(string key) => Metadata.TryGetValue(key, out var value) && value is string text
@@ -133,6 +156,54 @@ internal sealed unsafe class GgufFile : IDisposable
         new ReadOnlySpan<float>(GetTensorPointer(tensor), values.Length).CopyTo(values);
         return values;
     }
+
+    /// <summary>Parses a string array from the mapping; every length is bounds-checked against the file.</summary>
+    public string[] ReadStringArray(string key)
+    {
+        var reference = RequireArray(key, 8);
+        var values = new string[reference.Count];
+        var offset = reference.Offset;
+        for (var index = 0; index < values.Length; index++)
+        {
+            var length = checked((long)Read<ulong>(offset));
+            offset = checked(offset + sizeof(ulong));
+            if (length > 16 * 1024 * 1024 || offset + length > Length)
+            {
+                throw new InvalidDataException($"GGUF array '{key}' element {index} is outside the file.");
+            }
+
+            values[index] = System.Text.Encoding.UTF8.GetString(_pointer + offset, (int)length);
+            offset += length;
+        }
+
+        return values;
+    }
+
+    /// <summary>Copies an INT32 array from the mapping.</summary>
+    public int[] ReadInt32Array(string key)
+    {
+        var reference = RequireArray(key, 5);
+        if (checked(reference.Offset + ((long)reference.Count * sizeof(int))) > Length)
+        {
+            throw new InvalidDataException($"GGUF array '{key}' is outside the file.");
+        }
+
+        return new ReadOnlySpan<int>(_pointer + reference.Offset, reference.Count).ToArray();
+    }
+
+    private GgufArrayReference RequireArray(string key, uint elementType)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return Arrays.TryGetValue(key, out var reference) && reference.ElementType == elementType
+            ? reference
+            : throw new InvalidDataException($"GGUF metadata '{key}' is missing or not an array of type {elementType}.");
+    }
+
+    private T Read<T>(long offset)
+        where T : unmanaged =>
+        offset + sizeof(T) <= Length
+            ? System.Runtime.CompilerServices.Unsafe.ReadUnaligned<T>(_pointer + offset)
+            : throw new InvalidDataException("GGUF metadata read is outside the file.");
 
     public void Dispose()
     {

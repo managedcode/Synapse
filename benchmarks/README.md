@@ -3,7 +3,7 @@
 The short version is in the [main README](../README.md#benchmark). This page
 lists every recorded run, how it was measured, and its raw data.
 
-Runs A–K use Qwen2.5 0.5B Instruct, the only model Synapse runs today. Run L
+Runs A–K and N–O use Qwen2.5 0.5B Instruct, the only model Synapse runs today. Run L
 measures Microsoft Foundry Local alone on six models from four families.
 
 ## Runs
@@ -23,6 +23,8 @@ measures Microsoft Foundry Local alone on six models from four families.
 | **K. 8-token, newest** | SIMD C# kernels | 2 | 3 warm-up + 5 measured | [JSON](results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-cpu-kernels-managed-2thread-smoke.json) |
 | L. Foundry Local, 6 models, answer + dialogue | Not included (Foundry only) | runtime default (about 6 cores) | 1 warm-up + 3 measured | 14 JSON files + 2 default-context probes, `results/2026-09-28-m2-pro-foundry-local-*` |
 | M. Hosted CPU, MLX, and Foundry, 3 operating systems | Rust CPU kernels for Synapse | CPU 2 / external runtime default | CPU smoke 3+5; long/MLX/Foundry 1+3 | [GitHub run `36435838291`](https://github.com/managedcode/Synapse/actions/runs/36435838291), 22 raw artifacts |
+| N. Metal GPU long context, 40k and 131k synthetic tokens | Metal backend (ADR-012), FP32 KV | GPU | 1 measured per row | [JSON](results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-metal-long-context-speed-diagnostic.json) |
+| O. Metal GPU pass-key retrieval, 4k to 120k | Metal backend, FP32 KV (native window) and FP16 KV (YaRN ×4) | GPU | 1 measured per row | [native](results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-metal-passkey-native-f32-diagnostic.json), [YaRN](results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-metal-passkey-yarn4-f16-diagnostic.json) |
 
 Local machine: MacBook Pro, Apple M2 Pro (8 performance + 4 efficiency cores,
 19-core GPU), 32 GB, macOS 27.0 arm64. Every CPU sample starts a new process.

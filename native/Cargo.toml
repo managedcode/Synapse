@@ -3,6 +3,7 @@ resolver = "3"
 members = [
   "synapse-core",
   "synapse-kernels",
+  "synapse-gpu",
   "synapse-runtime",
 ]
 

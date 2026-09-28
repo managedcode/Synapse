@@ -26,7 +26,7 @@ internal sealed record Qwen2CpuLayer(
 }
 
 /// <summary>Row-major activations for one prompt chunk of up to <see cref="ChunkTokens"/> tokens.</summary>
-internal sealed class Qwen2CpuScratch(Qwen2Dimensions dimensions, int chunkTokens, int logitsRows)
+internal sealed class Qwen2CpuScratch(DecoderDimensions dimensions, int chunkTokens, int logitsRows)
 {
     public int ChunkTokens { get; } = chunkTokens;
 
@@ -54,30 +54,30 @@ internal sealed class Qwen2CpuScratch(Qwen2Dimensions dimensions, int chunkToken
 }
 
 /// <summary>
-/// NeoX rotary cosines and sines cached per position on first use. Angles use the same FP32 expression as
-/// the reference operator, so rotated values are identical.
+/// NeoX rotary cosines and sines cached per position on first use. Values come from the shared
+/// <see cref="RopeFrequencies"/>, so rotated values are identical to the reference operator.
 /// </summary>
 internal sealed class Qwen2RopeTable
 {
+    private readonly RopeFrequencies _frequencies;
     private readonly float[] _cosines;
     private readonly float[] _sines;
     private readonly bool[] _ready;
     private readonly int _headDimension;
     private readonly int _half;
-    private readonly float _theta;
 
-    public Qwen2RopeTable(int headDimension, float theta, int contextSize)
+    public Qwen2RopeTable(RopeFrequencies frequencies, int contextSize)
     {
-        _headDimension = headDimension;
-        _half = headDimension / 2;
+        _frequencies = frequencies;
+        _half = frequencies.Half;
+        _headDimension = _half * 2;
         if (_half % Vector128<float>.Count != 0)
         {
             throw new NotSupportedException($"RoPE half dimension {_half} is not a multiple of {Vector128<float>.Count}.");
         }
 
-        _theta = theta;
-        _cosines = new float[contextSize * _half];
-        _sines = new float[contextSize * _half];
+        _cosines = new float[checked(contextSize * _half)];
+        _sines = new float[checked(contextSize * _half)];
         _ready = new bool[contextSize];
     }
 
@@ -110,13 +110,10 @@ internal sealed class Qwen2RopeTable
             return;
         }
 
-        for (var index = 0; index < _half; index++)
-        {
-            var angle = position / MathF.Pow(_theta, 2.0f * index / _headDimension);
-            _cosines[(position * _half) + index] = MathF.Cos(angle);
-            _sines[(position * _half) + index] = MathF.Sin(angle);
-        }
-
+        _frequencies.Compute(
+            position,
+            _cosines.AsSpan(position * _half, _half),
+            _sines.AsSpan(position * _half, _half));
         _ready[position] = true;
     }
 }

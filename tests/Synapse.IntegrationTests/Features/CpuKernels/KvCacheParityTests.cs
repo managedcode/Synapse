@@ -1,5 +1,4 @@
 using ManagedCode.Synapse.IntegrationTests.Features.Benchmarking;
-using ManagedCode.Synapse.Runtime.Features.CpuKernels;
 using ManagedCode.Synapse.Runtime.Features.ModelLoading;
 using ManagedCode.Synapse.Runtime.Features.TextGeneration.Qwen2;
 
@@ -12,10 +11,10 @@ public sealed class KvCacheParityTests
     private static readonly int[] Continuation = [12095, 13, 1084, 374, 279, 7772];
 
     [Test]
-    [Arguments(CpuKernelBackend.Reference)]
-    [Arguments(CpuKernelBackend.Managed)]
-    [Arguments(CpuKernelBackend.Native)]
-    public async Task IncrementalDecodeMatchesFullPrefill(CpuKernelBackend backend)
+    [Arguments(KernelBackend.Reference)]
+    [Arguments(KernelBackend.Managed)]
+    [Arguments(KernelBackend.Native)]
+    public async Task IncrementalDecodeMatchesFullPrefill(KernelBackend backend)
     {
         using var model = Load(backend, contextSize: 64);
 
@@ -26,9 +25,9 @@ public sealed class KvCacheParityTests
     }
 
     [Test]
-    [Arguments(CpuKernelBackend.Managed)]
-    [Arguments(CpuKernelBackend.Native)]
-    public async Task GenerationRepeatsAfterLongerPrompt(CpuKernelBackend backend)
+    [Arguments(KernelBackend.Managed)]
+    [Arguments(KernelBackend.Native)]
+    public async Task GenerationRepeatsAfterLongerPrompt(KernelBackend backend)
     {
         using var model = Load(backend, contextSize: 128);
         int[] longer = [.. Enumerable.Repeat(Prompt, 8).SelectMany(tokens => tokens)];
@@ -44,8 +43,8 @@ public sealed class KvCacheParityTests
     public async Task LongPromptAcrossChunksMatchesSequential()
     {
         int[] prompt = [.. Enumerable.Range(0, 150).Select(index => Prompt[index % Prompt.Length] + (index / 7))];
-        using var sequential = Load(CpuKernelBackend.Managed, contextSize: 160, prefillChunkTokens: 1);
-        using var chunked = Load(CpuKernelBackend.Managed, contextSize: 160);
+        using var sequential = Load(KernelBackend.Managed, contextSize: 160, prefillChunkTokens: 1);
+        using var chunked = Load(KernelBackend.Managed, contextSize: 160);
 
         var expected = sequential.EvaluatePromptLogits(prompt);
         var actual = chunked.EvaluatePromptLogits(prompt);
@@ -54,9 +53,9 @@ public sealed class KvCacheParityTests
     }
 
     [Test]
-    [Arguments(CpuKernelBackend.Reference)]
-    [Arguments(CpuKernelBackend.Managed)]
-    public async Task ContextCapacityIsEnforcedExactly(CpuKernelBackend backend)
+    [Arguments(KernelBackend.Reference)]
+    [Arguments(KernelBackend.Managed)]
+    public async Task ContextCapacityIsEnforcedExactly(KernelBackend backend)
     {
         using var model = Load(backend, contextSize: 8);
 
@@ -85,7 +84,7 @@ public sealed class KvCacheParityTests
         await Assert.That(() => cache.Store(0, 0, key.AsSpan(0, 4), value)).Throws<ArgumentOutOfRangeException>();
     }
 
-    private static Qwen2Model Load(CpuKernelBackend backend, int contextSize, int? prefillChunkTokens = null)
+    private static Qwen2Model Load(KernelBackend backend, int contextSize, int? prefillChunkTokens = null)
     {
         var options = new ModelLoadOptions { ContextSize = contextSize, MaximumParallelism = 3, KernelBackend = backend };
         if (prefillChunkTokens is { } chunk)

@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "passkey-qwen2.5",
+  "kind": "token-passkey",
+  "description": "Long-context retrieval: a pass key hidden at a chosen depth inside repeated filler; the model must answer with the key. Prompts are concatenations of the token segments below, not re-tokenized strings.",
+  "provenance": {
+    "tokenizer": "llama-tokenize 0.4.1 (llama.cpp b29c606e2, Homebrew, AppleClang 21) over the pinned qwen2.5-0.5b-instruct-q8_0.gguf (sha256 ca59ca7f13d0e15a8cfa77bd17e65d24f6844b554a7b6c12e07a5f89ff76844e)",
+    "command": "llama-tokenize -m <model> -p <text> --ids --log-disable",
+    "compatibleArchitectures": ["qwen2"]
+  },
+  "segments": {
+    "prefixText": "<|im_start|>system\\nYou are a helpful assistant.<|im_end|>\\n<|im_start|>user\\nThere is an important pass key hidden inside a lot of irrelevant text. Find it and memorize it. I will quiz you about the pass key later.",
+    "prefix": [151644, 8948, 198, 2610, 525, 264, 10950, 17847, 13, 151645, 198, 151644, 872, 198, 3862, 374, 458, 2989, 1494, 1376, 8177, 4766, 264, 2696, 315, 39715, 1467, 13, 7379, 432, 323, 16035, 551, 432, 13, 358, 686, 27124, 498, 911, 279, 1494, 1376, 2937, 13],
+    "fillerText": " The grass is green. The sky is blue. The sun is yellow. Here we go. There and back again.",
+    "filler": [576, 16359, 374, 6176, 13, 576, 12884, 374, 6303, 13, 576, 7015, 374, 13753, 13, 5692, 582, 728, 13, 2619, 323, 1182, 1549, 13],
+    "suffixText": " What is the pass key? Answer with the number only.<|im_end|>\\n<|im_start|>assistant\\n",
+    "suffix": [3555, 374, 279, 1494, 1376, 30, 21806, 448, 279, 1372, 1172, 13, 151645, 198, 151644, 77091, 198]
+  },
+  "keys": [
+    {
+      "key": "68317",
+      "needle": [576, 1494, 1376, 374, 220, 21, 23, 18, 16, 22, 13, 19881, 432, 13, 220, 21, 23, 18, 16, 22, 374, 279, 1494, 1376, 13],
+      "answer": [21, 23, 18, 16, 22]
+    },
+    {
+      "key": "42905",
+      "needle": [576, 1494, 1376, 374, 220, 19, 17, 24, 15, 20, 13, 19881, 432, 13, 220, 19, 17, 24, 15, 20, 374, 279, 1494, 1376, 13],
+      "answer": [19, 17, 24, 15, 20]
+    },
+    {
+      "key": "71264",
+      "needle": [576, 1494, 1376, 374, 220, 22, 16, 17, 21, 19, 13, 19881, 432, 13, 220, 22, 16, 17, 21, 19, 374, 279, 1494, 1376, 13],
+      "answer": [22, 16, 17, 21, 19]
+    }
+  ]
+}

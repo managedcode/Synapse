@@ -59,9 +59,17 @@ The bootstrap doctor proves the installed .NET/Rust toolchains, current CPU
 architecture and SIMD capability, memory budget validation, a real Rust child
 process, and a durable ZoneTree write/reopen/read. The first inference slice
 adds a bounded GGUF v3 reader, a verified 26-region Qwen2 Model IR, and a
-managed Qwen2 Q8_0 forward/decode path. It currently accepts pre-tokenized IDs;
-the first scalar reference operators and a fixed-shape dense tiny-graph
-interpreter are covered by FP64 and fail-closed tests. Qwen execution from the
-IR, the tokenizer, Metal, paged KV, and the Orleans topology
-remain on the critical path. Model acquisition and import boundaries are in
-`ADR-004` and `docs/Features/ModelPackages.md`.
+managed Qwen2 Q8_0 forward/decode path. Text enters through a repo-owned
+byte-level BPE tokenizer read from the GGUF vocabulary (ADR-014), qualified by
+whole-corpus parity with `llama-tokenize`. The first scalar reference
+operators and a fixed-shape dense tiny-graph interpreter are covered by FP64
+and fail-closed tests. Qwen execution from the IR, paged KV, and the Orleans
+topology remain on the critical path. GPU execution (ADR-012) runs a
+brand-neutral dense-decoder layout through `native/synapse-gpu`: Metal is
+implemented and tested on Apple silicon; CUDA shares the same step encoder and
+ABI but has not run on NVIDIA hardware. Context limits and explicit YaRN
+scaling are ADR-013. Quality is measured by teacher-forced scoring on every
+backend (perplexity with the llama-perplexity protocol) and by exact-answer
+long-context tasks, with every engine given identical tokens (ADR-015). Model
+acquisition and import boundaries are in `ADR-004` and
+`docs/Features/ModelPackages.md`.

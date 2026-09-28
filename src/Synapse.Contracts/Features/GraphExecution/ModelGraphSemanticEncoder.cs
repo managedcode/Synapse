@@ -14,10 +14,18 @@ internal static class ModelGraphSemanticEncoder
                 writer.WriteSingle(normalization.Epsilon);
                 break;
             case RopeAttributes rope:
-                writer.WriteByte(2);
+                // Unscaled RoPE keeps tag 2 so existing fingerprints are unchanged; a scaled profile uses tag 5.
+                writer.WriteByte(rope.Scaling is null ? (byte)2 : (byte)5);
                 writer.WriteSingle(rope.Theta);
                 writer.WriteInt32(rope.HeadDimension);
                 writer.WriteInt32((int)rope.Layout);
+                if (rope.Scaling is { } scaling)
+                {
+                    writer.WriteInt32((int)scaling.Kind);
+                    writer.WriteSingle(scaling.Factor);
+                    writer.WriteInt32(scaling.OriginalContextLength);
+                }
+
                 break;
             case CausalAttentionAttributes attention:
                 writer.WriteByte(3);

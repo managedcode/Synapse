@@ -29,21 +29,21 @@ internal static class Qwen2Attention
         int heads,
         int headDimension,
         int position,
-        float ropeTheta)
+        RopeFrequencies frequencies)
     {
         var half = headDimension / 2;
+        Span<float> cosines = stackalloc float[half];
+        Span<float> sines = stackalloc float[half];
+        frequencies.Compute(position, cosines, sines);
         for (var head = 0; head < heads; head++)
         {
             var offset = head * headDimension;
             for (var index = 0; index < half; index++)
             {
-                var angle = position / MathF.Pow(ropeTheta, 2.0f * index / headDimension);
-                var cosine = MathF.Cos(angle);
-                var sine = MathF.Sin(angle);
                 var first = values[offset + index];
                 var second = values[offset + index + half];
-                values[offset + index] = (first * cosine) - (second * sine);
-                values[offset + index + half] = (first * sine) + (second * cosine);
+                values[offset + index] = (first * cosines[index]) - (second * sines[index]);
+                values[offset + index + half] = (first * sines[index]) + (second * cosines[index]);
             }
         }
     }

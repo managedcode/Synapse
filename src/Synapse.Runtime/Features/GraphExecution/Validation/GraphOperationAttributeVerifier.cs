@@ -101,9 +101,11 @@ internal static class GraphOperationAttributeVerifier
         if (node.Attributes is not RopeAttributes attributes ||
             !float.IsFinite(attributes.Theta) || attributes.Theta <= 0 ||
             attributes.HeadDimension <= 0 || (attributes.HeadDimension & 1) != 0 ||
-            !Enum.IsDefined(attributes.Layout))
+            !Enum.IsDefined(attributes.Layout) ||
+            (attributes.Scaling is { } scaling && (!Enum.IsDefined(scaling.Kind) || !float.IsFinite(scaling.Factor) ||
+                scaling.Factor <= 1 || scaling.OriginalContextLength <= 0)))
         {
-            AddInvalid(context, node, "requires valid theta, even head dimension, and rotary layout");
+            AddInvalid(context, node, "requires valid theta, even head dimension, rotary layout, and scaling profile");
         }
     }
 

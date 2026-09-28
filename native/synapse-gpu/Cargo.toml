@@ -1,0 +1,32 @@
+[package]
+name = "synapse-gpu"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "synapse_gpu"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+# ADR-012: the GPU host needs Objective-C (Metal) calls and raw device pointers, so this crate replaces the
+# workspace `unsafe_code = "forbid"` with `deny`; only the FFI and device modules opt in, each block documented.
+[lints.rust]
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+undocumented_unsafe_blocks = "deny"
+
+[dependencies]
+libloading = "0.9.0"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.4"
+objc2-foundation = "0.3.2"
+objc2-metal = "0.3.2"

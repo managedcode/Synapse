@@ -14,9 +14,9 @@ internal static class GgufHeaderReader
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1 << 16);
         using var reader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true);
         ValidateHeader(reader);
-        var tensorCount = ReadBoundedCount(reader, "tensor", 1_000_000);
-        var metadataCount = ReadBoundedCount(reader, "metadata", 1_000_000);
-        var metadata = ReadMetadata(reader, metadataCount);
+        var tensorCount = GgufMetadataValues.ReadBoundedCount(reader, "tensor", 1_000_000);
+        var metadataCount = GgufMetadataValues.ReadBoundedCount(reader, "metadata", 1_000_000);
+        var (metadata, arrays) = ReadMetadata(reader, metadataCount);
         var tensorHeaders = ReadTensorHeaders(reader, tensorCount);
         var alignment = metadata.TryGetValue("general.alignment", out var configuredAlignment)
             ? Convert.ToInt32(configuredAlignment, System.Globalization.CultureInfo.InvariantCulture)
@@ -29,7 +29,8 @@ internal static class GgufHeaderReader
         var dataOffset = checked((stream.Position + alignment - 1) / alignment * alignment);
         return new GgufDescriptor(
             metadata,
-            MaterializeTensorInfos(tensorHeaders, dataOffset, stream.Length));
+            MaterializeTensorInfos(tensorHeaders, dataOffset, stream.Length),
+            arrays);
     }
 
     private static void ValidateHeader(BinaryReader reader)
@@ -46,22 +47,36 @@ internal static class GgufHeaderReader
         }
     }
 
-    private static Dictionary<string, object> ReadMetadata(BinaryReader reader, int count)
+    /// <summary>
+    /// Scalars are materialized; arrays are skipped and only located (element type, count, offset of the first
+    /// element), so the tokenizer can parse them later from the memory map without a second file read.
+    /// </summary>
+    private static (Dictionary<string, object> Metadata, Dictionary<string, GgufArrayReference> Arrays) ReadMetadata(
+        BinaryReader reader,
+        int count)
     {
         var metadata = new Dictionary<string, object>(count, StringComparer.Ordinal);
+        var arrays = new Dictionary<string, GgufArrayReference>(StringComparer.Ordinal);
         for (var index = 0; index < count; index++)
         {
-            var key = ReadString(reader);
+            var key = GgufMetadataValues.ReadString(reader);
             var type = reader.ReadUInt32();
-            var capture = type != 9;
-            var value = ReadValue(reader, type, depth: 0);
-            if (capture && value is not null)
+            if (type == 9)
+            {
+                var elementType = reader.ReadUInt32();
+                var elements = GgufMetadataValues.ReadBoundedCount(reader, "array element", 10_000_000);
+                arrays.Add(key, new GgufArrayReference(elementType, elements, reader.BaseStream.Position));
+                GgufMetadataValues.SkipArrayElements(reader, elementType, elements, depth: 1);
+                continue;
+            }
+
+            if (GgufMetadataValues.ReadValue(reader, type, depth: 0) is { } value)
             {
                 metadata.Add(key, value);
             }
         }
 
-        return metadata;
+        return (metadata, arrays);
     }
 
     private static List<TensorHeader> ReadTensorHeaders(BinaryReader reader, int count)
@@ -69,7 +84,7 @@ internal static class GgufHeaderReader
         var tensors = new List<TensorHeader>(count);
         for (var index = 0; index < count; index++)
         {
-            var name = ReadString(reader);
+            var name = GgufMetadataValues.ReadString(reader);
             var dimensionCount = reader.ReadUInt32();
             if (dimensionCount is 0 or > 8)
             {
@@ -124,114 +139,6 @@ internal static class GgufHeaderReader
         return tensors;
     }
 
-    private static object? ReadValue(BinaryReader reader, uint type, int depth)
-    {
-        if (depth > 2)
-        {
-            throw new InvalidDataException("Nested GGUF metadata is too deep.");
-        }
-
-        return type switch
-        {
-            0 => reader.ReadByte(),
-            1 => reader.ReadSByte(),
-            2 => reader.ReadUInt16(),
-            3 => reader.ReadInt16(),
-            4 => reader.ReadUInt32(),
-            5 => reader.ReadInt32(),
-            6 => reader.ReadSingle(),
-            7 => reader.ReadByte() != 0,
-            8 => ReadString(reader),
-            9 => ReadArray(reader, depth + 1),
-            10 => reader.ReadUInt64(),
-            11 => reader.ReadInt64(),
-            12 => reader.ReadDouble(),
-            _ => throw new InvalidDataException($"GGUF metadata type {type} is unknown."),
-        };
-    }
-
-    private static object? ReadArray(BinaryReader reader, int depth)
-    {
-        var elementType = reader.ReadUInt32();
-        var count = ReadBoundedCount(reader, "array element", 10_000_000);
-        if (elementType != 8 && TryGetFixedSize(elementType, out var elementSize))
-        {
-            _ = reader.BaseStream.Seek(checked((long)count * elementSize), SeekOrigin.Current);
-            return null;
-        }
-
-        for (var index = 0; index < count; index++)
-        {
-            if (elementType == 8)
-            {
-                SkipString(reader);
-            }
-            else
-            {
-                _ = ReadValue(reader, elementType, depth);
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>Validates and skips an unused metadata string without materializing it.</summary>
-    private static void SkipString(BinaryReader reader)
-    {
-        var length = reader.ReadUInt64();
-        if (length > 16 * 1024 * 1024)
-        {
-            throw new InvalidDataException($"GGUF string length {length} exceeds the safety limit.");
-        }
-
-        // ReadExactly throws EndOfStreamException for a truncated file; querying Length per string would
-        // cost one fstat call for each of the ~300k tokenizer entries.
-        var stream = reader.BaseStream;
-        Span<byte> discard = stackalloc byte[256];
-        for (var remaining = (int)length; remaining > 0; remaining -= discard.Length)
-        {
-            stream.ReadExactly(discard[..Math.Min(remaining, discard.Length)]);
-        }
-    }
-
-    private static bool TryGetFixedSize(uint type, out int size)
-    {
-        size = type switch
-        {
-            0 or 1 or 7 => 1,
-            2 or 3 => 2,
-            4 or 5 or 6 => 4,
-            10 or 11 or 12 => 8,
-            _ => 0,
-        };
-        return size != 0;
-    }
-
-    private static string ReadString(BinaryReader reader)
-    {
-        var length = reader.ReadUInt64();
-        if (length > 16 * 1024 * 1024)
-        {
-            throw new InvalidDataException($"GGUF string length {length} exceeds the safety limit.");
-        }
-
-        var bytes = reader.ReadBytes(checked((int)length));
-        if ((ulong)bytes.Length != length)
-        {
-            throw new EndOfStreamException("GGUF string is truncated.");
-        }
-
-        return Encoding.UTF8.GetString(bytes);
-    }
-
-    private static int ReadBoundedCount(BinaryReader reader, string name, int maximum)
-    {
-        var count = reader.ReadUInt64();
-        return count <= (ulong)maximum
-            ? checked((int)count)
-            : throw new InvalidDataException($"GGUF {name} count {count} exceeds {maximum}.");
-    }
-
     private sealed record TensorHeader(
         string Name,
         ulong[] Dimensions,
@@ -241,4 +148,8 @@ internal static class GgufHeaderReader
 
 internal sealed record GgufDescriptor(
     IReadOnlyDictionary<string, object> Metadata,
-    IReadOnlyDictionary<string, GgufTensorInfo> Tensors);
+    IReadOnlyDictionary<string, GgufTensorInfo> Tensors,
+    IReadOnlyDictionary<string, GgufArrayReference> Arrays);
+
+/// <summary>A metadata array located in the file: element type, element count, and offset of the first element.</summary>
+internal sealed record GgufArrayReference(uint ElementType, int Count, long Offset);

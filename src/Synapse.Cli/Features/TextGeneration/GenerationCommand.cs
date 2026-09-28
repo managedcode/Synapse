@@ -2,8 +2,9 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using ManagedCode.Synapse.Runtime.Features.CpuKernels;
 using ManagedCode.Synapse.Runtime.Features.ModelLoading;
+using ManagedCode.Synapse.Runtime.Features.TextGeneration;
+using ManagedCode.Synapse.Runtime.Features.Tokenization;
 
 namespace ManagedCode.Synapse.Cli.Features.TextGeneration;
 
@@ -14,10 +15,7 @@ internal static class GenerationCommand
         var options = GenerationOptions.Parse(arguments);
         if (options is null)
         {
-            Console.Error.WriteLine(
-                "Usage: synapse generate --model <model.gguf> --tokens <id,id,...> " +
-                "[--max-tokens <count>] [--context-size <count>] [--threads <count>] " +
-                $"[--backend <{CpuKernelBackendNames.Usage}>] [--concurrent-requests <count>]");
+            Console.Error.WriteLine(GenerationOptions.Usage);
             return 2;
         }
 
@@ -42,53 +40,27 @@ internal static class GenerationCommand
                     ContextSize = options.ContextSize,
                     MaximumParallelism = options.Threads,
                     KernelBackend = options.Backend,
+                    RopeScaling = options.RopeScaling,
+                    KvCachePrecision = options.KvCachePrecision,
+                    KvPageActivation = options.KvPages,
                 });
             loadTimer.Stop();
             process.Refresh();
             var workingSetAfterLoad = process.WorkingSet64;
             var managedHeapAfterLoad = GC.GetTotalMemory(forceFullCollection: false);
-            var result = model.Generate(options.Tokens, options.MaximumTokens);
+            var result = model.Generate(options.Tokens, options.MaximumTokens, new StandardErrorProgress());
             subjectTimer.Stop();
-            var managedHeapAfterGeneration = GC.GetTotalMemory(forceFullCollection: false);
-            var managedAllocated = GC.GetTotalAllocatedBytes() - managedAllocatedBefore;
             process.Refresh();
-            var maximumObservedWorkingSet = Math.Max(workingSetAfterLoad, process.WorkingSet64);
-            if (process.PeakWorkingSet64 > 0)
-            {
-                maximumObservedWorkingSet = Math.Max(maximumObservedWorkingSet, process.PeakWorkingSet64);
-            }
-
-            var subjectCpu = process.TotalProcessorTime - subjectCpuStart;
-            var decodeSeconds = Math.Max(
-                0.000_001,
-                result.Elapsed.TotalSeconds - result.TimeToFirstToken.TotalSeconds);
-            var output = new GenerationOutput(
-                $"synapse-{model.RuntimeProfile}",
-                CpuKernelBackendNames.ToName(options.Backend),
-                model.KernelImplementation,
-                Path.GetFullPath(options.ModelPath),
-                result.PromptTokens,
-                result.GeneratedTokens,
-                options.Threads,
-                loadTimer.Elapsed.TotalMilliseconds,
-                result.TimeToFirstToken.TotalMilliseconds,
-                result.Elapsed.TotalMilliseconds,
-                result.Elapsed.TotalSeconds == 0
-                    ? null
-                    : result.GeneratedTokens.Count / result.Elapsed.TotalSeconds,
-                result.GeneratedTokens.Count <= 1
-                    ? null
-                    : (result.GeneratedTokens.Count - 1) / decodeSeconds,
-                subjectTimer.Elapsed.TotalMilliseconds,
-                subjectCpu.TotalMilliseconds,
-                subjectTimer.Elapsed.TotalSeconds == 0
-                    ? null
-                    : subjectCpu.TotalSeconds / subjectTimer.Elapsed.TotalSeconds,
+            var measurement = new SubjectMeasurement(
+                loadTimer.Elapsed,
+                subjectTimer.Elapsed,
+                process.TotalProcessorTime - subjectCpuStart,
                 workingSetAfterLoad,
-                maximumObservedWorkingSet,
+                Math.Max(Math.Max(workingSetAfterLoad, process.WorkingSet64), process.PeakWorkingSet64),
                 managedHeapAfterLoad,
-                managedHeapAfterGeneration,
-                managedAllocated);
+                GC.GetTotalMemory(forceFullCollection: false),
+                GC.GetTotalAllocatedBytes() - managedAllocatedBefore);
+            var output = CreateOutput(options, model, result, measurement);
             Console.WriteLine(JsonSerializer.Serialize(output, GenerationJsonContext.Default.GenerationOutput));
             return 0;
         }
@@ -99,75 +71,63 @@ internal static class GenerationCommand
         }
     }
 
-    internal sealed record GenerationOptions(
-        string ModelPath,
-        int[] Tokens,
-        int MaximumTokens,
-        int ContextSize,
-        int Threads,
-        CpuKernelBackend Backend,
-        int ConcurrentRequests)
+    private static GenerationOutput CreateOutput(
+        GenerationOptions options,
+        ITextGenerationModel model,
+        TextGenerationResult result,
+        SubjectMeasurement measurement)
     {
-        public static GenerationOptions? Parse(IReadOnlyList<string> arguments)
-        {
-            var values = new Dictionary<string, string>(StringComparer.Ordinal);
-            for (var index = 0; index < arguments.Count; index += 2)
-            {
-                if (index + 1 >= arguments.Count ||
-                    !arguments[index].StartsWith("--", StringComparison.Ordinal))
-                {
-                    return null;
-                }
-
-                values[arguments[index]] = arguments[index + 1];
-            }
-
-            if (!values.TryGetValue("--model", out var modelPath) ||
-                !values.TryGetValue("--tokens", out var tokenText))
-            {
-                return null;
-            }
-
-            var tokens = ParseTokens(tokenText);
-            var maximumTokens = ParsePositive(values.GetValueOrDefault("--max-tokens"), 1);
-            var contextSize = ParsePositive(values.GetValueOrDefault("--context-size"), 512);
-            var threads = ParsePositive(values.GetValueOrDefault("--threads"), Environment.ProcessorCount);
-            var backend = CpuKernelBackend.Managed;
-            if (values.TryGetValue("--backend", out var backendName) &&
-                !CpuKernelBackendNames.TryParse(backendName, out backend))
-            {
-                return null;
-            }
-
-            var concurrentRequests = ParsePositive(values.GetValueOrDefault("--concurrent-requests"), 1);
-            return tokens is { Length: > 0 } && maximumTokens > 0 && contextSize > 0 && threads > 0 &&
-                concurrentRequests is > 0 and <= 64
-                ? new GenerationOptions(modelPath, tokens, maximumTokens, contextSize, threads, backend, concurrentRequests)
-                : null;
-        }
-
-        private static int[]? ParseTokens(string value)
-        {
-            var parts = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            var tokens = new int[parts.Length];
-            for (var index = 0; index < parts.Length; index++)
-            {
-                if (!int.TryParse(parts[index], NumberStyles.None, CultureInfo.InvariantCulture, out tokens[index]) ||
-                    tokens[index] < 0)
-                {
-                    return null;
-                }
-            }
-
-            return tokens;
-        }
-
-        private static int ParsePositive(string? value, int fallback) => value is null
-                ? fallback
-                : int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-                    ? parsed
-                    : -1;
+        var decodeSeconds = Math.Max(0.000_001, result.Elapsed.TotalSeconds - result.TimeToFirstToken.TotalSeconds);
+        return new GenerationOutput(
+            $"synapse-{model.RuntimeProfile}",
+            KernelBackendNames.ToName(options.Backend),
+            model.KernelImplementation,
+            Path.GetFullPath(options.ModelPath),
+            result.PromptTokens,
+            result.PromptTokens.Count,
+            options.ContextSize,
+            options.RopeScaling?.Name,
+            result.GeneratedTokens,
+            DecodeOrNull(options.ModelPath, result.GeneratedTokens),
+            options.Threads,
+            measurement.Load.TotalMilliseconds,
+            result.TimeToFirstToken.TotalMilliseconds,
+            result.Elapsed.TotalMilliseconds,
+            result.TimeToFirstToken.TotalSeconds == 0 ? null : result.PromptTokens.Count / result.TimeToFirstToken.TotalSeconds,
+            result.Elapsed.TotalSeconds == 0 ? null : result.GeneratedTokens.Count / result.Elapsed.TotalSeconds,
+            result.GeneratedTokens.Count <= 1 ? null : (result.GeneratedTokens.Count - 1) / decodeSeconds,
+            measurement.Wall.TotalMilliseconds,
+            measurement.Cpu.TotalMilliseconds,
+            measurement.Wall.TotalSeconds == 0 ? null : measurement.Cpu.TotalSeconds / measurement.Wall.TotalSeconds,
+            measurement.WorkingSetAfterLoad,
+            measurement.MaximumObservedWorkingSet,
+            measurement.ManagedHeapAfterLoad,
+            measurement.ManagedHeapAfterGeneration,
+            measurement.ManagedAllocated);
     }
+
+    /// <summary>Decodes with the model file's own tokenizer (ADR-014); null when that tokenizer is not implemented.</summary>
+    internal static string? DecodeOrNull(string modelPath, IReadOnlyList<int> tokens)
+    {
+        try
+        {
+            return TextTokenizers.FromGguf(modelPath).Decode(tokens);
+        }
+        catch (Exception exception) when (exception is NotSupportedException or InvalidDataException)
+        {
+            return null;
+        }
+    }
+
+    private sealed record SubjectMeasurement(
+        TimeSpan Load,
+        TimeSpan Wall,
+        TimeSpan Cpu,
+        long WorkingSetAfterLoad,
+        long MaximumObservedWorkingSet,
+        long ManagedHeapAfterLoad,
+        long ManagedHeapAfterGeneration,
+        long ManagedAllocated);
 }
 
 internal sealed record GenerationOutput(
@@ -176,11 +136,16 @@ internal sealed record GenerationOutput(
     string KernelImplementation,
     string ModelPath,
     IReadOnlyList<int> PromptTokens,
+    int PromptTokenCount,
+    int ContextSize,
+    string? RopeScaling,
     IReadOnlyList<int> GeneratedTokens,
+    string? GeneratedText,
     int Threads,
     double LoadMilliseconds,
     double TimeToFirstTokenMilliseconds,
     double TotalGenerationMilliseconds,
+    double? PromptTokensPerSecondThroughFirstToken,
     double? TotalOutputTokensPerSecond,
     double? DecodeTokensPerSecond,
     double SubjectWallMilliseconds,
@@ -195,3 +160,26 @@ internal sealed record GenerationOutput(
 [JsonSerializable(typeof(GenerationOutput))]
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
 internal sealed partial class GenerationJsonContext : JsonSerializerContext;
+
+/// <summary>Writes prompt and output progress to standard error at most once per second, plus completion lines.</summary>
+internal sealed class StandardErrorProgress : IProgress<GenerationProgress>
+{
+    private TimeSpan? _lastReport;
+    private bool _prefillDone;
+
+    public void Report(GenerationProgress value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var prefillCompleted = !_prefillDone && value.EvaluatedPromptTokens == value.PromptTokens;
+        if (!prefillCompleted && _lastReport is { } last && value.Elapsed - last < TimeSpan.FromSeconds(1))
+        {
+            return;
+        }
+
+        _lastReport = value.Elapsed;
+        _prefillDone |= prefillCompleted;
+        Console.Error.WriteLine(string.Create(
+            CultureInfo.InvariantCulture,
+            $"progress: prefill {value.EvaluatedPromptTokens}/{value.PromptTokens}, generated {value.GeneratedTokens}, {value.Elapsed.TotalSeconds:F1} s"));
+    }
+}

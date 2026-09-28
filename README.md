@@ -43,7 +43,7 @@ Details: [`docs/Architecture.md`](docs/Architecture.md).
 | Is a whole short request faster? | **Yes in the 8-token smoke.** The local median was 216 ms versus 690 ms; hosted medians were 526–557 ms versus 635–1,671 ms. |
 | Does it use less memory? | **Yes in these CPU diagnostics.** The local smoke was 555 MiB versus 1,256 MiB; hosted Synapse used 539–553 MiB versus 575–1,203 MiB. |
 | Does it start answering fast? | **For the 5-token smoke prompt, yes.** On the hosted long prompt, Synapse's first token was slower than LLamaSharp on all three OSes even with batched prefill. |
-| Is it as fast as **MLX** on the Apple GPU? | **No.** MLX writes 225 tokens/s on the GPU. Synapse has no GPU code yet. |
+| Is it as fast as **MLX** on the Apple GPU? | **No.** MLX writes 225 tokens/s on the GPU. The new Synapse Metal backend wrote 135 tokens/s in one local 128-token run (llama.cpp Metal: 157). |
 | How does **Microsoft Foundry Local** do? | **Fast, but quality-limited in this test.** With separate ONNX weights on about 6 cores, Qwen2.5 0.5B reached 231 tokens/s and the 7B models 22–25 tokens/s; none of the 7 model/device variants fully completed the 128-token instruction. |
 | Is it faster than the other .NET engine, dotLLM? | **In the same 8-token smoke, 14× faster.** |
 
@@ -131,7 +131,7 @@ in the table above and the benchmark details.
 | | Problem | Fix | Where |
 |---|---|---|---|
 | 🔴 | Hosted long-prompt first token and 128-token decode trail the CPU references | Profile prefill and decode on each runner | `experiments/Synapse.ReferenceBenchmarks` |
-| 🔴 | No GPU | Metal kernels | not started |
+| 🟡 | Metal runs Qwen2 but decodes slower than llama.cpp and MLX; CUDA is written but has never run | FP16 KV cache, GPU-packed weights; run CUDA on an NVIDIA machine | `native/synapse-gpu` |
 | 🟡 | Long-output quality is unreviewed | Review generated text and add a quality gate before release claims | `.github/workflows/performance.yml` |
 | 🟡 | Takes token IDs, not text | Tokenizer and chat templates | not started |
 | 🟡 | Only Qwen2 runs | More model families | `src/Synapse.Runtime/Features/TextGeneration` |

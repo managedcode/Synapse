@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using ManagedCode.Synapse.Runtime.Features.CpuKernels;
 using ManagedCode.Synapse.Runtime.Features.ModelLoading;
 using ManagedCode.Synapse.Runtime.Features.TextGeneration;
 
@@ -13,7 +12,7 @@ namespace ManagedCode.Synapse.Cli.Features.TextGeneration;
 /// </summary>
 internal static class ConcurrentGenerationCommand
 {
-    public static async Task<int> RunAsync(GenerationCommand.GenerationOptions options)
+    public static async Task<int> RunAsync(GenerationOptions options)
     {
         try
         {
@@ -29,6 +28,9 @@ internal static class ConcurrentGenerationCommand
                     MaximumParallelism = options.Threads,
                     KernelBackend = options.Backend,
                     MaximumConcurrentSessions = options.ConcurrentRequests,
+                    RopeScaling = options.RopeScaling,
+                    KvCachePrecision = options.KvCachePrecision,
+                    KvPageActivation = options.KvPages,
                 });
             loadTimer.Stop();
             var wallTimer = Stopwatch.StartNew();
@@ -51,7 +53,7 @@ internal static class ConcurrentGenerationCommand
     }
 
     private static ConcurrentGenerationOutput CreateOutput(
-        GenerationCommand.GenerationOptions options,
+        GenerationOptions options,
         ITextGenerationModel model,
         TextGenerationResult[] results,
         TimeSpan load,
@@ -63,7 +65,7 @@ internal static class ConcurrentGenerationCommand
         var generated = results.Sum(result => result.GeneratedTokens.Count);
         return new ConcurrentGenerationOutput(
             $"synapse-{model.RuntimeProfile}",
-            CpuKernelBackendNames.ToName(options.Backend),
+            KernelBackendNames.ToName(options.Backend),
             model.KernelImplementation,
             Path.GetFullPath(options.ModelPath),
             options.Tokens,

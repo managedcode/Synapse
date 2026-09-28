@@ -172,7 +172,7 @@ internal sealed class Qwen2GraphBuildContext
         _ => throw new NotSupportedException($"Tensor '{tensor.Name}' uses unsupported GGUF type {tensor.Type}."),
     };
 
-    private static WeightEncoding ToEncoding(GgufTensorInfo tensor) => tensor.Type switch
+    internal static WeightEncoding ToEncoding(GgufTensorInfo tensor) => tensor.Type switch
     {
         0 => WeightEncoding.Fp32,
         8 => WeightEncoding.GgmlQ8Zero,

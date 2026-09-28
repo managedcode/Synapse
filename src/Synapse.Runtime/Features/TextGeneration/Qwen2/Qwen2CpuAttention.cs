@@ -12,7 +12,7 @@ namespace ManagedCode.Synapse.Runtime.Features.TextGeneration.Qwen2;
 internal sealed class Qwen2CpuAttention
 {
     private const long ParallelMultiplyAdds = 1 << 15;
-    private readonly Qwen2Dimensions _dimensions;
+    private readonly DecoderDimensions _dimensions;
     private readonly Qwen2KvSlots _slots;
     private readonly BatchToken[] _batch;
     private readonly Qwen2CpuScratch _scratch;
@@ -20,10 +20,11 @@ internal sealed class Qwen2CpuAttention
     private readonly float[][] _scores;
     private readonly AttentionWork _work;
     private readonly float _scale;
+    private readonly Qwen2KvPageMasks? _pages;
     private int _layer;
 
     public Qwen2CpuAttention(
-        Qwen2Dimensions dimensions,
+        DecoderDimensions dimensions,
         Qwen2KvSlots slots,
         BatchToken[] batch,
         Qwen2CpuScratch scratch,
@@ -42,12 +43,16 @@ internal sealed class Qwen2CpuAttention
         }
 
         _work = new AttentionWork(this);
+        _pages = dimensions.KvPages is { } activation
+            ? new Qwen2KvPageMasks(activation, dimensions, slots, batch, scratch.Query)
+            : null;
     }
 
     /// <summary>Attends the first <paramref name="count"/> batch tokens after their KV writes.</summary>
     public void Execute(int layer, int count)
     {
         _layer = layer;
+        _pages?.Prepare(layer, count);
         var items = count * _dimensions.AttentionHeads;
         long attendedPositions = 0;
         for (var index = 0; index < count; index++)
@@ -84,9 +89,12 @@ internal sealed class Qwen2CpuAttention
         var offset = (token * _dimensions.HiddenSize) + (head * headDimension);
         ReadOnlySpan<float> query = _scratch.Query.AsSpan(offset, headDimension);
         var scores = _scores[worker].AsSpan(0, position + 1);
+        var attended = _pages is null ? default : _pages.For(token, keyValueHead, position + 1);
         for (var cached = 0; cached <= position; cached++)
         {
-            scores[cached] = Dot(query, cache.GetKey(_layer, cached, keyValueHead, headDimension)) * _scale;
+            scores[cached] = attended.IsEmpty || attended[cached]
+                ? Dot(query, cache.GetKey(_layer, cached, keyValueHead, headDimension)) * _scale
+                : float.NegativeInfinity;
         }
 
         Softmax(scores);
@@ -94,7 +102,10 @@ internal sealed class Qwen2CpuAttention
         destination.Clear();
         for (var cached = 0; cached <= position; cached++)
         {
-            MultiplyAdd(destination, scores[cached], cache.GetValue(_layer, cached, keyValueHead, headDimension));
+            if (attended.IsEmpty || attended[cached])
+            {
+                MultiplyAdd(destination, scores[cached], cache.GetValue(_layer, cached, keyValueHead, headDimension));
+            }
         }
     }
 

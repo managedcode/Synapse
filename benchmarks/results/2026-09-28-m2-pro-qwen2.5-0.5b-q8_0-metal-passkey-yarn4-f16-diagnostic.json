@@ -1,0 +1,205 @@
+{
+  "schemaVersion": 1,
+  "kind": "passkey-long-context-diagnostic",
+  "recordedAtUtc": "2026-09-28T16:33:37.374258+00:00",
+  "operatingSystem": "macOS 27.0.0",
+  "processArchitecture": "Arm64",
+  "logicalProcessors": 12,
+  "scenario": "passkey-qwen2.5",
+  "modelPath": "/Users/ksemenenko/Developer/Synapse/artifacts/models/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.gguf",
+  "backend": "metal",
+  "contextSize": 131072,
+  "ropeScaling": "yarn:4:32768",
+  "threads": 8,
+  "kvPrecision": "f16",
+  "runs": [
+    {
+      "promptTokens": 65535,
+      "depth": 0.1,
+      "key": "68317",
+      "answer": [
+        21,
+        23,
+        18,
+        16,
+        22
+      ],
+      "generatedTokens": [
+        21,
+        23,
+        18,
+        16,
+        22,
+        151645
+      ],
+      "exactAnswer": true,
+      "containsAnswer": true,
+      "exitCode": 0,
+      "subject": "synapse-metal-qwen2-q8_0xf32-kvf16\u002Byarn4",
+      "kernelImplementation": "metal-apple8-m2-pro",
+      "timeToFirstTokenMilliseconds": 153372.16,
+      "promptTokensPerSecondThroughFirstToken": 427.29397564721,
+      "decodeTokensPerSecond": 64.80629398728769,
+      "peakPhysicalFootprintBytes": 1793394104,
+      "maximumObservedWorkingSetBytes": 675053568,
+      "wallMilliseconds": 153721.4162,
+      "error": null
+    },
+    {
+      "promptTokens": 65535,
+      "depth": 0.5,
+      "key": "42905",
+      "answer": [
+        19,
+        17,
+        24,
+        15,
+        20
+      ],
+      "generatedTokens": [
+        19,
+        17,
+        24,
+        15,
+        20,
+        151645
+      ],
+      "exactAnswer": true,
+      "containsAnswer": true,
+      "exitCode": 0,
+      "subject": "synapse-metal-qwen2-q8_0xf32-kvf16\u002Byarn4",
+      "kernelImplementation": "metal-apple8-m2-pro",
+      "timeToFirstTokenMilliseconds": 153479.7608,
+      "promptTokensPerSecondThroughFirstToken": 426.99441058810925,
+      "decodeTokensPerSecond": 64.97430266329506,
+      "peakPhysicalFootprintBytes": 1791985032,
+      "maximumObservedWorkingSetBytes": 674267136,
+      "wallMilliseconds": 153800.2119,
+      "error": null
+    },
+    {
+      "promptTokens": 65535,
+      "depth": 0.9,
+      "key": "71264",
+      "answer": [
+        22,
+        16,
+        17,
+        21,
+        19
+      ],
+      "generatedTokens": [
+        22,
+        16,
+        17,
+        21,
+        19,
+        151645
+      ],
+      "exactAnswer": true,
+      "containsAnswer": true,
+      "exitCode": 0,
+      "subject": "synapse-metal-qwen2-q8_0xf32-kvf16\u002Byarn4",
+      "kernelImplementation": "metal-apple8-m2-pro",
+      "timeToFirstTokenMilliseconds": 153512.2771,
+      "promptTokensPerSecondThroughFirstToken": 426.90396649715257,
+      "decodeTokensPerSecond": 62.85845031292362,
+      "peakPhysicalFootprintBytes": 1792083336,
+      "maximumObservedWorkingSetBytes": 674889728,
+      "wallMilliseconds": 153847.1325,
+      "error": null
+    },
+    {
+      "promptTokens": 119991,
+      "depth": 0.1,
+      "key": "68317",
+      "answer": [
+        21,
+        23,
+        18,
+        16,
+        22
+      ],
+      "generatedTokens": [
+        21,
+        151645
+      ],
+      "exactAnswer": false,
+      "containsAnswer": false,
+      "exitCode": 0,
+      "subject": "synapse-metal-qwen2-q8_0xf32-kvf16\u002Byarn4",
+      "kernelImplementation": "metal-apple8-m2-pro",
+      "timeToFirstTokenMilliseconds": 585010.4939,
+      "promptTokensPerSecondThroughFirstToken": 205.1091412054412,
+      "decodeTokensPerSecond": 49.884517342377414,
+      "peakPhysicalFootprintBytes": 1802798520,
+      "maximumObservedWorkingSetBytes": 683868160,
+      "wallMilliseconds": 585301.4517,
+      "error": null
+    },
+    {
+      "promptTokens": 119991,
+      "depth": 0.5,
+      "key": "42905",
+      "answer": [
+        19,
+        17,
+        24,
+        15,
+        20
+      ],
+      "generatedTokens": [
+        19,
+        17,
+        24,
+        15,
+        20,
+        151645
+      ],
+      "exactAnswer": true,
+      "containsAnswer": true,
+      "exitCode": 0,
+      "subject": "synapse-metal-qwen2-q8_0xf32-kvf16\u002Byarn4",
+      "kernelImplementation": "metal-apple8-m2-pro",
+      "timeToFirstTokenMilliseconds": 585719.907,
+      "promptTokensPerSecondThroughFirstToken": 204.86071681357416,
+      "decodeTokensPerSecond": 52.88078661232263,
+      "peakPhysicalFootprintBytes": 1802765704,
+      "maximumObservedWorkingSetBytes": 679034880,
+      "wallMilliseconds": 586075.2879,
+      "error": null
+    },
+    {
+      "promptTokens": 119991,
+      "depth": 0.9,
+      "key": "71264",
+      "answer": [
+        22,
+        16,
+        17,
+        21,
+        19
+      ],
+      "generatedTokens": [
+        22,
+        16,
+        17,
+        21,
+        19,
+        151645
+      ],
+      "exactAnswer": true,
+      "containsAnswer": true,
+      "exitCode": 0,
+      "subject": "synapse-metal-qwen2-q8_0xf32-kvf16\u002Byarn4",
+      "kernelImplementation": "metal-apple8-m2-pro",
+      "timeToFirstTokenMilliseconds": 585677.9095,
+      "promptTokensPerSecondThroughFirstToken": 204.87540686388135,
+      "decodeTokensPerSecond": 54.854153775986845,
+      "peakPhysicalFootprintBytes": 1802913184,
+      "maximumObservedWorkingSetBytes": 684392448,
+      "wallMilliseconds": 586028.9449,
+      "error": null
+    }
+  ]
+}

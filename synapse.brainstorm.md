@@ -160,3 +160,68 @@ Date: 2026-09-27. Status: accepted for the bootstrap slice.
 - Preserve distinct GGUF CPU, MLX Metal, and Foundry Local timing scopes. Show
   measured medians, sample counts, quality state, and missing artifacts. Upload
   the Markdown report as one artifact and show it in the final Actions summary.
+
+## 2026-09-28 GPU backends and long context
+
+- GPU host language. Options were C# Objective-C interop through
+  `objc_msgSend`, a Swift or Objective-C shim, or Rust with `objc2-metal`.
+  Swift and Objective-C are outside the allowed languages. C# interop would
+  hand-roll every selector. Rust `objc2-metal` is typed and small, so the Metal
+  host is Rust (ADR-012).
+- Kernel delivery. Options were a prebuilt `metallib` from the Metal toolchain
+  or source compiled at load. Runtime compilation removes a build-time Xcode
+  component and keeps CI simple. CUDA follows the same rule with NVRTC, so no
+  `nvcc` and no local NVIDIA download are needed.
+- Model agnosticism. The first draft named the host after Qwen2. The owner
+  rejected that: the GPU layer must not know brands or source formats. The ABI
+  now describes a pre-norm dense decoder, and family adapters map tensor names.
+  The ADR-004 package compiler will add a second adapter, and its chunk format
+  can repack weights for GPU loads.
+- Batch invariance. Matrix-vector decode is invariant: explicit `fma` order and
+  templated token counts. GEMM and attention splits are not. Making attention
+  splits position-determined with a sequential merge would restore
+  bitwise-equal concurrency on GPU; this is kept as a plan item, not claimed.
+- Long context. Trained limits now fail explicitly, and YaRN is an explicit
+  profile. Pass-key retrieval, not synthetic-token speed, decides quality.
+  - The 0.5B model kept 12 of 12 up to 65k.
+  - At 120k it lost the 10%-depth key, and llama.cpp on identical token IDs
+    lost it too.
+  - The largest measured engine gap is long-context prefill: llama.cpp was
+    2x faster at 120k.
+
+## 2026-09-28 long-context quality evaluation
+
+The owner asked whether the model is correct on large prompts, not only fast,
+and asked for comparisons across systems.
+
+- Tokenizer first (ADR-014). Evaluation needs text in and text out. Options
+  were an external tokenizer process, a Hugging Face `tokenizer.json`, or the
+  GGUF arrays. The GGUF arrays are already mapped and pinned with the weights,
+  so the tokenizer reads them. Parity is qualified over the whole repository,
+  in both special-token modes, instead of a handful of strings.
+- Engine fidelity. Options were KL divergence against llama.cpp
+  `--kl-divergence-base` files, greedy-continuation agreement, or perplexity
+  with the llama-perplexity protocol. A KL base file stores the full vocabulary
+  per scored position: about 311 MB per 1,000 positions at 151,936 tokens, or
+  roughly 20 GB for one 128k chunk. That is impractical at long context, so KL
+  was rejected for now. Perplexity on identical tokens is cheap and uses the
+  exact same protocol on both engines. Synapse also writes per-position traces,
+  so its own profiles (FP32 against FP16 KV) are compared position by position.
+- Model capability. An LLM judge was rejected: it adds a second model and
+  non-determinism. RULER-style tasks were chosen instead, because their
+  answers are exact and they are generated from a seed: a single needle, a
+  multi-key needle with distractors, and variable tracking. A capability claim
+  needs agreement between engines, because an answer every engine misses is a
+  model limit.
+- Two llama.cpp input transformations were found while doing this:
+  - escape processing is on by default in every common-args tool;
+  - `-f` drops one trailing newline from the prompt file.
+
+  The second one invalidated the "identical token IDs" claim of the earlier
+  120k pass-key control. That control evaluated 119,990 tokens, not
+  119,991. The control is rerun with a compensated file, and the evidence is
+  corrected instead of kept.
+- MLX (SwiftLM) joins as a separate-weights cohort at 32k and below. Its
+  `--ctx-size` option selects a rotating KV cache, which would silently drop
+  early context, so it runs without that option. The chat API can only confirm
+  the prompt token count, not the IDs.

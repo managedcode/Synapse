@@ -17,6 +17,9 @@ internal interface IBatchDecoder
 
     int VocabularySize { get; }
 
+    /// <summary>Logit rows one step may request.</summary>
+    int LogitsRowCapacity { get; }
+
     /// <summary>Evaluates one step. Logits rows must be exactly <c>0..k-1</c> in token order.</summary>
     void Forward(ReadOnlySpan<BatchToken> tokens);
 

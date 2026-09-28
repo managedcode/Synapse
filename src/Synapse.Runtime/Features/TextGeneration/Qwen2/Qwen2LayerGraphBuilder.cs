@@ -23,7 +23,7 @@ internal static class Qwen2LayerGraphBuilder
         int attentionHeads,
         int keyValueHeads,
         int headDimension,
-        float ropeTheta,
+        RopeAttributes rope,
         float normalizationEpsilon)
     {
         var nodes = new List<NodeId>();
@@ -41,7 +41,7 @@ internal static class Qwen2LayerGraphBuilder
             attentionHeads,
             keyValueHeads,
             headDimension,
-            ropeTheta,
+            rope,
             normalizationEpsilon,
             nodes,
             weights,
@@ -82,7 +82,7 @@ internal static class Qwen2LayerGraphBuilder
         int attentionHeads,
         int keyValueHeads,
         int headDimension,
-        float ropeTheta,
+        RopeAttributes rope,
         float normalizationEpsilon,
         ICollection<NodeId> nodes,
         ICollection<TensorId> weights,
@@ -97,7 +97,6 @@ internal static class Qwen2LayerGraphBuilder
         query = EmitBias(context, file, $"{prefix}.attn_q.bias", query, nodes, weights);
         key = EmitBias(context, file, $"{prefix}.attn_k.bias", key, nodes, weights);
         value = EmitBias(context, file, $"{prefix}.attn_v.bias", value, nodes, weights);
-        var rope = new RopeAttributes(ropeTheta, headDimension, RotaryLayout.NeoX);
         var rotatedQuery = context.Emit(
             GraphOperationKind.Rope,
             [query.Id, position.Id],

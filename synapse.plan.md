@@ -48,6 +48,9 @@ normative product scope.
   scheduler, and remaining ops are open.
 - [ ] C# paged KV ownership, rollback, and ZoneTree prefix metadata.
 - [ ] Repo-owned tokenizer plus pinned SmolLM/Qwen import and text generation.
+  Qwen2 byte-level BPE from the GGUF arrays is implemented and matched
+  `llama-tokenize` on the whole repository corpus (ADR-014). Other
+  pre-tokenizers fail explicitly. `generate` reports decoded text.
 - [ ] .NET SDK, worker IPC, bounded streaming, and cancellation.
 - [x] Real-process smoke runner against pinned dotLLM and LLamaSharp baselines.
 - [ ] Complete the statistical paired benchmark runner, evidence validator,
@@ -206,3 +209,20 @@ and statistical release gate remain unverified until new runs complete.
     Q8-activation paths diverge at token 22, where the FP32 reference's own
     top-2 margin is 0.0115 logits.
   - ADR-009 fixes the Orleans cluster direction; it is not implemented.
+- [ ] GPU and long-context checkpoint (`gpu-kernels.plan.md`; ADR-012, ADR-013;
+  `TASK-GPU-001..004`, `TASK-CTX-001..003`).
+  - Implemented:
+    - explicit context limits and a YaRN profile, plus `--tokens-file`,
+      `--rope-scaling`, and prefill progress;
+    - the brand-neutral `synapse-gpu` ABI and a Metal dense-decoder backend:
+      matrix-vector, GEMM, flash attention, and split decode;
+    - one backend-neutral step encoder shared by Metal and CUDA;
+    - watchdog-safe submissions for long prompts;
+    - CUDA as code only (driver API plus NVRTC).
+  - Verified locally on the M2 Pro:
+    - 10 Metal TUnit tests and 1 CLI Metal test;
+    - 11 Rust `synapse-gpu` tests;
+    - 5 context tests and 2 CLI long-prompt tests.
+  - The CUDA kernels only passed a C++ syntax check with a local shim. They
+    have not been compiled by NVRTC or run on NVIDIA hardware.
+  - Raw long-context evidence and the pass-key quality run are still open.
