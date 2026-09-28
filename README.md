@@ -39,10 +39,10 @@ Details: [`docs/Architecture.md`](docs/Architecture.md).
 
 | Question | Answer |
 |---|---|
-| Does Synapse write as fast as **llama.cpp**? | **In the 8-token smoke, yes.** The native kernel reached 102% of llama.cpp at 2 threads and 114% at 8 threads. |
-| Is a whole short request faster? | **In that smoke, 3.2× faster.** Synapse's median fresh-process wall time was 216 ms versus 690 ms. |
-| Does it use less memory? | **In that smoke, 2.3× less peak RSS.** 555 MiB versus 1,256 MiB. |
-| Does it start answering fast? | **For the 5-token prompt, yes.** The older 274-token run was about 3× slower to first token; the new batched-prefill path still needs the same long test. |
+| Does Synapse write as fast as **llama.cpp**? | **On the local M2 Pro 8-token smoke, yes** (102% at 2 threads, 114% at 8). On hosted M1/x64 runners, its reported decode rate was 54–67% of llama.cpp; at 128 tokens it was slower on all three OSes. |
+| Is a whole short request faster? | **Yes in the 8-token smoke.** The local median was 216 ms versus 690 ms; hosted medians were 526–557 ms versus 635–1,671 ms. |
+| Does it use less memory? | **Yes in these CPU diagnostics.** The local smoke was 555 MiB versus 1,256 MiB; hosted Synapse used 539–553 MiB versus 575–1,203 MiB. |
+| Does it start answering fast? | **For the 5-token smoke prompt, yes.** On the hosted long prompt, Synapse's first token was slower than LLamaSharp on all three OSes even with batched prefill. |
 | Is it as fast as **MLX** on the Apple GPU? | **No.** MLX writes 225 tokens/s on the GPU. Synapse has no GPU code yet. |
 | How does **Microsoft Foundry Local** do? | **Fast, but quality-limited in this test.** With separate ONNX weights on about 6 cores, Qwen2.5 0.5B reached 231 tokens/s and the 7B models 22–25 tokens/s; none of the 7 model/device variants fully completed the 128-token instruction. |
 | Is it faster than the other .NET engine, dotLLM? | **In the same 8-token smoke, 14× faster.** |
@@ -52,9 +52,9 @@ Details: [`docs/Architecture.md`](docs/Architecture.md).
 | Machine | Chip · CPU | RAM | OS | What runs there |
 |---|---|---|---|---|
 | MacBook Pro (local) | Apple M2 Pro · 12 cores | 32 GB | macOS 27 | Newest code, all engines, MLX on the GPU, Foundry Local (6 models) |
-| GitHub `macos-15` | Apple M1 · 3 vCPU | 7 GB | macOS 15 | Committed code, every performance run; Foundry Local: 3 models that fit (not run yet) |
-| GitHub `ubuntu-24.04` | x64 · 4 vCPU | 16 GB | Ubuntu 24.04 | Committed code, every performance run; Foundry Local: all 6 models (not run yet) |
-| GitHub `windows-2025` | x64 · 4 vCPU | 16 GB | Windows Server 2025 | Committed code, every performance run; Foundry Local: all 6 models (not run yet) |
+| GitHub `macos-15` | Apple M1 · 3 vCPU | 7 GB | macOS 15 | Committed code; CPU, MLX Metal, and 3 fitting Foundry models measured |
+| GitHub `ubuntu-24.04` | x64 · 4 vCPU | 16 GB | Ubuntu 24.04 | Committed code; CPU and all 6 fitting Foundry models measured |
+| GitHub `windows-2025` | x64 · 4 vCPU | 16 GB | Windows Server 2025 | Committed code; CPU and all 6 fitting Foundry models measured |
 
 ### How it is tested
 
@@ -79,14 +79,31 @@ What the result says:
 - This is three warm-ups plus five measurements of an eight-token answer. It
   proves short parity and supplies a diagnostic speed signal; it is not the
   30-pair release verdict and does not establish long-answer quality.
-- The published long-prompt gap comes from an older build. Batched prefill is
-  implemented now, but its fresh GitHub long-answer result is still pending.
+- Batched prefill is implemented. The [hosted 128-token run](https://github.com/managedcode/Synapse/actions/runs/36435838291)
+  still shows slower first-token and decode phases than the CPU references;
+  the older long-prompt result is no longer the only evidence for this gap.
 
 ### GitHub Actions, committed code
 
-![GitHub Actions performance run on macOS, Ubuntu, and Windows](docs/images/github-actions.svg)
+[Run `36435838291`](https://github.com/managedcode/Synapse/actions/runs/36435838291)
+completed all 20 jobs and retained 22 raw artifacts. Median measured rounds
+on each runner (2 CPU threads, same pinned GGUF):
+
+| Runner | 8-token wall: Synapse / llama.cpp | 128-token wall: Synapse / llama.cpp | 128-token reported decode: Synapse / llama.cpp |
+|---|---:|---:|---:|
+| macOS M1 | 526 / 1,671 ms | 5,856 / 4,223 ms | 32.5 / 59.0 tok/s |
+| Ubuntu x64 | 537 / 635 ms | 4,503 / 3,608 ms | 36.5 / 47.0 tok/s |
+| Windows x64 | 557 / 681 ms | 4,936 / 3,330 ms | 30.3 / 52.0 tok/s |
+
+All 8-token answers matched. The longer outputs remain quality-unreviewed;
+these diagnostics do not pass the 30-pair release gate. The performance
+workflow now assembles all raw artifacts into one results-table artifact and
+its final GitHub job summary.
 
 ### Long prompts
+
+The plot below is the earlier scalar diagnostic. Current hosted results are
+in the table above and the benchmark details.
 
 ![Long prompts: the wait before the first token grows](docs/images/first-token.svg)
 
@@ -113,9 +130,9 @@ What the result says:
 
 | | Problem | Fix | Where |
 |---|---|---|---|
-| 🔴 | Older long-prompt run: first token about 3× slower | Rerun the same matrix on the new batched-prefill path | `performance.yml` |
+| 🔴 | Hosted long-prompt first token and 128-token decode trail the CPU references | Profile prefill and decode on each runner | `experiments/Synapse.ReferenceBenchmarks` |
 | 🔴 | No GPU | Metal kernels | not started |
-| 🟡 | Hosted evidence for the new kernels is pending | Complete and review the current performance workflow | `.github/workflows/performance.yml` |
+| 🟡 | Long-output quality is unreviewed | Review generated text and add a quality gate before release claims | `.github/workflows/performance.yml` |
 | 🟡 | Takes token IDs, not text | Tokenizer and chat templates | not started |
 | 🟡 | Only Qwen2 runs | More model families | `src/Synapse.Runtime/Features/TextGeneration` |
 | 🟢 | Speed, memory, startup | Confirm with the 30-run release gate | `experiments/Synapse.ReferenceBenchmarks` |

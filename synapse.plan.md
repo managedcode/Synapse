@@ -143,6 +143,17 @@ diagnostics now trigger on every push to `main` as well as manual dispatch.
 This does not close `TASK-BMK-001`, `TASK-BMK-002`, or any CPU task; fresh
 hosted evidence is still required.
 
+Hosted aggregation follow-up (`TASK-BMK-001`, `AC-BMK-001-4`): run
+`36435838291` completed its 20 jobs and published 22 raw artifacts, but no
+run-level results table. Add a final C# artifact collector and Actions job;
+verify its partial-evidence behavior first, then render the actual 22-artifact
+run and check the new hosted reporting job. The long-output quality gate and
+30-pair release verdict remain open.
+Local checkpoint: the aggregate command processed all 22 raw artifacts from
+that run into 124 result rows with no missing evidence; the two focused
+real-evidence regressions passed, and `actionlint` accepted the workflow.
+The new final Actions job is not hosted-verified until its next run finishes.
+
 Local direct-native evidence: pinned Homebrew llama.cpp `b29c606e2` reproduced
 the Qwen prompt token IDs and continuation, three focused real-process native
 regressions passed, and raw 8/128-token samples plus a separate `llama-bench`

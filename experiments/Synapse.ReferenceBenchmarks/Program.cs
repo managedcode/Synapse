@@ -13,6 +13,7 @@ return await (args.FirstOrDefault() switch
     "dialogue" => LockedDialogueCommand.RunAsync(args[1..]),
     "mlx" => MlxBenchmarkCommand.RunAsync(args[1..]),
     "report-dialogue" => DialogueReportCommand.RunAsync(args[1..]),
+    "aggregate" => HostedArtifactReportCommand.RunAsync(args[1..]),
     _ => ReferenceBenchmarkCommand.RunAsync(args),
 }).ConfigureAwait(false);
 

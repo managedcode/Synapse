@@ -151,3 +151,12 @@ Date: 2026-09-27. Status: accepted for the bootstrap slice.
   reasoning-only, factually wrong, and truncated answers; none of the seven
   model/device variants completed the 128-token instruction. Keep the raw
   evidence status unchanged and publish the review as a descriptive layer.
+
+## 2026-09-28 hosted artifact reporting
+
+- A successful matrix currently leaves 22 separate raw artifacts and no single
+  run-level results table. Build one C# report from downloaded raw JSON after
+  every measurement job, including failed or incomplete runs.
+- Preserve distinct GGUF CPU, MLX Metal, and Foundry Local timing scopes. Show
+  measured medians, sample counts, quality state, and missing artifacts. Upload
+  the Markdown report as one artifact and show it in the final Actions summary.

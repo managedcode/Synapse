@@ -46,6 +46,15 @@ writing the report, while the raw artifact is still uploaded. Hosted runners
 are variable hardware, so their results are never pooled across OSes or
 compared to the owner's Mac as a release winner verdict.
 
+After the measurement jobs finish, a final reporting job downloads every raw
+artifact from that run and writes one Markdown report and Actions summary.
+The report groups GGUF CPU, MLX Metal, and Foundry Local separately, computes
+medians from measured rounds only, and labels fresh-process wall time versus
+resident-model request wall time. It lists missing or invalid artifacts and
+does not promote unreviewed long answers into quality or winner verdicts.
+The reporting job runs after failed measurement jobs too, so partial evidence
+remains visible rather than silently disappearing.
+
 ## Consequences
 
 The benchmark result schema adds nullable timing fields and a provenance label

@@ -74,7 +74,22 @@ immutable-pinned Node 24 artifact action. Each runner is a distinct
 cohort; this eight-token diagnostic neither replaces long generation nor
 passes the 30-pair release benchmark gate. The first actual Actions run on
 `9567d06` passed all three performance jobs and published three raw artifacts;
-the quality-gate CLI change still requires a fresh workflow run.
+the later [current-kernel run `36435838291`](https://github.com/managedcode/Synapse/actions/runs/36435838291)
+passed 20 jobs and published 22 raw artifacts across CPU, MLX, and Foundry.
+Its eight-token outputs matched; long-output quality remains unreviewed.
+
+`REQ-BMK-001` hosted reporting: once all measurement jobs finish, download
+their raw artifacts into separate directories and publish one Markdown report
+as both the final job summary and a retained artifact. It must show measured
+round counts and per-runner medians for the eight-token GGUF smoke, 128-token
+and three-turn CPU diagnostics, MLX Metal, and each scheduled Foundry model.
+Mark long-output quality as unreviewed, keep request wall separate from
+fresh-process wall, and list missing or invalid artifacts explicitly. The
+reporting job also runs after a failed measurement job.
+
+| Criterion | Test |
+|---|---|
+| `AC-BMK-001-4` aggregate real raw evidence into one scoped report without hiding missing or mislabeled artifacts | `TEST-BMK-001-4` `HostedReportShowsPartialEvidenceAndMissingArtifacts`, `HostedReportRejectsMislabeledEvidence` |
 
 Two 10-turn modes use `benchmarks/scenarios/travel-planner-10-turns.json`:
 

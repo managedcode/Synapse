@@ -22,6 +22,7 @@ measures Microsoft Foundry Local alone on six models from four families.
 | **J. 8-token, newest** | Rust kernels | 8 | 3 warm-up + 5 measured | [JSON](results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-cpu-kernels-native-8thread-smoke.json) |
 | **K. 8-token, newest** | SIMD C# kernels | 2 | 3 warm-up + 5 measured | [JSON](results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-cpu-kernels-managed-2thread-smoke.json) |
 | L. Foundry Local, 6 models, answer + dialogue | Not included (Foundry only) | runtime default (about 6 cores) | 1 warm-up + 3 measured | 14 JSON files + 2 default-context probes, `results/2026-09-28-m2-pro-foundry-local-*` |
+| M. Hosted CPU, MLX, and Foundry, 3 operating systems | Rust CPU kernels for Synapse | CPU 2 / external runtime default | CPU smoke 3+5; long/MLX/Foundry 1+3 | [GitHub run `36435838291`](https://github.com/managedcode/Synapse/actions/runs/36435838291), 22 raw artifacts |
 
 Local machine: MacBook Pro, Apple M2 Pro (8 performance + 4 efficiency cores,
 19-core GPU), 32 GB, macOS 27.0 arm64. Every CPU sample starts a new process.
@@ -138,7 +139,40 @@ a 98 GiB compressed footprint and a 12.4 s first token. Raw data:
 **GitHub Actions.** The performance workflow runs one isolated job per runner
 and model: a model runs only where its file is at most half of the runner's
 RAM. That is 3 models on `macos-15` (7 GB) and all 6 on `ubuntu-24.04` and
-`windows-2025` (16 GB), 15 jobs in total. These jobs have not run yet.
+`windows-2025` (16 GB), 15 jobs in total. All 15 jobs passed in
+[run `36435838291`](https://github.com/managedcode/Synapse/actions/runs/36435838291)
+and retained separate raw answer/dialogue JSON. Their raw quality state remains
+unreviewed; a green job confirms execution and artifact delivery, not answer
+correctness.
+
+## M. Hosted current-kernel run (`36435838291`)
+
+The [performance run](https://github.com/managedcode/Synapse/actions/runs/36435838291)
+passed all 20 jobs and retained 22 raw artifacts: three eight-token CPU
+matrices, three CPU answer/dialogue pairs, one MLX answer/dialogue pair, and
+15 Foundry model/runner answer/dialogue pairs. Each row below is a median of
+measured rounds on that runner; warm-ups are excluded. CPU wall time includes
+a fresh process and model load. MLX and Foundry request wall time excludes
+their resident model load and belongs to separate weight/runtime cohorts.
+
+| CPU runner | 8-token Synapse / llama.cpp wall ms | 8-token Synapse / llama.cpp RSS MiB | 128-token Synapse / llama.cpp wall ms | 128-token Synapse / llama.cpp reported decode tok/s |
+|---|---:|---:|---:|---:|
+| macOS M1 | 526 / 1,671 | 551 / 1,203 | 5,856 / 4,223 | 32.5 / 59.0 |
+| Ubuntu x64 | 537 / 635 | 553 / 724 | 4,503 / 3,608 | 36.5 / 47.0 |
+| Windows x64 | 557 / 681 | 539 / 575 | 4,936 / 3,330 | 30.3 / 52.0 |
+
+All measured eight-token outputs matched. The 128-token and three-turn CPU
+outputs retain `quality_status: unreviewed`; their timings are not eligible for
+a quality-adjusted winner verdict. Hosted MLX produced a 128-token answer at
+73.0 tok/s and 1,799 ms request wall on the M1, with three different measured
+continuations. Hosted Foundry scheduled 3/6/6 models on Mac/Ubuntu/Windows;
+Qwen3 and DeepSeek again spent the 128-token answer budget in reasoning without
+a final answer. Foundry and MLX are not ranked against the GGUF CPU subjects.
+
+The workflow's final job downloads every raw artifact and publishes one
+per-run Markdown table with runner, scenario, turn, subject, measured-round
+count, median timing/memory, output state, and source artifact. Missing or
+invalid evidence is listed and makes that reporting job fail.
 
 ## A. 128-token answer (4 CPU engines, 2 threads)
 

@@ -35,7 +35,7 @@
       "stage": "D1",
       "status": "in_progress",
       "dependsOn": ["TASK-BST-004"],
-      "tests": ["TEST-BMK-001-1", "TEST-BMK-001-2", "TEST-BMK-001-3"]
+      "tests": ["TEST-BMK-001-1", "TEST-BMK-001-2", "TEST-BMK-001-3", "TEST-BMK-001-4"]
     },
     {
       "id": "TASK-BMK-002",
