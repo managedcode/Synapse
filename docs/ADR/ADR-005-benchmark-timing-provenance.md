@@ -40,7 +40,8 @@ TUnit checks can validate rendering against recorded raw evidence, but do not
 run the measured matrix or assert throughput. The performance workflow runs
 automatically for every push to `main` and also supports manual dispatch. It
 runs its own macOS/Linux/Windows matrix and retains every measured round as an
-artifact with a descriptive report. An output mismatch fails the job after
+artifact with a descriptive report. Artifact upload uses the official Node 24
+action pinned to an immutable release commit. An output mismatch fails the job after
 writing the report, while the raw artifact is still uploaded. Hosted runners
 are variable hardware, so their results are never pooled across OSes or
 compared to the owner's Mac as a release winner verdict.

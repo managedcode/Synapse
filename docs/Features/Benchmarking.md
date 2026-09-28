@@ -69,7 +69,8 @@ and uploads unmodified per-round JSON for each runner. The C# `report --input
 <raw.json> [--summary <path>] [--require-quality]` command renders workload, model digest,
 platform, quality, median process wall time, peak RSS, Mac footprint, and
 reported decode phase into the GitHub job summary. The quality flag fails a
-job when output diverges, while the raw artifact is retained. Each runner is a distinct
+job when output diverges, while the raw artifact is retained through the
+immutable-pinned Node 24 artifact action. Each runner is a distinct
 cohort; this eight-token diagnostic neither replaces long generation nor
 passes the 30-pair release benchmark gate. The first actual Actions run on
 `9567d06` passed all three performance jobs and published three raw artifacts;

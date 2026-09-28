@@ -85,6 +85,8 @@ public sealed class FoundryLocalPlanTests
         await Assert.That(performance).Contains("fetch --set benchmarks/model-sets/foundry-local-families.json --alias \"${{ matrix.alias }}\"");
         await Assert.That(performance).Contains("name: foundry-local-${{ matrix.runner }}-${{ matrix.alias }}");
         await Assert.That(performance).Contains("dotnet restore experiments/Synapse.FoundryLocalBenchmarks --locked-mode");
+        await Assert.That(performance).Contains("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1");
+        await Assert.That(performance).DoesNotContain("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
         await Assert.That(verify).Contains("--alias qwen2.5-0.5b");
         await Assert.That(verify).Contains("SYNAPSE_FOUNDRY_CACHE:");
         await Assert.That(verify).DoesNotContain("--alias deepseek-r1-7b");
