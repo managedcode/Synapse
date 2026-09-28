@@ -44,6 +44,64 @@ for (const button of document.querySelectorAll("[data-threads]")) {
   });
 }
 
+// ---------- Long context (benchmarks/README.md, run T) ----------
+// [memory MiB, first token s, full answer s, tokens/s, tokens written, right answers of 2, tokens shared with llama.cpp]
+const LONG = {
+  4096: { kv: { f16: 48, f32: 96 },
+    f16: { me: [174, 1.34, 2.24, 139.8, 128, 2, 128], c1: [125, 0.85, 1.75, 141.4, 128, 2, 128] },
+    f32: { me: [222, 1.36, 2.32, 132.2, 128, 2, 128], c1: [174, 0.96, 3.01, 62.1, 128, 2, 128] },
+    c4: [1138, 0.81, 1.70, 143.1, 128, 2, 38] },
+  8192: { kv: { f16: 96, f32: 192 },
+    f16: { me: [223, 3.63, 4.62, 129.1, 128, 2, 128], c1: [181, 2.47, 3.47, 127.3, 128, 2, 128] },
+    f32: { me: [318, 3.82, 4.88, 120.0, 128, 2, 128], c1: [277, 2.64, 6.17, 36.0, 128, 2, 128] },
+    c4: [1898, 2.05, 3.16, 114.4, 128, 0, 1] },
+  16384: { kv: { f16: 192, f32: 384 },
+    f16: { me: [328, 10.28, 11.40, 112.6, 128, 0, 128], c1: [300, 7.40, 8.50, 115.9, 128, 0, 128] },
+    f32: { me: [520, 11.06, 12.34, 99.1, 128, 0, 128], c1: [487, 8.10, 14.23, 20.7, 128, 0, 128] },
+    c4: [4401, 5.32, 6.76, 88.3, 128, 0, 42] },
+  32768: { kv: { f16: 384, f32: 768 },
+    f16: { me: [533, 32.64, 32.84, 90.0, 19, 2, 18], c1: [535, 26.62, 26.81, 92.9, 19, 2, 18] },
+    f32: { me: [917, 35.40, 35.64, 73.3, 19, 2, 18], c1: [906, 27.36, 29.04, 10.7, 19, 2, 18] },
+    c4: [13500, 15.51, 17.62, 60.1, 128, 0, 0] },
+};
+const METRICS = { mem: [0, (v) => `${v.toLocaleString("en-US")} MiB`], ttft: [1, (v) => `${v.toFixed(2)} s`],
+  gen: [2, (v) => `${v.toFixed(2)} s`], dec: [3, (v) => v.toFixed(1)] };
+const longctx = document.querySelector("[data-longctx]");
+const choice = { ctx: 32768, kv: "f16" };
+
+function renderLong() {
+  const d = LONG[choice.ctx];
+  const rows = { me: d[choice.kv].me, c1: d[choice.kv].c1, c4: d.c4 };
+  for (const [metric, [index, format]] of Object.entries(METRICS)) {
+    const max = Math.max(...Object.values(rows).map((r) => r[index]));
+    for (const li of longctx.querySelectorAll(`[data-metric="${metric}"] li`)) {
+      const value = rows[li.className][index];
+      li.querySelector("b").style.setProperty("--w", `${Math.max(1.5, (value / max) * 100)}%`);
+      li.querySelector("em").textContent = format(value);
+    }
+  }
+
+  const { me, c1, c4 } = rows;
+  longctx.querySelector("[data-kvm]").textContent = d.kv[choice.kv];
+  longctx.querySelector("[data-tokens]").textContent = me[4] === c4[4]
+    ? `all three write ${me[4]} tokens`
+    : `Synapse and llama.cpp stop after ${me[4]} tokens, MLX writes ${c4[4]}`;
+  const same = me[6] === c1[6] ? "the same tokens llama.cpp wrote" : `${me[6]} of llama.cpp's tokens`;
+  longctx.querySelector("[data-same]").textContent =
+    `Same tokens: Synapse wrote ${same}. Right answer: Synapse ${me[5]}/2, llama.cpp ${c1[5]}/2, MLX ${c4[5]}/2.`;
+}
+
+if (longctx) {
+  for (const button of longctx.querySelectorAll("[data-ctx], [data-kv]")) {
+    button.addEventListener("click", () => {
+      const key = button.dataset.ctx ? "ctx" : "kv";
+      choice[key] = key === "ctx" ? Number(button.dataset.ctx) : button.dataset.kv;
+      longctx.querySelectorAll(`[data-${key}]`).forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
+      renderLong();
+    });
+  }
+}
+
 // ---------- 3D scene ----------
 const LAYERS = 12;                         // transformer blocks, plus one output head
 const STATES = {

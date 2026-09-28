@@ -12,6 +12,7 @@ internal sealed record SweepRow(
     double WeightsMebibytes,
     double? KvCacheMebibytes,
     double? PeakFootprintMebibytes,
+    double? PeakResidentMebibytes,
     double? TimeToFirstTokenMilliseconds,
     double? GenerationMilliseconds,
     double? DecodeTokensPerSecond,
@@ -25,7 +26,7 @@ internal static class SweepReport
     private const double Mebibyte = 1024 * 1024;
 
     public static IReadOnlyList<SweepRow> Summarize(
-        SweepOptions options,
+        string referenceCell,
         SweepModel model,
         ITextTokenizer tokenizer,
         IReadOnlyList<SweepSample> samples)
@@ -36,7 +37,7 @@ internal static class SweepReport
         {
             var runs = cell.Select(sample => sample.Run).ToArray();
             var reference = samples.FirstOrDefault(sample => !sample.Warmup && sample.Context == cell.Key.Context &&
-                $"{sample.Subject}/{sample.KvCache}" == options.Reference &&
+                $"{sample.Subject}/{sample.KvCache}" == referenceCell &&
                 sample.Run.ExitCode == 0);
             rows.Add(new SweepRow(
                 cell.Key.Context,
@@ -47,6 +48,7 @@ internal static class SweepReport
                 model.WeightsBytes / Mebibyte,
                 model.KvBytesPerToken(cell.Key.KvCache) * cell.Key.Context / Mebibyte,
                 Median(runs.Select(run => run.PeakFootprintBytes / Mebibyte)),
+                Median(runs.Select(run => run.PeakResidentBytes / Mebibyte)),
                 Median(runs.Select(run => run.TimeToFirstTokenMilliseconds)),
                 Median(runs.Select(run => run.GenerationMilliseconds)),
                 Median(runs.Select(run => run.DecodeTokensPerSecond)),
@@ -62,13 +64,14 @@ internal static class SweepReport
     public static string Markdown(IReadOnlyList<SweepRow> rows)
     {
         var text = new StringBuilder();
-        _ = text.AppendLine("| context | engine | KV | KV MiB | peak footprint MiB | TTFT s | full generation s | decode tok/s | tokens | correct | same tokens as reference |")
-            .AppendLine("|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|");
+        _ = text.AppendLine("| context | engine | KV | KV MiB | peak RSS MiB | peak footprint MiB | TTFT s | full generation s | decode tok/s | tokens | correct | same tokens as reference |")
+            .AppendLine("|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
         foreach (var row in rows.OrderBy(row => row.Context).ThenBy(row => row.Subject, StringComparer.Ordinal)
             .ThenBy(row => row.KvCache, StringComparer.Ordinal))
         {
             _ = text.AppendLine(string.Create(CultureInfo.InvariantCulture,
                 $"| {row.Context} | {row.Subject} | {row.KvCache} | {Format(row.KvCacheMebibytes, "F0")} | " +
+                $"{Format(row.PeakResidentMebibytes, "F0")} | " +
                 $"{Format(row.PeakFootprintMebibytes, "F0")} | {Format(row.TimeToFirstTokenMilliseconds / 1000, "F2")} | " +
                 $"{Format(row.GenerationMilliseconds / 1000, "F2")} | {Format(row.DecodeTokensPerSecond, "F1")} | " +
                 $"{row.GeneratedTokens} | {row.CorrectRuns}/{row.MeasuredRuns} | {Format(row.TokensMatchingReference, "F0")} |"));

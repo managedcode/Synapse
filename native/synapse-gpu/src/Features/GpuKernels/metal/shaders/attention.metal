@@ -1,7 +1,7 @@
-// Causal grouped-query attention over FP32 KV slots with online softmax (flash attention). Each simdgroup
-// owns eight (token, query head) rows. Q·K^T and P·V use 8x8 FP32 simdgroup matrices. Prompt runs stage one
-// K/V tile in threadgroup memory for all query heads of a KV head; decode tokens read K/V straight from the
-// slot with little threadgroup memory, so many threadgroups share a core. Long decode contexts split keys
+// Causal grouped-query attention over FP32 or FP16 KV slots with online softmax (flash attention). Each simdgroup
+// owns eight (token, query head) rows. Q·K^T and P·V use 8x8 simdgroup matrices with FP32 accumulation. Prompt
+// runs and decode tokens both read K/V straight from the slot with little threadgroup memory, so many threadgroups
+// share a core; the simdgroups of one KV head hit the same cache lines. Long decode contexts split keys
 // across threadgroups and merge in synapse_attention_reduce with the standard max/sum rescaling.
 
 constant constexpr short ATT_KEYS = 32;
@@ -198,21 +198,10 @@ static inline attention_state attention_start() {
     return state;
 }
 
-// Copies up to ATT_KEYS keys and values (converted to FP32) into the threadgroup tile, zero-filling the rest.
-template <typename KV>
-static inline void stage_tile(device const KV * keys, device const KV * values, uint first_key, uint count,
-                              threadgroup float * key_tile, threadgroup float * value_tile, ushort tid,
-                              ushort threads) {
-    for (uint idx = tid; idx < ATT_KEYS * SYNAPSE_HEAD_DIM; idx += threads) {
-        const uint key = idx / SYNAPSE_HEAD_DIM;
-        const ulong source = (ulong)(first_key + key) * SYNAPSE_HEAD_DIM + idx % SYNAPSE_HEAD_DIM;
-        key_tile[idx] = key < count ? (float)keys[source] : 0.0f;
-        value_tile[idx] = key < count ? (float)values[source] : 0.0f;
-    }
-}
-
 // Prompt runs (mode 0). Grid: (run blocks, 1). Threadgroup: group * 32 threads, one simdgroup per query head.
-// The staged tile is FP32 whatever the slot element type `KV` is.
+// Every simdgroup reads K/V straight from the slot (the group's simdgroups hit the same cache lines) and owns a
+// private threadgroup region: query staging first, then its score and rescale scratch. No threadgroup barrier is
+// needed, and the small footprint lets several threadgroups share a core.
 template <typename KV>
 kernel void synapse_attention(
         constant attention_args & a [[buffer(0)]],
@@ -227,12 +216,11 @@ kernel void synapse_attention(
         ushort2 threads_2d [[threads_per_threadgroup]],
         ushort lane [[thread_index_in_simdgroup]],
         ushort sg [[simdgroup_index_in_threadgroup]]) {
-    threadgroup float tile[2 * ATT_KEYS * SYNAPSE_HEAD_DIM];
-    threadgroup float scratch[ATT_MAX_SIMDGROUPS][8 * ATT_KEYS];
-    threadgroup float diagonal[ATT_MAX_SIMDGROUPS][64];
+    threadgroup float region[ATT_MAX_SIMDGROUPS][8 * SYNAPSE_HEAD_DIM];
     threadgroup float row_state[ATT_MAX_SIMDGROUPS][16];
-    threadgroup float * keys = tile;
-    threadgroup float * values = tile + ATT_KEYS * SYNAPSE_HEAD_DIM;
+    if (sg >= a.group) {
+        return;
+    }
 
     const attention_block block = blocks[a.block_base + tg.x];
     const uint split = tg.y;
@@ -242,36 +230,30 @@ kernel void synapse_attention(
     const ulong key_base = kv_offset(a.layer, block.kv_head, 0, a.kv_heads, a.context);
     const ulong value_base = kv_value_base(a.layers, a.kv_heads, a.context) + key_base;
 
-    threadgroup float * stage = tile + sg * 8 * SYNAPSE_HEAD_DIM;
+    threadgroup float * stage = region[sg];
     stage_query(a, block, qkv, stage, sg, lane);
-
-    threadgroup_barrier(mem_flags::mem_threadgroup);
+    simdgroup_barrier(mem_flags::mem_threadgroup);
     simdgroup_float8x8 query[8];
     for (short dk = 0; dk < 8; ++dk) {
         simdgroup_load(query[dk], stage + dk * 8, SYNAPSE_HEAD_DIM);
     }
 
-    threadgroup_barrier(mem_flags::mem_threadgroup);
+    simdgroup_barrier(mem_flags::mem_threadgroup);
+    threadgroup float * scores = stage;
+    threadgroup float * diagonal = stage + 8 * ATT_KEYS;
     attention_state state = attention_start();
     const attention_row mine = attention_map(block, a.group, sg, lane / 4);
     const uint my_position = mine.valid ? (uint)tokens[mine.token].position : 0;
-    const bool active = sg < a.group;
     for (uint first_key = key_begin; first_key < key_end; first_key += ATT_KEYS) {
         const uint count = min((uint)ATT_KEYS, key_end - first_key);
-        stage_tile(kv + key_base, kv + value_base, first_key, count, keys, values, tid, threads_2d.x);
-
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-        if (active) {
-            attend_tile<float>(state, query, (threadgroup const float *)keys, (threadgroup const float *)values,
-                        scratch[sg], diagonal[sg], first_key, count, mine.valid, my_position, a.scale, lane);
-        }
-
-        threadgroup_barrier(mem_flags::mem_threadgroup);
+        const ulong offset = (ulong)first_key * SYNAPSE_HEAD_DIM;
+        attend_tile<KV>(state, query, kv + key_base + offset, kv + value_base + offset, scores, diagonal, first_key,
+                        count, mine.valid, my_position, a.scale, lane);
     }
 
-    if (active) {
-        attention_finish(a, state, block, stage, row_state[sg], output, partial, tg.x, split, sg, lane);
-    }
+    attention_finish(a, state, block, stage, row_state[sg], output, partial, tg.x, split, sg, lane);
+    (void)tid;
+    (void)threads_2d;
 }
 
 // Decode tokens (mode 1). Grid: (decode blocks, splits). Threadgroup: one simdgroup whose rows are the

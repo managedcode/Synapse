@@ -15,6 +15,7 @@ return await (args.FirstOrDefault() switch
     "passkey" => PasskeyCommand.RunAsync(args[1..]),
     "quality" => QualityCommand.RunAsync(args[1..]),
     "sweep" => SweepCommand.RunAsync(args[1..]),
+    "sweep-report" => SweepReportCommand.RunAsync(args[1..]),
     "report-dialogue" => DialogueReportCommand.RunAsync(args[1..]),
     "aggregate" => HostedArtifactReportCommand.RunAsync(args[1..]),
     _ => ReferenceBenchmarkCommand.RunAsync(args),

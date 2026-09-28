@@ -47,10 +47,20 @@ Design references were studied from source (license noted, nothing copied):
   - Done: packed `char4` code loads, bitwise-equal. Short-context decode went from 135 to 164 tok/s.
   - Open: more rows per threadgroup, and GPU-friendly repacked weights from the ADR-004 package compiler
     (separate scales and codes, 16-byte alignment).
-- [ ] GPU.10 prompt-run attention occupancy. The kernel uses 26.5 KiB of threadgroup memory, so one
-  threadgroup fits per core. Candidates: half K/V tiles for the FP16 profile, 16-key tiles, and 16 query
-  rows per simdgroup. At 32k it roughly matches llama.cpp (~1.6 TFLOPS effective), but on the identical
-  120k pass-key prompt llama.cpp prefilled in 288 s against our 585 s. This is the largest measured gap.
+- [ ] GPU.10 prompt time (first token).
+  - Done: prompt-run attention reads K/V straight from the slot, like decode. Each simdgroup owns a private
+    16 KiB region with no threadgroup barrier; before, a staged tile took 26.5 KiB and allowed one threadgroup
+    per core. All 17 Metal tests pass.
+  - Measured: time to first token at 4k/8k/16k/32k went from 1.41/3.98/11.96/40.5 s to 1.34/3.63/10.28/32.6 s.
+    llama.cpp takes 0.85/2.47/7.40/26.6 s.
+  - Open: the prompt GEMM. At 512 tokens Synapse takes 179–185 ms against llama.cpp 108–126 ms, about
+    2.2 TFLOPS. Three experiments did not close the gap:
+    - half-precision weight tiles: -5%, rejected because the rounding changes the exact Q8_0 x FP32 profile;
+    - contiguous 8x8 block layout: -3%;
+    - 64x64 tiles: 3.4–4x slower.
+
+    The pipelined, vectorized staging was kept (bitwise identical). Next: GPU counter profiling instead of
+    guessing.
 - [x] TOK.1 `TASK-TOK-001` (ADR-014): repo-owned byte-level BPE tokenizer read from the GGUF arrays,
   ChatML template, `synapse tokenize`/`detokenize`. The tests were red (types missing), then green.
   Corpus parity against `llama-tokenize --no-escape`: 702 of 702 runs identical (351 files, 540,679 tokens).
@@ -61,18 +71,27 @@ Design references were studied from source (license noted, nothing copied):
 - [ ] QUAL.2 `TASK-CTX-005` (ADR-015): exact-answer task suite (needle, multi-key, variable tracking) across
   Synapse Metal FP32/FP16, llama.cpp Metal, and MLX (a separate-weights cohort, 32k and below). Harness
   tests are green; the recorded runs are in `docs/Features/LongContext.md`.
-- [ ] QUAL.3 correct the 120k llama.cpp pass-key control: llama.cpp `-f` drops the prompt's trailing
-  newline, so that control evaluated 119,990 tokens, not the 119,991 recorded as identical. Rerun it with
-  the compensated prompt file and fix the evidence.
+- [x] QUAL.3 corrected the 120k llama.cpp pass-key control. llama.cpp `-f` drops the prompt's trailing
+  newline, so the first control evaluated 119,990 tokens. On the compensated file (119,991 identical
+  tokens), llama.cpp answers `6`, exactly like Synapse. The evidence file records both runs.
 - [ ] QUAL.4 `TASK-CTX-006` (ADR-016): query-aware KV page activation, the owner's "smart context" idea as
   partial activation over the context. Done: the C# reference selection on the managed and native CPU
   backends, and `--kv-pages` in `generate` and `score`. The tests were red (types missing), then 5 of 5
-  green, including bitwise equality with dense for a covering budget. Open: the CPU decode-mode quality
-  runs (key bound against the random control), then the Metal kernels matched to the C# selection, then a
-  cold tier for unselected pages.
-- [ ] BENCH.1 context sweep (`experiments ... sweep`): every engine and KV cache type at 4k, 8k, 16k, and
-  32k on three axes (tokens, memory, speed), feeding the README, `benchmarks/README.md`, and the site.
-  Multi-machine comparison follows ADR-009.
+  green, including bitwise equality with dense for a covering budget. The page size (16/32/64) and
+  `--first-scored` were added test-first. CPU decode-mode quality is recorded: key-bound selection beats
+  the equal-budget random control at every budget; 16-token pages with 2,048 tokens cost +3.4% at 8k and
+  +6.2% at 16k. Open: needle tasks under the profile, the Metal kernels matched to the C# selection (the
+  only way to measure speed and memory), then a cold tier for unselected pages.
+- [x] BENCH.1 context sweep (`experiments ... sweep`, `sweep-report`). Every engine and KV cache type at
+  4k/8k/16k/32k on three axes: tokens, memory, and speed. It feeds the README (`long-context.svg`),
+  `benchmarks/README.md` run T, and the site's interactive block.
+  - The harness tests (`SweepReportTests`) were written after the code, not red-first.
+  - Found and fixed while measuring:
+    - SwiftLM prompt-cache hits: a fresh server per sample now;
+    - its early "ready" line: the model list is polled until it answers;
+    - llama.cpp perf lines with timestamps;
+    - the footprint-versus-RSS asymmetry, now reported as both.
+  - Multi-machine comparison follows ADR-009.
 - [ ] GPU.11 ideas from the llama.cpp, MLX, and vLLM study that are not yet measured here: share one
   grouped-query K/V read across the query heads of a group in decode; concurrent dispatch with two command
   buffers per token; GPU arg-max; fused QKV, gate+up+SwiGLU, and residual+norm kernels; half K/V prefill

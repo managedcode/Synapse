@@ -1,0 +1,283 @@
+{
+  "schema_version": 1,
+  "kind": "long-context-quality-diagnostic",
+  "recorded_at": "2026-09-28T18:20:15.153013+00:00",
+  "operating_system": "macOS 27.0.0",
+  "architecture": "Arm64",
+  "logical_processors": 12,
+  "model_path": "/Users/ksemenenko/Developer/Synapse/artifacts/models/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.gguf",
+  "haystack_path": "/private/tmp/claude-501/-Users-ksemenenko-Developer-Synapse/4e40e122-987a-49bd-9266-8108fb4b3f65/scratchpad/haystack.txt",
+  "haystack_sha256": "5f19e6165a0627aef2da212b43e2e105c4d6e7d23bde7e6aa32fce264ea8041f",
+  "context_size": 4096,
+  "rope_scaling": null,
+  "seed": 20260928,
+  "subjects": [
+    "synapse-native-kvf32",
+    "llamacpp-cpu"
+  ],
+  "cases": [
+    {
+      "task": "needle",
+      "target_tokens": 4000,
+      "prompt_tokens": 3543,
+      "depth": 0.1,
+      "seed": 20260928,
+      "prompt_token_ids_sha256": "da62aad14edca756fa126d11bc51b2f2bace082bb5558a6256db7b4c26b196dd",
+      "answers": [
+        "2043583"
+      ],
+      "results": [
+        {
+          "subject": "synapse-native-kvf32",
+          "output": "2043583",
+          "score": 1,
+          "passed": true,
+          "prompt_tokens": 3543,
+          "token_ids_identical": true,
+          "prompt_milliseconds": 72697.68,
+          "wall_milliseconds": 76916.8412,
+          "exit_code": 0,
+          "error": null
+        },
+        {
+          "subject": "llamacpp-cpu",
+          "output": "2043583",
+          "score": 1,
+          "passed": true,
+          "prompt_tokens": 3543,
+          "token_ids_identical": true,
+          "prompt_milliseconds": 43562,
+          "wall_milliseconds": 47932.7538,
+          "exit_code": 0,
+          "error": null
+        }
+      ]
+    },
+    {
+      "task": "needle",
+      "target_tokens": 4000,
+      "prompt_tokens": 3541,
+      "depth": 0.5,
+      "seed": 20260929,
+      "prompt_token_ids_sha256": "6782d8cebfd7452122fbb69341d7d3476a7b55c98b5ddb9fc713102940e297f7",
+      "answers": [
+        "8334474"
+      ],
+      "results": [
+        {
+          "subject": "synapse-native-kvf32",
+          "output": "8334474",
+          "score": 1,
+          "passed": true,
+          "prompt_tokens": 3541,
+          "token_ids_identical": true,
+          "prompt_milliseconds": 58818.7155,
+          "wall_milliseconds": 60231.1007,
+          "exit_code": 0,
+          "error": null
+        },
+        {
+          "subject": "llamacpp-cpu",
+          "output": "8334474",
+          "score": 1,
+          "passed": true,
+          "prompt_tokens": 3541,
+          "token_ids_identical": true,
+          "prompt_milliseconds": 22083.84,
+          "wall_milliseconds": 23731.5366,
+          "exit_code": 0,
+          "error": null
+        }
+      ]
+    },
+    {
+      "task": "needle",
+      "target_tokens": 4000,
+      "prompt_tokens": 3543,
+      "depth": 0.9,
+      "seed": 20260930,
+      "prompt_token_ids_sha256": "0e781b3595469eddb91aaebd2891d1c6056982cd8efea0be5b51540dbee104f1",
+      "answers": [
+        "5625366"
+      ],
+      "results": [
+        {
+          "subject": "synapse-native-kvf32",
+          "output": "5625366",
+          "score": 1,
+          "passed": true,
+          "prompt_tokens": 3543,
+          "token_ids_identical": true,
+          "prompt_milliseconds": 34339.1524,
+          "wall_milliseconds": 35721.8863,
+          "exit_code": 0,
+          "error": null
+        },
+        {
+          "subject": "llamacpp-cpu",
+          "output": "5625366",
+          "score": 1,
+          "passed": true,
+          "prompt_tokens": 3543,
+          "token_ids_identical": true,
+          "prompt_milliseconds": 23474.05,
+          "wall_milliseconds": 25397.9512,
+          "exit_code": 0,
+          "error": null
+        }
+      ]
+    },
+    {
+      "task": "multikey",
+      "target_tokens": 4000,
+      "prompt_tokens": 3609,
+      "depth": 0.1,
+      "seed": 20261028,
+      "prompt_token_ids_sha256": "51d167ffcd99130f558c7436874c07a4827aae95c2b4e156edff6247546a5d23",
+      "answers": [
+        "5578360"
+      ],
+      "results": [
+        {
+          "subject": "synapse-native-kvf32",
+          "output": "5578360",
+          "score": 1,
+          "passed": true,
+          "prompt_tokens": 3609,
+          "token_ids_identical": true,
+          "prompt_milliseconds": 33582.2445,
+          "wall_milliseconds": 34404.0513,
+          "exit_code": 0,
+          "error": null
+        },
+        {
+          "subject": "llamacpp-cpu",
+          "output": "5578360",
+          "score": 1,
+          "passed": true,
+          "prompt_tokens": 3609,
+          "token_ids_identical": true,
+          "prompt_milliseconds": 13721.12,
+          "wall_milliseconds": 15033.596,
+          "exit_code": 0,
+          "error": null
+        }
+      ]
+    },
+    {
+      "task": "multikey",
+      "target_tokens": 4000,
+      "prompt_tokens": 3607,
+      "depth": 0.5,
+      "seed": 20261029,
+      "prompt_token_ids_sha256": "016c806e5c7fffc05f159b5cbdd584a89959af5f96f1cb4cfd63182afe4ade99",
+      "answers": [
+        "6691810"
+      ],
+      "results": [
+        {
+          "subject": "synapse-native-kvf32",
+          "output": "6691810",
+          "score": 1,
+          "passed": true,
+          "prompt_tokens": 3607,
+          "token_ids_identical": true,
+          "prompt_milliseconds": 21819.5145,
+          "wall_milliseconds": 22220.6731,
+          "exit_code": 0,
+          "error": null
+        },
+        {
+          "subject": "llamacpp-cpu",
+          "output": "6691810",
+          "score": 1,
+          "passed": true,
+          "prompt_tokens": 3607,
+          "token_ids_identical": true,
+          "prompt_milliseconds": 18171.7,
+          "wall_milliseconds": 20368.4322,
+          "exit_code": 0,
+          "error": null
+        }
+      ]
+    },
+    {
+      "task": "multikey",
+      "target_tokens": 4000,
+      "prompt_tokens": 3609,
+      "depth": 0.9,
+      "seed": 20261030,
+      "prompt_token_ids_sha256": "ef19f4b01bdbb2544948ad11466a6116170b4dba71050d2dc39b562edb9592e2",
+      "answers": [
+        "7805260"
+      ],
+      "results": [
+        {
+          "subject": "synapse-native-kvf32",
+          "output": "7805260",
+          "score": 1,
+          "passed": true,
+          "prompt_tokens": 3609,
+          "token_ids_identical": true,
+          "prompt_milliseconds": 21667.4325,
+          "wall_milliseconds": 22026.8672,
+          "exit_code": 0,
+          "error": null
+        },
+        {
+          "subject": "llamacpp-cpu",
+          "output": "7805260",
+          "score": 1,
+          "passed": true,
+          "prompt_tokens": 3609,
+          "token_ids_identical": true,
+          "prompt_milliseconds": 9760.72,
+          "wall_milliseconds": 10991.9425,
+          "exit_code": 0,
+          "error": null
+        }
+      ]
+    },
+    {
+      "task": "vartrack",
+      "target_tokens": 4000,
+      "prompt_tokens": 3564,
+      "depth": 0.5,
+      "seed": 20261128,
+      "prompt_token_ids_sha256": "8ecb07d1448d98b70631dd517e63aabc241cd6a219fffc9fc1d7b81121f390d5",
+      "answers": [
+        "XZXCO",
+        "WAIWM",
+        "VUNBO",
+        "WUSGZ"
+      ],
+      "results": [
+        {
+          "subject": "synapse-native-kvf32",
+          "output": "XZXCO",
+          "score": 0.25,
+          "passed": false,
+          "prompt_tokens": 3564,
+          "token_ids_identical": true,
+          "prompt_milliseconds": 24768.6869,
+          "wall_milliseconds": 25087.5743,
+          "exit_code": 0,
+          "error": null
+        },
+        {
+          "subject": "llamacpp-cpu",
+          "output": "XZXCO",
+          "score": 0.25,
+          "passed": false,
+          "prompt_tokens": 3564,
+          "token_ids_identical": true,
+          "prompt_milliseconds": 8975.95,
+          "wall_milliseconds": 9800.3295,
+          "exit_code": 0,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "summary_markdown": "| task | target tokens | synapse-native-kvf32 | llamacpp-cpu |\n|---|---:|---:|---:|\n| needle | 4000 | 3/3 | 3/3 |\n| multikey | 4000 | 3/3 | 3/3 |\n| vartrack | 4000 | 0/1 | 0/1 |\n"
+}

@@ -75,8 +75,9 @@ row. They carry no paired or statistical claim.
 - **llama.cpp control** (Metal, same YaRN ×4, FP16 KV, key at 10% depth). **Corrected:** it was
   recorded as using identical 119,991 token IDs, but llama.cpp `-f` dropped the final newline, so
   it evaluated 119,990 tokens (see the correction below).
-  - It also missed the key and printed filler text. Because the prompts differed by that newline,
-    this no longer proves that the miss is the model's limit rather than an engine's.
+  - The first run missed the key and printed filler text. The rerun on truly identical 119,991
+    tokens answered exactly like Synapse: `6`, then end of turn. Both engines agree, so the miss is
+    the model under YaRN ×4.
   - Prefill: llama.cpp 288 s (417 tok/s) against Synapse 585 s (205 tok/s). Long-context prefill
     attention is the open gap (`gpu-kernels.plan.md` GPU.10).
   - Decode: 48 tok/s against 50–55 tok/s. Peak footprint: 1.95 GB against 1.80 GB.
@@ -122,6 +123,9 @@ YaRN lengths are not part of it.
   token IDs verified identical in every run.
 - **MLX** (SwiftLM, separately converted 8-bit weights) agreed in 23 of 28
   and was never more correct.
+- **CPU pair at 4k.** Synapse native (Rust Q8 kernels, FP32 KV) and llama.cpp
+  CPU gave byte-identical answers in 7 of 7 cases on identical IDs. Raw data:
+  `benchmarks/results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-long-context-quality-cpu-diagnostic.json`.
 - **Model limits.** The failures are shared by every engine, so they are
   limits of the 0.5B model:
   - single needle: 11 of 12 (it missed at 32k, 50% depth);
@@ -133,7 +137,42 @@ YaRN lengths are not part of it.
   from the context sweep on a quiet machine.
 
 **Correction of the earlier 120k llama.cpp control.** llama.cpp `-f` drops
-the prompt's trailing newline. That control therefore evaluated 119,990
-tokens (its own log says so), not the 119,991 recorded as identical. The
-comparison with Synapse's missed 10%-depth key is invalid until the rerun
-with the compensated prompt file (plan QUAL.3).
+the prompt's trailing newline. The first control therefore evaluated 119,990
+tokens (its own log says so), not the 119,991 recorded as identical, and it
+printed filler text. The rerun used the prompt text plus one extra newline, so
+llama.cpp reported 119,991 tokens. It answered `6`, then end of turn: the
+same answer as Synapse. The evidence file keeps both runs.
+
+## KV page activation, CPU quality evidence (ADR-016)
+
+This is decode-mode perplexity (`score --scoring-rows 1`), so every scored
+position goes through page selection. Runs are on the native CPU backend
+over the pinned corpus. "Read" is the share of the context a decode step
+attends to.
+
+| Context | Selection | Budget | Read | Perplexity | Change | Greedy |
+|---|---|---|---:|---:|---:|---:|
+| 8k | dense | — | 100% | 8.936 | — | 59.0% |
+| 8k | key bound, 16-token pages | 512 tokens | ~10% | 11.903 | +33% | 53.7% |
+| 8k | random, 16-token pages | 512 tokens | ~10% | 21.132 | +136% | 45.5% |
+| 8k | key bound, 64-token pages | 512 tokens | ~11% | 16.408 | +84% | 46.9% |
+| 8k | key bound, 16-token pages | 2,048 tokens | ~30% | 9.236 | +3.4% | 58.4% |
+| 8k | random, 16-token pages | 2,048 tokens | ~30% | 13.916 | +56% | 49.4% |
+| 8k | key bound, 64-token pages | 2,048 tokens | ~31% | 10.484 | +17% | 55.7% |
+| 16k | dense | — | 100% | 43.673 | — | 35.3% |
+| 16k | key bound, 16-token pages | 512 tokens | ~5% | 52.498 | +20% | 33.9% |
+| 16k | key bound, 16-token pages | 2,048 tokens | ~14% | 46.381 | +6.2% | 34.7% |
+| 16k | random, 16-token pages | 2,048 tokens | ~14% | 58.522 | +34% | 32.4% |
+
+- **Setup.** The window is 256 tokens for every run. The 8k and 16k rows score
+  the last 1,023 positions of the first chunk.
+- **Key-bound selection is real signal.** At the same budget, the random
+  control loses 5–16 times more.
+- **Smaller pages help.** 16-token pages bound the keys much more tightly
+  than 64-token pages.
+- **The needed share falls as context grows.** 14% of a 16k context costs
+  6%, while 30% of an 8k context costs 3%.
+- **It is not free.** The profile stays opt-in and approximate. The GPU
+  kernels, and with them any speed or memory benefit, are not implemented or
+  measured yet.
+- Raw data: `benchmarks/results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-kv-page-activation-cpu-diagnostic.json`.

@@ -37,7 +37,7 @@ public sealed class SweepReportTests
             Sample(round: 2, warmup: false, ttft: 300, footprint: 3_000),
         ];
 
-        var row = SweepReport.Summarize(options, model, Tokenizer(), samples).Single();
+        var row = SweepReport.Summarize(options.Reference, model, Tokenizer(), samples).Single();
 
         await Assert.That(row.KvCacheMebibytes).IsEqualTo(384.0);
         await Assert.That(row.TimeToFirstTokenMilliseconds).IsEqualTo(200.0);
@@ -46,6 +46,27 @@ public sealed class SweepReportTests
         await Assert.That(row.CorrectRuns).IsEqualTo(2);
         await Assert.That(row.TokensMatchingReference ?? 0).IsGreaterThan(0);
         await Assert.That(SweepReport.Markdown([row])).Contains("| 32768 | synapse-metal | f16 | 384 |");
+    }
+
+    [Test]
+    public async Task MergeReplacesEveryEarlierSampleOfARerunCell()
+    {
+        var model = new SweepModel(676_000_000, 24, 2, 64);
+        SweepEvidence Evidence(params SweepSample[] samples)
+        {
+            return new(1, "context-sweep-diagnostic", DateTimeOffset.UnixEpoch, "os", "arm64", 12, "m.gguf", model, "h.txt",
+                128, 1, 2, 8, "synapse-metal/f16", samples, [], string.Empty);
+        }
+
+        var first = Evidence(Sample(0, true, 900, 1), Sample(1, false, 100, 1), Sample(2, false, 300, 1),
+            Sample(1, false, 50, 1) with { Subject = "mlx-swiftlm", KvCache = "native" });
+        var rerun = Evidence(Sample(1, false, 700, 1) with { Subject = "mlx-swiftlm", KvCache = "native" });
+
+        var merged = SweepReportCommand.Merge([first, rerun]);
+
+        await Assert.That(merged.Count(sample => sample.Subject == "synapse-metal")).IsEqualTo(3);
+        await Assert.That(merged.Where(sample => sample.Subject == "mlx-swiftlm").Select(sample => sample.Run.TimeToFirstTokenMilliseconds ?? 0))
+            .IsEquivalentTo([700.0]);
     }
 
     [Test]

@@ -3,11 +3,14 @@ using System.Text;
 using System.Text.Json;
 
 /// <summary>
-/// MLX through a resident SwiftLM server with separately converted weights (a separate-weights cohort). The client
-/// times the first streamed token and the last one; memory is the server's peak footprint during the request.
+/// MLX through SwiftLM with separately converted weights (a separate-weights cohort). Each sample starts a fresh
+/// server, like every other engine's fresh process: a resident server would answer a repeated prompt from its prompt
+/// cache. The client times the first streamed token and the last one; memory is the server's peak during the request.
 /// </summary>
-internal sealed class MlxSweepSubject(MlxServer server, int maxTokens) : ISweepSubject
+internal sealed class MlxSweepSubject(SweepOptions options) : ISweepSubject
 {
+    private int _samples;
+
     public string Name => "mlx-swiftlm";
 
     public string KvCache => "native";
@@ -16,9 +19,11 @@ internal sealed class MlxSweepSubject(MlxServer server, int maxTokens) : ISweepS
 
     public async Task<SweepRun> RunAsync(QualityCase prompt, int context, CancellationToken cancellationToken)
     {
+        await using var server = await MlxServer.StartAsync(options.MlxBinary!, options.MlxModel!, options.MlxPort + (_samples++ % 32))
+            .ConfigureAwait(false);
         await using var sampler = new ProcessMemorySampler(server.Process);
         var timer = Stopwatch.StartNew();
-        using var request = server.ChatRequest(prompt, maxTokens, stream: true);
+        using var request = server.ChatRequest(prompt, options.MaxTokens, stream: true);
         using var response = await server.Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
             .ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
@@ -39,7 +44,7 @@ internal sealed class MlxSweepSubject(MlxServer server, int maxTokens) : ISweepS
             total, metrics.PeakPhysicalFootprintBytes, metrics.MaximumObservedWorkingSetBytes, null);
     }
 
-    public ValueTask DisposeAsync() => server.DisposeAsync();
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     private static async Task<(string Text, double? First, int? PromptTokens, int? CompletionTokens)> ReadStreamAsync(
         HttpResponseMessage response,

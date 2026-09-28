@@ -182,19 +182,39 @@ static inline gemm_loader gemm_prepare(constant matmul_args & a, device const ch
     return l;
 }
 
-static inline void gemm_stage(thread const gemm_loader & l, uint block, threadgroup float * wt, threadgroup float * xt) {
+// One K step of one thread held in registers: the next step is fetched while the current one multiplies.
+struct gemm_fetch {
+    float d;
+    char4 q[4];
+    float4 x[2];
+};
+
+static inline gemm_fetch gemm_load(thread const gemm_loader & l, uint block) {
+    gemm_fetch f;
     device const block_q8_0 * b = l.weight_blocks + block;
-    const float d = l.weight_valid ? (float)b->d : 0.0f;
+    f.d = l.weight_valid ? (float)b->d : 0.0f;
     device const int8_t * q = b->qs + l.load_half * 16;
-    threadgroup float * target = wt + l.load_row * GEMM_K + l.load_half * 16;
-    for (short i = 0; i < 16; ++i) {
-        target[i] = d * (float)q[i];
+    for (short i = 0; i < 4; ++i) {
+        f.q[i] = char4(*(device const packed_char4 *)(q + 4 * i));
     }
 
     device const float4 * v = (device const float4 *)(l.x + block * 32);
+    f.x[0] = l.token_valid ? v[0] : float4(0.0f);
+    f.x[1] = l.token_valid ? v[1] : float4(0.0f);
+    return f;
+}
+
+// Dequantizes exactly (d * q per element, as the scalar form did) into the threadgroup tile.
+static inline void gemm_stage(thread const gemm_loader & l, thread const gemm_fetch & f, threadgroup float * wt,
+                              threadgroup float * xt) {
+    threadgroup float4 * target = (threadgroup float4 *)(wt + l.load_row * GEMM_K + l.load_half * 16);
+    for (short i = 0; i < 4; ++i) {
+        target[i] = f.d * float4(f.q[i]);
+    }
+
     threadgroup float4 * xtarget = (threadgroup float4 *)(xt + l.load_token * GEMM_K + l.load_quarter * 8);
-    xtarget[0] = l.token_valid ? v[0] : float4(0.0f);
-    xtarget[1] = l.token_valid ? v[1] : float4(0.0f);
+    xtarget[0] = f.x[0];
+    xtarget[1] = f.x[1];
 }
 
 // Simdgroup sg owns rows [32 * (sg % 2), +32) and tokens [16 * (sg / 2), +16) of the tile.
@@ -263,9 +283,14 @@ kernel void synapse_q8_gemm(
     const ushort row_base = 32 * (sg % 2);
     const ushort token_base = 16 * (sg / 2);
     const uint blocks = a.columns / 32;
+    gemm_fetch next = gemm_load(loader, 0);
     for (uint block = 0; block < blocks; ++block) {
-        gemm_stage(loader, block, wt, xt);
+        gemm_stage(loader, next, wt, xt);
         threadgroup_barrier(mem_flags::mem_threadgroup);
+        if (block + 1 < blocks) {
+            next = gemm_load(loader, block + 1);
+        }
+
         gemm_accumulate(acc, wt, xt, row_base, token_base);
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }

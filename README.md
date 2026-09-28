@@ -43,7 +43,10 @@ Details: [`docs/Architecture.md`](docs/Architecture.md).
 | Is a whole short request faster? | **Yes in the 8-token smoke.** The local median was 216 ms versus 690 ms; hosted medians were 526–557 ms versus 635–1,671 ms. |
 | Does it use less memory? | **Yes in these CPU diagnostics.** The local smoke was 555 MiB versus 1,256 MiB; hosted Synapse used 539–553 MiB versus 575–1,203 MiB. |
 | Does it start answering fast? | **For the 5-token smoke prompt, yes.** On the hosted long prompt, Synapse's first token was slower than LLamaSharp on all three OSes even with batched prefill. |
-| Is it as fast as **MLX** on the Apple GPU? | **No.** MLX writes 225 tokens/s on the GPU. The new Synapse Metal backend wrote 135 tokens/s in one local 128-token run (llama.cpp Metal: 157). |
+| Does Synapse compute the same thing as **llama.cpp**? | **Yes.** On identical tokens, perplexity matches within 0.01% from 4k to 32k of context, and on the Apple GPU Synapse writes the same tokens (128 of 128 at 4k–16k). |
+| Is it as fast on the **Apple GPU** with long context? | **Writing, yes; the first token, not yet.** From 4k to 32k Synapse writes 90–140 tokens/s, level with llama.cpp (93–141); MLX falls to 60 at 32k. The first token takes 1.2–1.6× llama.cpp's time and 1.6–2.1× MLX's. |
+| Does it use less memory with long context? | **Same as llama.cpp, 25× less than MLX.** At 32k: 533 MiB peak footprint against 535 (llama.cpp) and 13,500 (MLX). |
+| Is the model still right on long prompts? | **As right as a 0.5B model gets.** Synapse, llama.cpp, and MLX give the same answers; the misses (a hidden number at 32k, keys among distractors, variable chains) happen in every engine, so they are the model's limits. |
 | How does **Microsoft Foundry Local** do? | **Fast, but quality-limited in this test.** With separate ONNX weights on about 6 cores, Qwen2.5 0.5B reached 231 tokens/s and the 7B models 22–25 tokens/s; none of the 7 model/device variants fully completed the 128-token instruction. |
 | Is it faster than the other .NET engine, dotLLM? | **In the same 8-token smoke, 14× faster.** |
 
@@ -100,12 +103,22 @@ these diagnostics do not pass the 30-pair release gate. The performance
 workflow now assembles all raw artifacts into one results-table artifact and
 its final GitHub job summary.
 
-### Long prompts
+### Long context on the Apple GPU
 
-The plot below is the earlier scalar diagnostic. Current hosted results are
-in the table above and the benchmark details.
+![Long context on the Apple GPU: time to first token, writing speed, and memory from 4k to 32k](docs/images/long-context.svg)
 
-![Long prompts: the wait before the first token grows](docs/images/first-token.svg)
+- **Tokens.** Every engine gets the same prompt, and its token IDs are
+  checked before its answer counts. Synapse's answers match llama.cpp's
+  byte for byte in 28 of 28 long-context questions.
+- **Memory.** Synapse keeps the KV cache at 384 MiB for 32k tokens (FP16) and
+  maps the model file instead of copying it.
+- **Speed.** Writing is level with llama.cpp. The first token is the open gap:
+  prompt attention and the prompt matrix multiply are slower. Removing the
+  staged K/V tile from prompt attention already cut 32k from 40.5 s to 32.6 s.
+- **FP32 KV cache.** Synapse writes 73 tokens/s at 32k, against 10.7 for
+  llama.cpp with the same cache type.
+- Details, every engine and KV cache type, and CPU rows: runs Q–T in
+  [`benchmarks/README.md`](benchmarks/README.md).
 
 ### Microsoft Foundry Local, 6 models
 
@@ -131,9 +144,11 @@ in the table above and the benchmark details.
 | | Problem | Fix | Where |
 |---|---|---|---|
 | 🔴 | Hosted long-prompt first token and 128-token decode trail the CPU references | Profile prefill and decode on each runner | `experiments/Synapse.ReferenceBenchmarks` |
-| 🟡 | Metal runs Qwen2 but decodes slower than llama.cpp and MLX; CUDA is written but has never run | FP16 KV cache, GPU-packed weights; run CUDA on an NVIDIA machine | `native/synapse-gpu` |
-| 🟡 | Long-output quality is unreviewed | Review generated text and add a quality gate before release claims | `.github/workflows/performance.yml` |
-| 🟡 | Takes token IDs, not text | Tokenizer and chat templates | not started |
+| 🔴 | Apple GPU first token is 1.2–1.6× llama.cpp's; the prompt matrix multiply alone is 1.55× slower at 512 tokens | Profile the GEMM with GPU counters (tile, half, and layout experiments did not close it) | `native/synapse-gpu/.../metal/shaders/matmul.metal` |
+| 🟡 | CPU first token is 1.9× llama.cpp's at 8k | Tiled, vectorized prompt attention | `Qwen2CpuAttention.cs` |
+| 🟡 | Smart context (query-aware KV pages) is proven only on CPU: +3.4% perplexity while reading 30% of an 8k context | Metal kernels matched to the C# selection, then measure speed and memory | ADR-016, `KvPageSelector.cs` |
+| 🟡 | CUDA is written but has never run | Run CUDA on an NVIDIA machine | `native/synapse-gpu` |
+| 🟡 | Free-form long answers are checked for agreement with llama.cpp, not reviewed for content | Human review plus exact-answer gates before release claims | `.github/workflows/performance.yml` |
 | 🟡 | Only Qwen2 runs | More model families | `src/Synapse.Runtime/Features/TextGeneration` |
 | 🟢 | Speed, memory, startup | Confirm with the 30-run release gate | `experiments/Synapse.ReferenceBenchmarks` |
 

@@ -60,9 +60,11 @@ source of weights, and GGUF is only one adapter.
   - Prompt runs of more than 8 tokens use a tiled FP32 simdgroup-matrix GEMM, with 64 rows × 32 tokens
     per tile and one Q8_0 block per K step.
 
-  Prompt-run attention stages a K/V tile shared by the query heads of one KV head. Decode attention reads
-  K/V directly with little threadgroup memory, and a long context splits its keys and merges them in a
-  reduce kernel.
+  Prompt-run and decode attention both read K/V directly from the slot, with little threadgroup memory,
+  and the simdgroups of one KV head share cache lines. The earlier prompt kernel staged a K/V tile in
+  26.5 KiB of threadgroup memory, which allowed one threadgroup per core; reading directly cut 32k time to
+  first token by 20% (2026-09-28). A long decode context splits its keys and merges them in a reduce
+  kernel.
 - **FP16 KV profile.** `KvCachePrecision.Fp16` (CLI `--kv-precision f16`, profile suffix `-kvf16`) stores
   K and V in half precision. Loads convert or multiply half tiles into FP32 simdgroup accumulators
   (mixed-precision `simdgroup_multiply_accumulate`). It halves KV memory and attention bandwidth: the slot

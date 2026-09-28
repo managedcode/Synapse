@@ -49,7 +49,7 @@ Decision: ADR-012. Plan: `gpu-kernels.plan.md`. Long-context behavior: `LongCont
   |---|---|
   | `synapse_q8_matvec_{1,2,4,8}` | Decode projections and logits; fixed `fma` order, independent of batch size |
   | `synapse_q8_gemm` | Prompt runs of more than 8 tokens; FP32 8×8 simdgroup matrices, 64×32 tiles |
-  | `synapse_attention` | Prompt runs; K/V tile staged once for all query heads of a KV head |
+  | `synapse_attention` | Prompt runs; K/V read straight from the slot, one private threadgroup region per simdgroup |
   | `synapse_attention_decode` | Decode; reads K/V directly; keys split across threadgroups for long contexts |
   | `synapse_attention_reduce` | Merges decode splits |
   | `synapse_rope_kv`, `synapse_rms_norm`, `synapse_swiglu`, `synapse_embed_q8_0` | Element-wise steps |

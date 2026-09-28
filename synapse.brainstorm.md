@@ -184,8 +184,9 @@ Date: 2026-09-27. Status: accepted for the bootstrap slice.
 - Long context. Trained limits now fail explicitly, and YaRN is an explicit
   profile. Pass-key retrieval, not synthetic-token speed, decides quality.
   - The 0.5B model kept 12 of 12 up to 65k.
-  - At 120k it lost the 10%-depth key, and llama.cpp on identical token IDs
-    lost it too.
+  - At 120k it lost the 10%-depth key. The first llama.cpp control lost one
+    token of the prompt (see the quality section below). On truly identical
+    IDs, llama.cpp gave the same one-digit answer.
   - The largest measured engine gap is long-context prefill: llama.cpp was
     2x faster at 120k.
 

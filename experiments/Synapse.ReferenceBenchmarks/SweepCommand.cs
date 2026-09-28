@@ -26,7 +26,7 @@ internal static class SweepCommand
         var tokenizer = TextTokenizers.FromGguf(options.ModelPath);
         var factory = new QualityTaskFactory(tokenizer, await File.ReadAllTextAsync(options.Haystack).ConfigureAwait(false));
         var model = SweepModel.Describe(options.ModelPath);
-        var subjects = await CreateSubjectsAsync(options).ConfigureAwait(false);
+        var subjects = CreateSubjects(options);
         var samples = new List<SweepSample>();
         try
         {
@@ -66,11 +66,11 @@ internal static class SweepCommand
             }
         }
 
-        Console.WriteLine(SweepReport.Markdown(SweepReport.Summarize(options, model, tokenizer, samples)));
+        Console.WriteLine(SweepReport.Markdown(SweepReport.Summarize(options.Reference, model, tokenizer, samples)));
         return samples.All(sample => sample.Run.ExitCode == 0) ? 0 : 1;
     }
 
-    private static async Task<List<ISweepSubject>> CreateSubjectsAsync(SweepOptions options)
+    private static List<ISweepSubject> CreateSubjects(SweepOptions options)
     {
         var subjects = new List<ISweepSubject>();
         foreach (var spec in options.Subjects)
@@ -79,9 +79,7 @@ internal static class SweepCommand
             {
                 ["synapse", var backend, var kv and ("f32" or "f16")] => new SynapseSweepSubject(options, backend, kv),
                 ["llamacpp", var device and ("metal" or "cpu"), var kv] => new LlamaSweepSubject(options, device, kv),
-                ["mlx"] => new MlxSweepSubject(
-                    await MlxServer.StartAsync(options.MlxBinary!, options.MlxModel!, options.MlxPort).ConfigureAwait(false),
-                    options.MaxTokens),
+                ["mlx"] => new MlxSweepSubject(options),
                 _ => throw new ArgumentException($"Unknown sweep subject '{spec}'."),
             });
         }
@@ -95,7 +93,7 @@ internal static class SweepCommand
         ITextTokenizer tokenizer,
         IReadOnlyList<SweepSample> samples)
     {
-        var rows = SweepReport.Summarize(options, model, tokenizer, samples);
+        var rows = SweepReport.Summarize(options.Reference, model, tokenizer, samples);
         var evidence = new SweepEvidence(1, "context-sweep-diagnostic", DateTimeOffset.UtcNow,
             RuntimeInformation.OSDescription, RuntimeInformation.ProcessArchitecture.ToString(), Environment.ProcessorCount,
             Path.GetFullPath(options.ModelPath), model, Path.GetFullPath(options.Haystack), options.MaxTokens,
@@ -159,7 +157,8 @@ internal sealed record SweepEvidence(
     string Reference,
     IReadOnlyList<SweepSample> Samples,
     IReadOnlyList<SweepRow> Summary,
-    string SummaryMarkdown);
+    string SummaryMarkdown,
+    IReadOnlyList<string>? Sources = null);
 
 [JsonSerializable(typeof(SweepEvidence))]
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower, WriteIndented = true)]

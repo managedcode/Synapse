@@ -153,6 +153,53 @@
     </div>
     <p class="fine reveal">MacBook Pro, Apple M2 Pro, 32 GB. Qwen2.5 0.5B Instruct Q8_0, prompt “The capital of France is”, 8-token answer. Median of 5 runs after 3 warm-ups; all four engines wrote the same 8 tokens. Diagnostic runs, not the final 30-run release gate. <a href="https://github.com/managedcode/Synapse/blob/main/benchmarks/README.md">All runs and raw JSON ↗</a></p>
 
+    <header class="sec-head reveal ctx-head"><p class="kicker">Long context · Apple GPU</p><h2>Tokens, memory and speed. <span class="soft">From 4k to 32k.</span></h2></header>
+    <article class="panel longctx reveal" data-longctx>
+      <div class="panel-top">
+        <h3>Pick a context and a KV cache</h3>
+        <div class="ctl">
+          <div class="seg" role="group" aria-label="Context size">
+            <button type="button" data-ctx="4096" aria-pressed="false">4k</button><button type="button" data-ctx="8192" aria-pressed="false">8k</button><button type="button" data-ctx="16384" aria-pressed="false">16k</button><button type="button" data-ctx="32768" aria-pressed="true">32k</button>
+          </div>
+          <div class="seg" role="group" aria-label="KV cache">
+            <button type="button" data-kv="f16" aria-pressed="true">FP16 KV</button><button type="button" data-kv="f32" aria-pressed="false">FP32 KV</button>
+          </div>
+        </div>
+      </div>
+      <div class="ctx-grid">
+        <div><p class="ctx-label">Memory</p>
+          <ul class="bars" data-metric="mem">
+            <li class="me"><span>Synapse</span><i><b style="--w:3.9%"></b></i><em>533 MiB</em></li>
+            <li class="c1"><span>llama.cpp</span><i><b style="--w:4%"></b></i><em>535 MiB</em></li>
+            <li class="c4"><span>MLX</span><i><b style="--w:100%"></b></i><em>13,500 MiB</em></li>
+          </ul>
+          <p class="unit">peak footprint · KV cache <span data-kvm>384</span> MiB</p></div>
+        <div><p class="ctx-label">First token</p>
+          <ul class="bars" data-metric="ttft">
+            <li class="me"><span>Synapse</span><i><b style="--w:100%"></b></i><em>32.64 s</em></li>
+            <li class="c1"><span>llama.cpp</span><i><b style="--w:81.6%"></b></i><em>26.62 s</em></li>
+            <li class="c4"><span>MLX</span><i><b style="--w:47.5%"></b></i><em>15.51 s</em></li>
+          </ul>
+          <p class="unit">time to first token · lower is better</p></div>
+        <div><p class="ctx-label">Full answer</p>
+          <ul class="bars" data-metric="gen">
+            <li class="me"><span>Synapse</span><i><b style="--w:100%"></b></i><em>32.84 s</em></li>
+            <li class="c1"><span>llama.cpp</span><i><b style="--w:81.6%"></b></i><em>26.81 s</em></li>
+            <li class="c4"><span>MLX</span><i><b style="--w:53.7%"></b></i><em>17.62 s</em></li>
+          </ul>
+          <p class="unit" data-tokens>Synapse and llama.cpp stop after 19 tokens, MLX writes 128</p></div>
+        <div><p class="ctx-label">Writing speed</p>
+          <ul class="bars" data-metric="dec">
+            <li class="me"><span>Synapse</span><i><b style="--w:96.9%"></b></i><em>90.0</em></li>
+            <li class="c1"><span>llama.cpp</span><i><b style="--w:100%"></b></i><em>92.9</em></li>
+            <li class="c4"><span>MLX</span><i><b style="--w:64.7%"></b></i><em>60.1</em></li>
+          </ul>
+          <p class="unit">tokens per second · higher is better</p></div>
+      </div>
+      <p class="ctx-tokens" data-same>Same tokens: Synapse wrote the same tokens llama.cpp wrote. Right answer: Synapse 2/2, llama.cpp 2/2, MLX 0/2.</p>
+    </article>
+    <p class="fine reveal">MacBook Pro, Apple M2 Pro 19-core GPU. Qwen2.5 0.5B Q8_0, one prompt per context: repository text with a hidden number, then “state the number and summarize”, up to 128 tokens. Every engine gets the same text and its token IDs are checked. Median of 2 runs after a warm-up, one engine at a time. MLX runs its own 8-bit weights and cache format; Synapse and llama.cpp also map the 644 MiB model file. Perplexity on identical tokens matches llama.cpp within 0.01% at 4k–32k. <a href="https://github.com/managedcode/Synapse/blob/main/benchmarks/README.md">Run T and raw JSON ↗</a></p>
+
     <article class="panel foundry reveal">
       <div class="panel-top"><h3>Also measured · Microsoft Foundry Local · 6 models</h3></div>
       <p class="panel-big">231<small>tokens/s, Qwen2.5 0.5B on the Mac CPU</small></p>
@@ -171,9 +218,9 @@
     <div class="notyet reveal">
       <h3>Not there yet. We say so.</h3>
       <ul>
-        <li><b>Long prompts</b><span>First token is about 3× slower on long prompts: 1,391 ms vs 473 ms at 274 tokens. Fix in progress: read the prompt in batches.</span></li>
-        <li><b>No GPU yet</b><span>MLX writes 225 tokens/s on the Apple GPU. Metal kernels are planned.</span></li>
-        <li><b>Token IDs in</b><span>No tokenizer yet: it takes token IDs, not text. Tokenizer and chat templates are next.</span></li>
+        <li><b>First token</b><span>On the Apple GPU the first token takes 1.2–1.6× llama.cpp's time (32.6 s vs 26.6 s at 32k). The prompt matrix multiply is the gap.</span></li>
+        <li><b>Smart context on CPU only</b><span>Reading only the relevant KV pages costs +3.4% perplexity while reading 30% of an 8k context. The GPU kernels are next.</span></li>
+        <li><b>CUDA untested</b><span>Metal runs. The CUDA backend is written but has not run on an NVIDIA GPU yet.</span></li>
         <li><b>One family</b><span>Only Qwen2 runs today. More model families are next.</span></li>
       </ul>
     </div>
@@ -206,7 +253,7 @@
     <div class="runtime reveal">
       <p class="kicker">Every worker runs the same runtime</p>
       <div class="chips">
-        <span>C# kernels</span><span>Rust kernels</span><span class="plan">Metal · planned</span><span class="plan">CUDA · planned</span><span>Weight residency</span><span>Hot KV cache</span><span>ZoneTree state</span>
+        <span>C# kernels</span><span>Rust kernels</span><span>Metal</span><span class="plan">CUDA · untested</span><span>Weight residency</span><span>Hot KV cache</span><span>ZoneTree state</span>
       </div>
     </div>
     <div class="modes">
@@ -227,10 +274,10 @@
       <p class="unit">CPU writing speed as a share of llama.cpp · the line is llama.cpp</p>
     </div>
     <div class="columns">
-      <article class="col reveal"><h3><i class="dot ok"></i>Done</h3><ul><li>Qwen2.5 runs fully in C#, same answer as llama.cpp</li><li>Model graph and verifier</li><li>Verified model downloads</li><li>Benchmarks on three operating systems</li></ul></article>
-      <article class="col reveal"><h3><i class="dot now"></i>Now</h3><ul><li>Finish CPU kernels</li><li>Faster first token on long prompts</li><li>Run the model from its graph</li></ul></article>
+      <article class="col reveal"><h3><i class="dot ok"></i>Done</h3><ul><li>Qwen2.5 runs fully in C#, same answer as llama.cpp</li><li>Apple GPU (Metal), up to 32k context</li><li>Tokenizer with the same IDs as llama.cpp</li><li>Long-context quality checks</li><li>Model graph and verifier</li><li>Benchmarks on three operating systems</li></ul></article>
+      <article class="col reveal"><h3><i class="dot now"></i>Now</h3><ul><li>Faster first token on long prompts</li><li>Smart context on the GPU</li><li>Run the model from its graph</li></ul></article>
       <article class="col reveal"><h3><i class="dot built"></i>Built, not wired in</h3><ul><li>2 to 8 bit and ternary compression</li><li>One model across several devices</li></ul></article>
-      <article class="col reveal"><h3><i class="dot"></i>Next</h3><ul><li>Tokenizer</li><li>Skipping regions, loading on demand</li><li>KV cache</li><li>Metal and CUDA</li><li>More models</li><li>Orleans cluster</li></ul></article>
+      <article class="col reveal"><h3><i class="dot"></i>Next</h3><ul><li>Skipping regions, loading on demand</li><li>Cold KV pages on disk</li><li>CUDA on NVIDIA</li><li>More models</li><li>Orleans cluster</li></ul></article>
     </div>
   </div>
 </section>

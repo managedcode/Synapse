@@ -37,8 +37,9 @@ These papers are references for the design, not evidence for Synapse.
 - **The searched vectors are keys, per layer and per KV head.** They are not
   token embeddings: attention scores use the current query against that
   layer's keys. The search is by inner product, not by distance.
-- **Pages are the regions.** The KV slot is cut into fixed pages of 64
-  positions. Each (layer, KV head, page) keeps a summary: the per-channel
+- **Pages are the regions.** The KV slot is cut into fixed pages of 16, 32, or
+  64 positions (`PageTokens`, default 64). The CPU evidence favours 16-token
+  pages at equal token budgets. Each (layer, KV head, page) keeps a summary: the per-channel
   minimum and maximum of its keys. The kernel that writes K updates the
   summary. For any query `q`, the page's score upper bound is
   `Σ_d max(q_d·min_d, q_d·max_d)`. A grouped-query KV head takes the maximum

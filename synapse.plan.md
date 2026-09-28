@@ -225,4 +225,11 @@ and statistical release gate remain unverified until new runs complete.
     - 5 context tests and 2 CLI long-prompt tests.
   - The CUDA kernels only passed a C++ syntax check with a local shim. They
     have not been compiled by NVRTC or run on NVIDIA hardware.
-  - Raw long-context evidence and the pass-key quality run are still open.
+  - Long-context evidence up to 32k is recorded (benchmark runs N–T):
+    - perplexity parity with llama.cpp within 0.01%;
+    - identical answers in 28 of 28 tasks;
+    - a three-axis context sweep against llama.cpp and MLX;
+    - CPU-qualified KV page activation (ADR-016).
+
+    Open gaps: GPU prompt GEMM (1.55x llama.cpp at 512 tokens); CPU prompt attention (first token 1.9x
+    llama.cpp at 8k, `Qwen2CpuAttention`); KV page Metal kernels; CUDA on hardware.
