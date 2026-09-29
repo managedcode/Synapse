@@ -9,7 +9,7 @@ use super::decoder::{BatchToken, DecoderDesc, DecoderLayerOffsets, DecoderPlan};
 use super::error::{GpuError, STATUS_OK, STATUS_PANIC};
 
 /// C ABI version checked by the managed loader before any other call.
-pub const ABI_VERSION: u32 = 1;
+pub const ABI_VERSION: u32 = 2;
 /// Apple Metal.
 pub const BACKEND_METAL: u32 = 1;
 /// NVIDIA CUDA.
@@ -225,4 +225,47 @@ pub unsafe extern "C" fn synapse_gpu_decoder_destroy(model: *mut GpuModel) {
         // SAFETY: the pointer came from `Box::into_raw` in `synapse_gpu_decoder_create`.
         drop(unsafe { Box::from_raw(model) });
     }
+}
+
+/// Bytes of K and V the model currently holds across its slots (ADR-017); `0` for null.
+///
+/// # Safety
+///
+/// `model` must be null or a live pointer from `synapse_gpu_decoder_create`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn synapse_gpu_decoder_kv_bytes(model: *const GpuModel) -> u64 {
+    // SAFETY: the caller passes null or a live model pointer.
+    match unsafe { model.as_ref() } {
+        None => 0,
+        #[cfg(target_os = "macos")]
+        Some(GpuModel::Metal(decoder)) => decoder.kv_bytes(),
+        Some(GpuModel::Cuda(decoder)) => decoder.kv_bytes(),
+    }
+}
+
+/// Sizes KV slot `slot` for `positions` at once (ADR-017).
+///
+/// # Safety
+///
+/// `model` must come from `synapse_gpu_decoder_create` and not be used concurrently.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn synapse_gpu_decoder_reserve(
+    model: *mut GpuModel,
+    slot: u32,
+    positions: u32,
+) -> i32 {
+    if model.is_null() {
+        return record(&GpuError::NullPointer("model"));
+    }
+
+    guarded(|| {
+        // SAFETY: the pointer is non-null and exclusively borrowed per this function's contract.
+        let model = unsafe { &mut *model };
+        let slot = slot as usize;
+        match model {
+            #[cfg(target_os = "macos")]
+            GpuModel::Metal(decoder) => decoder.reserve(slot, positions),
+            GpuModel::Cuda(decoder) => decoder.reserve(slot, positions),
+        }
+    })
 }

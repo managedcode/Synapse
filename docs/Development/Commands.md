@@ -26,7 +26,9 @@ No command in this repository invokes Python or Node.js.
 GPU and long-context runs (ADR-012, ADR-013). `--backend metal` needs an Apple7+
 GPU; `--backend cuda` needs an NVIDIA driver and NVRTC at runtime. Contexts above
 the trained window need an explicit `--rope-scaling yarn:<factor>:<trained>`.
-`SYNAPSE_GPU_TRACE=1` prints the GPU milliseconds of every step to standard error.
+`SYNAPSE_GPU_TRACE=1` prints the GPU milliseconds of every step to standard error;
+`SYNAPSE_GPU_PROFILE=1` runs every dispatch in its own command buffer and prints
+the summed GPU milliseconds per kernel (a diagnostic: it slows the run down).
 
 ```text
 dotnet run --project src/Synapse.Cli --configuration Release -- generate \

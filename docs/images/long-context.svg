@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="660" viewBox="0 0 960 660" font-family="Satoshi, 'Host Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="684" viewBox="0 0 960 684" font-family="Satoshi, 'Host Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="title desc">
   <title id="title">Long context on the Apple GPU: tokens, memory, and speed</title>
-  <desc id="desc">Qwen2.5 0.5B, MacBook Pro M2 Pro GPU, FP16 KV cache, median of 2 runs after a warm-up, 128-token answer. Time to first token at 4k, 8k, 16k, 32k: Synapse 1.34, 3.63, 10.28, 32.64 s; llama.cpp 0.85, 2.47, 7.40, 26.62 s; MLX 0.81, 2.05, 5.32, 15.51 s. Decode: Synapse 139.8, 129.1, 112.6, 90.0; llama.cpp 141.4, 127.3, 115.9, 92.9; MLX 143.1, 114.4, 88.3, 60.1 tokens per second. Peak footprint: Synapse 174, 223, 328, 533 MiB; llama.cpp 125, 181, 300, 535 MiB; MLX 1,138, 1,898, 4,401, 13,500 MiB. Synapse wrote the same tokens as llama.cpp at every length.</desc>
+  <desc id="desc">Qwen2.5 0.5B, MacBook Pro M2 Pro GPU, FP16 KV cache, median of 2 runs after a warm-up, 128-token answer. Time to first token at 4k, 8k, 16k, 32k: Synapse 1.26, 3.30, 8.99, 27.63 s; llama.cpp 0.85, 2.47, 7.40, 26.62 s; MLX 0.81, 2.05, 5.32, 15.51 s. Decode: Synapse 148.4, 137.0, 118.1, 92.2; llama.cpp 141.4, 127.3, 115.9, 92.9; MLX 143.1, 114.4, 88.3, 60.1 tokens per second. Peak footprint: Synapse 173, 223, 327, 534 MiB; llama.cpp 125, 181, 300, 535 MiB; MLX 1,138, 1,898, 4,401, 13,500 MiB. Synapse and llama.cpp give the same answers; with a 131k window and a 4k prompt Synapse peaks at 234 MiB and llama.cpp at 1,645 MiB.</desc>
   <defs>
     <linearGradient id="syn" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ed732e"/><stop offset="1" stop-color="#db3276"/></linearGradient>
   </defs>
@@ -26,7 +26,7 @@
     }
   </style>
 
-  <rect class="bgc" x="0.5" y="0.5" width="959" height="659" rx="24"/>
+  <rect class="bgc" x="0.5" y="0.5" width="959" height="683" rx="24"/>
 
   <text class="h" x="36" y="50" font-size="24" font-weight="600">Long context on the Apple GPU</text>
   <text class="m" x="36" y="76" font-size="13">Same prompt and token IDs · FP16 KV cache · 128-token answer · median of 2 runs after a warm-up · one engine at a time</text>
@@ -53,56 +53,56 @@
   <text class="h" x="656" y="162" font-size="15" font-weight="600">Peak memory footprint</text>
   <text class="m" x="656" y="180" font-size="12">MiB · shorter is better</text>
 
-  <!-- Time to first token: 5.515 px per second -->
+  <!-- Time to first token: 6.515 px per second -->
   <g font-size="12">
     <text class="t" x="54" y="222" font-weight="600">4k</text>
-    <rect x="86" y="206" width="7.4" height="16" rx="3" fill="url(#syn)"/><text class="t" x="99" y="219">1.34</text>
-    <rect class="llama" x="86" y="226" width="4.7" height="16" rx="3"/><text class="t" x="96" y="239">0.85</text>
-    <rect class="mlx" x="86" y="246" width="4.5" height="16" rx="3"/><text class="t" x="96" y="259">0.81</text>
+    <rect x="86" y="206" width="8.2" height="16" rx="3" fill="url(#syn)"/><text class="t" x="100" y="219">1.26</text>
+    <rect class="llama" x="86" y="226" width="5.5" height="16" rx="3"/><text class="t" x="97" y="239">0.85</text>
+    <rect class="mlx" x="86" y="246" width="5.3" height="16" rx="3"/><text class="t" x="97" y="259">0.81</text>
 
     <text class="t" x="54" y="318" font-weight="600">8k</text>
-    <rect x="86" y="302" width="20.0" height="16" rx="3" fill="url(#syn)"/><text class="t" x="112" y="315">3.63</text>
-    <rect class="llama" x="86" y="322" width="13.6" height="16" rx="3"/><text class="t" x="106" y="335">2.47</text>
-    <rect class="mlx" x="86" y="342" width="11.3" height="16" rx="3"/><text class="t" x="103" y="355">2.05</text>
+    <rect x="86" y="302" width="21.5" height="16" rx="3" fill="url(#syn)"/><text class="t" x="114" y="315">3.30</text>
+    <rect class="llama" x="86" y="322" width="16.1" height="16" rx="3"/><text class="t" x="108" y="335">2.47</text>
+    <rect class="mlx" x="86" y="342" width="13.4" height="16" rx="3"/><text class="t" x="105" y="355">2.05</text>
 
     <text class="t" x="54" y="414" font-weight="600">16k</text>
-    <rect x="86" y="398" width="56.7" height="16" rx="3" fill="url(#syn)"/><text class="t" x="149" y="411">10.28</text>
-    <rect class="llama" x="86" y="418" width="40.8" height="16" rx="3"/><text class="t" x="133" y="431">7.40</text>
-    <rect class="mlx" x="86" y="438" width="29.3" height="16" rx="3"/><text class="t" x="121" y="451">5.32</text>
+    <rect x="86" y="398" width="58.6" height="16" rx="3" fill="url(#syn)"/><text class="t" x="151" y="411">8.99</text>
+    <rect class="llama" x="86" y="418" width="48.2" height="16" rx="3"/><text class="t" x="140" y="431">7.40</text>
+    <rect class="mlx" x="86" y="438" width="34.7" height="16" rx="3"/><text class="t" x="127" y="451">5.32</text>
 
     <text class="t" x="54" y="510" font-weight="600">32k</text>
-    <rect x="86" y="494" width="180" height="16" rx="3" fill="url(#syn)"/><text class="t" x="272" y="507">32.6</text>
-    <rect class="llama" x="86" y="514" width="146.8" height="16" rx="3"/><text class="t" x="239" y="527">26.6</text>
-    <rect class="mlx" x="86" y="534" width="85.5" height="16" rx="3"/><text class="t" x="178" y="547">15.5</text>
+    <rect x="86" y="494" width="180" height="16" rx="3" fill="url(#syn)"/><text class="t" x="272" y="507">27.6</text>
+    <rect class="llama" x="86" y="514" width="173.4" height="16" rx="3"/><text class="t" x="265" y="527">26.6</text>
+    <rect class="mlx" x="86" y="534" width="101.0" height="16" rx="3"/><text class="t" x="193" y="547">15.5</text>
   </g>
 
-  <!-- Writing speed: 1.258 px per token/s -->
+  <!-- Writing speed: 1.2129 px per token/s (Synapse at 4k = 180 px) -->
   <g font-size="12">
     <text class="t" x="355" y="222" font-weight="600">4k</text>
-    <rect x="387" y="206" width="175.9" height="16" rx="3" fill="url(#syn)"/><text class="t" x="569" y="219">140</text>
-    <rect class="llama" x="387" y="226" width="177.9" height="16" rx="3"/><text class="t" x="571" y="239">141</text>
-    <rect class="mlx" x="387" y="246" width="180" height="16" rx="3"/><text class="t" x="573" y="259">143</text>
+    <rect x="387" y="206" width="180" height="16" rx="3" fill="url(#syn)"/><text class="t" x="573" y="219">148</text>
+    <rect class="llama" x="387" y="226" width="171.5" height="16" rx="3"/><text class="t" x="565" y="239">141</text>
+    <rect class="mlx" x="387" y="246" width="173.6" height="16" rx="3"/><text class="t" x="567" y="259">143</text>
 
     <text class="t" x="355" y="318" font-weight="600">8k</text>
-    <rect x="387" y="302" width="162.4" height="16" rx="3" fill="url(#syn)"/><text class="t" x="556" y="315">129</text>
-    <rect class="llama" x="387" y="322" width="160.1" height="16" rx="3"/><text class="t" x="553" y="335">127</text>
-    <rect class="mlx" x="387" y="342" width="143.9" height="16" rx="3"/><text class="t" x="537" y="355">114</text>
+    <rect x="387" y="302" width="166.2" height="16" rx="3" fill="url(#syn)"/><text class="t" x="559" y="315">137</text>
+    <rect class="llama" x="387" y="322" width="154.4" height="16" rx="3"/><text class="t" x="547" y="335">127</text>
+    <rect class="mlx" x="387" y="342" width="138.8" height="16" rx="3"/><text class="t" x="532" y="355">114</text>
 
     <text class="t" x="355" y="414" font-weight="600">16k</text>
-    <rect x="387" y="398" width="141.6" height="16" rx="3" fill="url(#syn)"/><text class="t" x="535" y="411">113</text>
-    <rect class="llama" x="387" y="418" width="145.8" height="16" rx="3"/><text class="t" x="539" y="431">116</text>
-    <rect class="mlx" x="387" y="438" width="111.1" height="16" rx="3"/><text class="t" x="504" y="451">88</text>
+    <rect x="387" y="398" width="143.2" height="16" rx="3" fill="url(#syn)"/><text class="t" x="536" y="411">118</text>
+    <rect class="llama" x="387" y="418" width="140.6" height="16" rx="3"/><text class="t" x="534" y="431">116</text>
+    <rect class="mlx" x="387" y="438" width="107.1" height="16" rx="3"/><text class="t" x="500" y="451">88</text>
 
     <text class="t" x="355" y="510" font-weight="600">32k</text>
-    <rect x="387" y="494" width="113.2" height="16" rx="3" fill="url(#syn)"/><text class="t" x="506" y="507">90</text>
-    <rect class="llama" x="387" y="514" width="116.9" height="16" rx="3"/><text class="t" x="510" y="527">93</text>
-    <rect class="mlx" x="387" y="534" width="75.6" height="16" rx="3"/><text class="t" x="469" y="547">60</text>
+    <rect x="387" y="494" width="111.8" height="16" rx="3" fill="url(#syn)"/><text class="t" x="505" y="507">92</text>
+    <rect class="llama" x="387" y="514" width="112.7" height="16" rx="3"/><text class="t" x="506" y="527">93</text>
+    <rect class="mlx" x="387" y="534" width="72.9" height="16" rx="3"/><text class="t" x="466" y="547">60</text>
   </g>
 
   <!-- Peak footprint: 0.01333 px per MiB (MLX at 32k = 180 px); tiny bars keep a 2 px minimum -->
   <g font-size="12">
     <text class="t" x="656" y="222" font-weight="600">4k</text>
-    <rect x="688" y="206" width="2.3" height="16" rx="1" fill="url(#syn)"/><text class="t" x="696" y="219">174</text>
+    <rect x="688" y="206" width="2.3" height="16" rx="1" fill="url(#syn)"/><text class="t" x="696" y="219">173</text>
     <rect class="llama" x="688" y="226" width="2" height="16" rx="1"/><text class="t" x="696" y="239">125</text>
     <rect class="mlx" x="688" y="246" width="15.2" height="16" rx="3"/><text class="t" x="709" y="259">1,138</text>
 
@@ -112,17 +112,18 @@
     <rect class="mlx" x="688" y="342" width="25.3" height="16" rx="3"/><text class="t" x="719" y="355">1,898</text>
 
     <text class="t" x="656" y="414" font-weight="600">16k</text>
-    <rect x="688" y="398" width="4.4" height="16" rx="1" fill="url(#syn)"/><text class="t" x="698" y="411">328</text>
+    <rect x="688" y="398" width="4.4" height="16" rx="1" fill="url(#syn)"/><text class="t" x="698" y="411">327</text>
     <rect class="llama" x="688" y="418" width="4.0" height="16" rx="1"/><text class="t" x="698" y="431">300</text>
     <rect class="mlx" x="688" y="438" width="58.7" height="16" rx="3"/><text class="t" x="752" y="451">4,401</text>
 
     <text class="t" x="656" y="510" font-weight="600">32k</text>
-    <rect x="688" y="494" width="7.1" height="16" rx="2" fill="url(#syn)"/><text class="t" x="701" y="507">533</text>
+    <rect x="688" y="494" width="7.1" height="16" rx="2" fill="url(#syn)"/><text class="t" x="701" y="507">534</text>
     <rect class="llama" x="688" y="514" width="7.1" height="16" rx="2"/><text class="t" x="701" y="527">535</text>
     <rect class="mlx" x="688" y="534" width="180" height="16" rx="3"/><text class="t" x="874" y="547">13,500</text>
   </g>
 
-  <text class="ok" x="36" y="604" font-size="13" font-weight="600">Tokens: Synapse wrote the same tokens as llama.cpp at every length (128 of 128 at 4k–16k, the whole answer at 32k).</text>
-  <text class="m" x="36" y="626" font-size="12">Footprint counts memory the process owns; Synapse and llama.cpp also map the 644 MiB model file, while MLX copies its weights in.</text>
-  <text class="m" x="36" y="644" font-size="12">Raw data: benchmarks/results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-context-sweep-diagnostic.json · diagnostic, not a paired verdict</text>
+  <text class="ok" x="36" y="602" font-size="13" font-weight="600">Tokens: identical prompt IDs; 28 of 28 long-context answers match llama.cpp. At 8k outputs part after 76 tokens (a near-tie).</text>
+  <text class="ok" x="36" y="622" font-size="13" font-weight="600">Memory grows with use: a 131k window with a 4k prompt peaks at 234 MiB in Synapse, 1,645 MiB in llama.cpp.</text>
+  <text class="m" x="36" y="646" font-size="12">Footprint counts memory the process owns; Synapse and llama.cpp also map the 644 MiB model file, while MLX copies its weights in.</text>
+  <text class="m" x="36" y="664" font-size="12">Raw data: benchmarks/results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-context-sweep-diagnostic.json · diagnostic, not a paired verdict</text>
 </svg>

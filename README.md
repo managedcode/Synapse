@@ -43,9 +43,10 @@ Details: [`docs/Architecture.md`](docs/Architecture.md).
 | Is a whole short request faster? | **Yes in the 8-token smoke.** The local median was 216 ms versus 690 ms; hosted medians were 526–557 ms versus 635–1,671 ms. |
 | Does it use less memory? | **Yes in these CPU diagnostics.** The local smoke was 555 MiB versus 1,256 MiB; hosted Synapse used 539–553 MiB versus 575–1,203 MiB. |
 | Does it start answering fast? | **For the 5-token smoke prompt, yes.** On the hosted long prompt, Synapse's first token was slower than LLamaSharp on all three OSes even with batched prefill. |
-| Does Synapse compute the same thing as **llama.cpp**? | **Yes.** On identical tokens, perplexity matches within 0.01% from 4k to 32k of context, and on the Apple GPU Synapse writes the same tokens (128 of 128 at 4k–16k). |
-| Is it as fast on the **Apple GPU** with long context? | **Writing, yes; the first token, not yet.** From 4k to 32k Synapse writes 90–140 tokens/s, level with llama.cpp (93–141); MLX falls to 60 at 32k. The first token takes 1.2–1.6× llama.cpp's time and 1.6–2.1× MLX's. |
-| Does it use less memory with long context? | **Same as llama.cpp, 25× less than MLX.** At 32k: 533 MiB peak footprint against 535 (llama.cpp) and 13,500 (MLX). |
+| Does Synapse compute the same thing as **llama.cpp**? | **Yes.** On identical tokens, perplexity matches within 0.01% from 4k to 32k of context, and 28 of 28 long-context answers are the same text. Long greedy outputs part only at near-ties, as llama.cpp's own cache types do: at 32k its FP32 and Q8 caches also leave its FP16 output after 18 tokens. |
+| Is it as fast on the **Apple GPU** with long context? | **Writing, yes; the first token, nearly.** From 4k to 32k Synapse writes 92–148 tokens/s, level with llama.cpp (93–141); MLX falls to 60 at 32k. The first token takes 1.04× llama.cpp's time at 32k and 1.5× at 4k; MLX is 1.6–1.8× faster to the first token. |
+| Does it use less memory with long context? | **Less than llama.cpp when the window is large, 25× less than MLX.** At 32k: 534 MiB peak against 535 (llama.cpp) and 13,500 (MLX). With a 131k window and a 4k prompt: 234 MiB against 1,645, because Synapse's KV cache grows with use. |
+| Is a second question about the same long document fast? | **Yes, with prefix reuse.** A second question about a 30,000-token document starts answering in 0.13 s instead of 23.8 s, with the same answer. |
 | Is the model still right on long prompts? | **As right as a 0.5B model gets.** Synapse, llama.cpp, and MLX give the same answers; the misses (a hidden number at 32k, keys among distractors, variable chains) happen in every engine, so they are the model's limits. |
 | How does **Microsoft Foundry Local** do? | **Fast, but quality-limited in this test.** With separate ONNX weights on about 6 cores, Qwen2.5 0.5B reached 231 tokens/s and the 7B models 22–25 tokens/s; none of the 7 model/device variants fully completed the 128-token instruction. |
 | Is it faster than the other .NET engine, dotLLM? | **In the same 8-token smoke, 14× faster.** |
@@ -110,14 +111,22 @@ its final GitHub job summary.
 - **Tokens.** Every engine gets the same prompt, and its token IDs are
   checked before its answer counts. Synapse's answers match llama.cpp's
   byte for byte in 28 of 28 long-context questions.
-- **Memory.** Synapse keeps the KV cache at 384 MiB for 32k tokens (FP16) and
-  maps the model file instead of copying it.
-- **Speed.** Writing is level with llama.cpp. The first token is the open gap:
-  prompt attention and the prompt matrix multiply are slower. Removing the
-  staged K/V tile from prompt attention already cut 32k from 40.5 s to 32.6 s.
-- **FP32 KV cache.** Synapse writes 73 tokens/s at 32k, against 10.7 for
-  llama.cpp with the same cache type.
-- Details, every engine and KV cache type, and CPU rows: runs Q–T in
+- **Memory.** The KV cache grows with the context in use instead of being
+  reserved for the whole window, and the model file is mapped, not copied.
+  At 32k Synapse and llama.cpp both peak at 534–535 MiB. With a 131k window
+  and a 4k prompt Synapse peaks at 234 MiB, llama.cpp at 1,645 MiB.
+- **Speed.** Writing is level with llama.cpp (92 against 93 tokens/s at 32k).
+  Prompt attention now reads K and V straight from the cache with the softmax
+  in registers: the first token at 32k fell from 40.5 s to 27.6 s, against
+  26.6 s for llama.cpp. On short prompts the prompt matrix multiply is still
+  the gap (1.26 s against 0.85 s at 4k).
+- **Second question, same document.** Prefix reuse keeps the document's K and
+  V: the second question about a 30,000-token document reaches its first
+  token in 0.13 s instead of 23.8 s.
+- **FP32 KV cache.** Synapse writes 54 tokens/s at 32k, against 10.7 for
+  llama.cpp with the same cache type. At 32k this cache is sensitive to heat:
+  repeated runs gave 45–73 tokens/s and a 31–37 s first token.
+- Details, every engine and KV cache type, and CPU rows: runs Q–V in
   [`benchmarks/README.md`](benchmarks/README.md).
 
 ### Microsoft Foundry Local, 6 models
@@ -144,7 +153,9 @@ its final GitHub job summary.
 | | Problem | Fix | Where |
 |---|---|---|---|
 | 🔴 | Hosted long-prompt first token and 128-token decode trail the CPU references | Profile prefill and decode on each runner | `experiments/Synapse.ReferenceBenchmarks` |
-| 🔴 | Apple GPU first token is 1.2–1.6× llama.cpp's; the prompt matrix multiply alone is 1.55× slower at 512 tokens | Profile the GEMM with GPU counters (tile, half, and layout experiments did not close it) | `native/synapse-gpu/.../metal/shaders/matmul.metal` |
+| 🔴 | Apple GPU first token is 1.5× llama.cpp's at 4k (1.04× at 32k); the prompt matrix multiply alone is 1.55× slower at 512 tokens | Profile the GEMM with GPU counters (tile, half, and layout experiments did not close it) | `native/synapse-gpu/.../metal/shaders/matmul.metal` |
+| 🟡 | Past 32k the 0.5B model is out of its rated range | Head size 128 kernels, then Qwen2.5-7B-Instruct-1M | `native/synapse-gpu`, `gpu-kernels.plan.md` LONG.1 |
+| 🟡 | Prefix reuse lives in one process | Persistent prefix cache: KV on disk, metadata in ZoneTree | ADR-018 |
 | 🟡 | CPU first token is 1.9× llama.cpp's at 8k | Tiled, vectorized prompt attention | `Qwen2CpuAttention.cs` |
 | 🟡 | Smart context (query-aware KV pages) is proven only on CPU: +3.4% perplexity while reading 30% of an 8k context | Metal kernels matched to the C# selection, then measure speed and memory | ADR-016, `KvPageSelector.cs` |
 | 🟡 | CUDA is written but has never run | Run CUDA on an NVIDIA machine | `native/synapse-gpu` |

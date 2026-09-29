@@ -87,12 +87,13 @@ kernel void synapse_rope_kv(
     const batch_token token = tokens[gid.z];
     device float * row = qkv + (ulong)gid.z * a.qkv_stride;
     device KV * kv = (device KV *)slots.address[token.slot];
+    const uint capacity = slots.capacity[token.slot];
     const uint position = (uint)token.position;
     if (head >= a.heads + a.kv_heads) {
         const uint kv_head = head - a.heads - a.kv_heads;
         device const float * value = row + a.value_column + kv_head * SYNAPSE_HEAD_DIM;
-        const ulong base = kv_value_base(a.layers, a.kv_heads, a.context) +
-            kv_offset(a.layer, kv_head, position, a.kv_heads, a.context);
+        const ulong base = kv_value_base(a.layers, a.kv_heads, capacity) +
+            kv_offset(a.layer, kv_head, position, a.kv_heads, capacity);
         kv[base + i] = (KV)value[i];
         kv[base + i + a.half_dim] = (KV)value[i + a.half_dim];
         return;
@@ -111,7 +112,7 @@ kernel void synapse_rope_kv(
     values[i] = rotated_first;
     values[i + a.half_dim] = rotated_second;
     if (is_key) {
-        const ulong base = kv_offset(a.layer, head - a.heads, position, a.kv_heads, a.context);
+        const ulong base = kv_offset(a.layer, head - a.heads, position, a.kv_heads, capacity);
         kv[base + i] = (KV)rotated_first;
         kv[base + i + a.half_dim] = (KV)rotated_second;
     }

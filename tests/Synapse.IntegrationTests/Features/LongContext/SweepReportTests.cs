@@ -49,6 +49,33 @@ public sealed class SweepReportTests
     }
 
     [Test]
+    public async Task FailedRunsStayVisibleInTheSummary()
+    {
+        var model = new SweepModel(676_000_000, 24, 2, 64);
+        var failed = Sample(round: 3, warmup: false, ttft: 50, footprint: 1);
+        failed = failed with { Correct = false, Run = failed.Run with { ExitCode = 1 } };
+        SweepSample[] samples =
+        [
+            Sample(round: 1, warmup: false, ttft: 100, footprint: 1),
+            Sample(round: 2, warmup: false, ttft: 300, footprint: 1),
+            failed,
+            failed with { Subject = "llamacpp-metal" },
+        ];
+
+        var rows = SweepReport.Summarize("synapse-metal/f16", model, Tokenizer(), samples);
+        var partial = rows.Single(row => row.Subject == "synapse-metal");
+        var broken = rows.Single(row => row.Subject == "llamacpp-metal");
+
+        await Assert.That(partial.MeasuredRuns).IsEqualTo(3);
+        await Assert.That(partial.FailedRuns).IsEqualTo(1);
+        await Assert.That(partial.CorrectRuns).IsEqualTo(2);
+        await Assert.That(partial.TimeToFirstTokenMilliseconds).IsEqualTo(200.0);
+        await Assert.That(broken.FailedRuns).IsEqualTo(1);
+        await Assert.That(broken.TimeToFirstTokenMilliseconds).IsNull();
+        await Assert.That(SweepReport.Markdown(rows)).Contains("| 2/3, 1 failed |");
+    }
+
+    [Test]
     public async Task MergeReplacesEveryEarlierSampleOfARerunCell()
     {
         var model = new SweepModel(676_000_000, 24, 2, 64);

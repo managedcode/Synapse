@@ -46,10 +46,19 @@ internal sealed class MlxServer : IAsyncDisposable
         var process = Process.Start(start) ?? throw new InvalidOperationException("SwiftLM did not start.");
         var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var pumps = Task.WhenAll(PumpAsync(process.StandardOutput, ready), PumpAsync(process.StandardError, ready));
-        await ready.Task.WaitAsync(TimeSpan.FromMinutes(3)).ConfigureAwait(false);
         var server = new MlxServer(process, pumps, model, port);
-        await server.WaitUntilListeningAsync().ConfigureAwait(false);
-        return server;
+        try
+        {
+            await ready.Task.WaitAsync(TimeSpan.FromMinutes(3)).ConfigureAwait(false);
+            await server.WaitUntilListeningAsync().ConfigureAwait(false);
+            return server;
+        }
+        catch
+        {
+            // A server that never became ready would stay resident and skew later memory and speed samples.
+            await server.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
     }
 
     /// <summary>The ready log line can precede the listening socket, so the model list is polled until it answers.</summary>
@@ -60,13 +69,16 @@ internal sealed class MlxServer : IAsyncDisposable
         {
             try
             {
-                using var response = await Client.GetAsync(new Uri($"http://127.0.0.1:{Port}/v1/models")).ConfigureAwait(false);
+                using var probe = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                using var response = await Client.GetAsync(new Uri($"http://127.0.0.1:{Port}/v1/models"), probe.Token)
+                    .ConfigureAwait(false);
                 if (response.IsSuccessStatusCode)
                 {
                     return;
                 }
             }
-            catch (HttpRequestException) when (DateTime.UtcNow < deadline)
+            catch (Exception exception) when (exception is HttpRequestException or OperationCanceledException &&
+                DateTime.UtcNow < deadline)
             {
             }
 

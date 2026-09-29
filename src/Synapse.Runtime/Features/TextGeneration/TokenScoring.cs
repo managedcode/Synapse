@@ -72,7 +72,7 @@ internal static class TokenScoring
                 step[index] = new BatchToken(0, tokens[position + index], position + index, scored ? index : -1);
             }
 
-            batch.Forward(step.AsSpan(0, count));
+            batch.Forward(step.AsSpan(0, count), promptStart: scored ? count : 0);
             if (scored)
             {
                 var start = position;

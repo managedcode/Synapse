@@ -26,7 +26,8 @@ internal static class Qwen2ModelComposition
             file.GetRequiredSingle("qwen2.rope.freq_base"),
             file.GetRequiredSingle("qwen2.attention.layer_norm_rms_epsilon"),
             scaling,
-            options.KvPageActivation);
+            options.KvPageActivation,
+            options.KvGrowthPositions);
     }
 
     /// <summary>The model context limit: trained, or extended by an explicit scaling profile (ADR-013).</summary>

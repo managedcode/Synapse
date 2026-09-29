@@ -54,11 +54,15 @@ internal sealed unsafe class GpuDecoderExecutor : IDecoderExecutor, IBatchDecode
 
     public int VocabularySize => _dimensions.VocabularySize;
 
+    public long AllocatedKvBytes => _model == 0 ? 0 : _library.KvBytes(_model);
+
+    public void Reserve(int positions) => _library.Reserve(_model, 0, positions);
+
     public int LogitsRowCapacity => _logits.Length / _dimensions.VocabularySize;
 
-    public ReadOnlyMemory<float> Prefill(IReadOnlyList<int> tokens, Action<int>? evaluated = null)
+    public ReadOnlyMemory<float> PrefillFrom(IReadOnlyList<int> tokens, int first, Action<int>? evaluated)
     {
-        for (var start = 0; start < tokens.Count; start += _prefillTokens)
+        for (var start = first; start < tokens.Count; start += _prefillTokens)
         {
             var count = Math.Min(_prefillTokens, tokens.Count - start);
             for (var index = 0; index < count; index++)
@@ -67,7 +71,7 @@ internal sealed unsafe class GpuDecoderExecutor : IDecoderExecutor, IBatchDecode
                 _batch[index] = new BatchToken(0, tokens[position], position, position == tokens.Count - 1 ? 0 : -1);
             }
 
-            Forward(_batch.AsSpan(0, count));
+            Forward(_batch.AsSpan(0, count), promptStart: 0);
             evaluated?.Invoke(start + count);
         }
 
@@ -77,11 +81,12 @@ internal sealed unsafe class GpuDecoderExecutor : IDecoderExecutor, IBatchDecode
     public ReadOnlyMemory<float> Decode(int token, int position)
     {
         _batch[0] = new BatchToken(0, token, position, 0);
-        Forward(_batch.AsSpan(0, 1));
+        Forward(_batch.AsSpan(0, 1), promptStart: 1);
         return LogitsRow(0);
     }
 
-    public void Forward(ReadOnlySpan<BatchToken> tokens)
+    /// <remarks>KV page activation is a CPU profile (ADR-016), so the prompt boundary changes nothing here.</remarks>
+    public void Forward(ReadOnlySpan<BatchToken> tokens, int promptStart)
     {
         ObjectDisposedException.ThrowIf(_model == 0, this);
         _ = Validate(tokens);
@@ -167,6 +172,7 @@ internal sealed unsafe class GpuDecoderExecutor : IDecoderExecutor, IBatchDecode
                 RopeLayout = layout.RopeLayout == RotaryLayout.NeoX ? 0u : 1u,
                 Activation = 0,
                 KvPrecision = kvPrecision == KvCachePrecision.Fp16 ? 1u : 0u,
+                KvGrowthPositions = (uint)dimensions.KvGrowthPositions,
             };
             return _library.CreateDecoder(backend, description);
         }
@@ -225,7 +231,7 @@ internal sealed unsafe class GpuDecoderExecutor : IDecoderExecutor, IBatchDecode
 
     static GpuDecoderExecutor()
     {
-        if (Unsafe.SizeOf<BatchToken>() != 16 || sizeof(NativeDecoderDesc) != 128 || sizeof(NativeGpuDeviceInfo) != 152)
+        if (Unsafe.SizeOf<BatchToken>() != 16 || sizeof(NativeDecoderDesc) != 136 || sizeof(NativeGpuDeviceInfo) != 152)
         {
             throw new PlatformNotSupportedException("GPU ABI struct layouts differ from the native library.");
         }

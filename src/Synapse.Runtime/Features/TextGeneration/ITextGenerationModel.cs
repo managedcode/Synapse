@@ -52,7 +52,11 @@ public sealed record TextGenerationResult(
     IReadOnlyList<int> PromptTokens,
     IReadOnlyList<int> GeneratedTokens,
     TimeSpan TimeToFirstToken,
-    TimeSpan Elapsed);
+    TimeSpan Elapsed)
+{
+    /// <summary>Prompt tokens whose K and V were reused instead of evaluated (ADR-018).</summary>
+    public int ReusedPromptTokens { get; init; }
+}
 
 /// <summary>Progress of one generation call, reported after each prompt chunk and each generated token.</summary>
 /// <param name="EvaluatedPromptTokens">Prompt tokens already evaluated.</param>

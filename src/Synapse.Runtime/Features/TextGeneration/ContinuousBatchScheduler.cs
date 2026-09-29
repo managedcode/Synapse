@@ -18,6 +18,7 @@ internal sealed class ContinuousBatchScheduler(IBatchDecoder decoder, object exe
     private readonly List<BatchRequest> _waiting = [];
     private readonly List<BatchRequest> _active = [];
     private readonly BatchToken[] _step = new BatchToken[decoder.StepTokenCapacity];
+    private readonly int[] _sampled = new int[decoder.StepTokenCapacity];
     private readonly Lock _startGate = new();
     private Thread? _loop;
     private volatile bool _disposed;
@@ -92,7 +93,7 @@ internal sealed class ContinuousBatchScheduler(IBatchDecoder decoder, object exe
         {
             RetireCancelled();
             Admit();
-            var count = Compose();
+            var (count, decodeTokens, logitsRows) = Compose();
             if (count == 0)
             {
                 _signal.Wait();
@@ -101,10 +102,7 @@ internal sealed class ContinuousBatchScheduler(IBatchDecoder decoder, object exe
 
             try
             {
-                lock (_executionGate)
-                {
-                    _decoder.Forward(_step.AsSpan(0, count));
-                }
+                ForwardAndSample(count, decodeTokens, logitsRows);
             }
             catch (Exception exception)
             {
@@ -113,6 +111,19 @@ internal sealed class ContinuousBatchScheduler(IBatchDecoder decoder, object exe
             }
 
             Advance();
+        }
+    }
+
+    /// <summary>Runs one step and samples its rows before releasing the gate: a direct call may overwrite the logits next.</summary>
+    private void ForwardAndSample(int count, int decodeTokens, int logitsRows)
+    {
+        lock (_executionGate)
+        {
+            _decoder.Forward(_step.AsSpan(0, count), promptStart: decodeTokens);
+            for (var row = 0; row < logitsRows; row++)
+            {
+                _sampled[row] = GreedySampling.ArgMax(_decoder.GetLogits(row));
+            }
         }
     }
 
@@ -145,7 +156,8 @@ internal sealed class ContinuousBatchScheduler(IBatchDecoder decoder, object exe
         throw new InvalidOperationException("No free KV slot although admission reported capacity.");
     }
 
-    private int Compose()
+    /// <summary>Decode tokens first, then prompt chunks; returns the step size, decode tokens, and logits rows.</summary>
+    private (int Count, int DecodeTokens, int LogitsRows) Compose()
     {
         var count = 0;
         var logitsRow = 0;
@@ -154,6 +166,8 @@ internal sealed class ContinuousBatchScheduler(IBatchDecoder decoder, object exe
             request.BeginStep(prefill: 0, decode: 1, logitsRow);
             _step[count++] = new BatchToken(request.Slot, request.Generated[^1], request.Length, logitsRow++);
         }
+
+        var decodeTokens = count;
 
         foreach (var request in _active.Where(request => request.InPrefill))
         {
@@ -168,7 +182,7 @@ internal sealed class ContinuousBatchScheduler(IBatchDecoder decoder, object exe
             }
         }
 
-        return count;
+        return (count, decodeTokens, logitsRow);
     }
 
     private void Advance()
@@ -190,8 +204,7 @@ internal sealed class ContinuousBatchScheduler(IBatchDecoder decoder, object exe
                 continue;
             }
 
-            var token = GreedySampling.ArgMax(_decoder.GetLogits(request.StepLogitsRow));
-            if (request.Accept(token, _endOfSequenceToken))
+            if (request.Accept(_sampled[request.StepLogitsRow], _endOfSequenceToken))
             {
                 _ = _active.Remove(request);
             }

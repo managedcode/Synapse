@@ -9,7 +9,7 @@ use crate::gpu_kernels::GpuDeviceInfo;
 use crate::gpu_kernels::decoder::{BatchToken, DecoderPlan, KvPrecision};
 use crate::gpu_kernels::error::GpuError;
 use crate::gpu_kernels::params::{MAX_SLOTS, SlotTable};
-use crate::gpu_kernels::schedule::plan_attention;
+use crate::gpu_kernels::schedule::{RUN_TOKENS, plan_attention};
 use crate::gpu_kernels::step::{
     Activations, Binding, Kernel, StepBackend, StepInputs, encode_step,
 };
@@ -108,7 +108,7 @@ impl CudaDecoder {
             .map(|index| u32::try_from(index).unwrap_or(u32::MAX))
             .collect();
         copy_to_device(&self.context, &self.activations.gather, &gather)?;
-        let attention = plan_attention(tokens, self.plan.shape.kv_heads);
+        let attention = plan_attention(tokens, self.plan.shape.kv_heads, RUN_TOKENS);
         copy_to_device(&self.context, &self.activations.blocks, &attention.blocks)?;
         let inputs = StepInputs {
             plan: &self.plan,
@@ -144,8 +144,32 @@ impl CudaDecoder {
         driver.check(copied, "cuMemcpyDtoH")
     }
 
+    /// CUDA slots are allocated at full size on first use, so a reservation only validates its arguments.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GpuError::InvalidArgument`] for an unknown slot or more positions than the context.
+    pub fn reserve(&mut self, slot: usize, positions: u32) -> Result<(), GpuError> {
+        if slot >= self.slots.len() || positions > self.plan.shape.context {
+            return Err(GpuError::invalid(
+                "reserve needs a known slot and at most the context positions",
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Bytes of K and V allocated across every slot, without padding; CUDA slots are full size.
+    #[must_use]
+    pub fn kv_bytes(&self) -> u64 {
+        let slots = self.slots.iter().flatten().count() as u64;
+        slots * self.plan.shape.slot_bytes(self.plan.shape.context)
+    }
+
     fn prepare_slots(&mut self, tokens: &[BatchToken]) -> Result<SlotTable, GpuError> {
-        let bytes = self.plan.shape.slot_bytes() + SLOT_PADDING_BYTES;
+        // CUDA keeps full-size slots until it runs on hardware (ADR-017): capacity equals the context.
+        let context = self.plan.shape.context;
+        let bytes = self.plan.shape.slot_bytes(context) + SLOT_PADDING_BYTES;
         for token in tokens {
             let slot = token.slot.unsigned_abs() as usize;
             if self.slots[slot].is_none() {
@@ -161,10 +185,13 @@ impl CudaDecoder {
 
         let mut table = SlotTable {
             address: [0; MAX_SLOTS],
+            capacity: [0; MAX_SLOTS],
+            pad: 0,
         };
         for (index, slot) in self.slots.iter().enumerate() {
             if let Some(buffer) = slot {
                 table.address[index] = buffer.pointer;
+                table.capacity[index] = context;
             }
         }
 

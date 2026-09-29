@@ -69,6 +69,8 @@ fn desc(length: u64, embedding: u64, output: u64, norm: u64) -> DecoderDesc {
         rope_layout: 0,
         activation: 0,
         kv_precision: KV_F32,
+        kv_growth_positions: 64,
+        pad: 0,
     }
 }
 
@@ -81,7 +83,7 @@ fn plan_accepts_exact_layout() {
     assert_eq!(plan.shape.group(), 2);
     assert_eq!(plan.shape.qkv_width(), 256);
     assert_eq!(plan.rope_floats, 8 * 32);
-    assert_eq!(plan.shape.slot_bytes(), 2 * 8 * 64 * 4);
+    assert_eq!(plan.shape.slot_bytes(8), 2 * 8 * 64 * 4);
 }
 
 #[test]
@@ -221,9 +223,39 @@ fn fp16_kv_halves_slot_bytes_and_unknown_precision_is_rejected() {
     let full = DecoderPlan::new(&base, &[layer]).expect("valid layout");
     let halved = DecoderPlan::new(&half, &[layer]).expect("valid layout");
 
-    assert_eq!(halved.shape.slot_bytes() * 2, full.shape.slot_bytes());
+    assert_eq!(halved.shape.slot_bytes(8) * 2, full.shape.slot_bytes(8));
     assert!(matches!(
         DecoderPlan::new(&unknown, &[layer]),
         Err(GpuError::InvalidArgument(_))
     ));
+}
+
+#[test]
+fn kv_capacity_grows_by_unit_and_doubling_up_to_the_context() {
+    let (layer, embedding, output, norm, length) = layout();
+    let mut description = desc(length, embedding, output, norm);
+    description.context = 4_096;
+    description.kv_growth_positions = 1_024;
+    let shape = DecoderPlan::new(&description, &[layer])
+        .expect("valid layout")
+        .shape;
+
+    assert_eq!(shape.next_capacity(1, 0), 1_024);
+    assert_eq!(shape.next_capacity(1_025, 1_024), 2_048);
+    assert_eq!(shape.next_capacity(3_001, 1_024), 3_072);
+    assert_eq!(shape.next_capacity(3_500, 3_072), 4_096);
+    assert_eq!(shape.kv_bytes_per_position(), 2 * 64 * 4);
+}
+
+#[test]
+fn kv_growth_unit_must_be_a_positive_multiple_of_64() {
+    let (layer, embedding, output, norm, length) = layout();
+    for unit in [0, 32, 100] {
+        let mut description = desc(length, embedding, output, norm);
+        description.kv_growth_positions = unit;
+        assert!(matches!(
+            DecoderPlan::new(&description, &[layer]),
+            Err(GpuError::InvalidArgument(_))
+        ));
+    }
 }

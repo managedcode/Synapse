@@ -32,11 +32,20 @@ public sealed record ModelLoadOptions
     /// </summary>
     public int ScoringRowsPerStep { get; init; } = 8;
 
+    /// <summary>KV slots grow in multiples of this many positions, at least doubling (ADR-017).</summary>
+    internal int KvGrowthPositions { get; init; } = 1024;
+
     /// <summary>
     /// Query-aware KV page activation for decode tokens (ADR-016), or <see langword="null"/> for dense attention. An
     /// approximation profile implemented on the managed and native CPU backends; other backends fail at load.
     /// </summary>
     public KvPageActivation? KvPageActivation { get; init; }
+
+    /// <summary>
+    /// Reuses the direct session's K and V for the longest token prefix shared with the previous direct request
+    /// (ADR-018). Reused positions carry the earlier request's numbers, so this is opt-in.
+    /// </summary>
+    public bool ReusePromptPrefix { get; init; }
 
     /// <summary>Prompt tokens evaluated per shared weight pass by optimized backends.</summary>
     internal int PrefillChunkTokens { get; init; } = 64;
@@ -56,6 +65,11 @@ public sealed record ModelLoadOptions
         ArgumentOutOfRangeException.ThrowIfGreaterThan(MaximumConcurrentSessions, 64);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(ScoringRowsPerStep);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(ScoringRowsPerStep, 512);
+        if (KvGrowthPositions <= 0 || KvGrowthPositions % 64 != 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(KvGrowthPositions), KvGrowthPositions, "KV growth is a positive multiple of 64 positions.");
+        }
+
         if (!Enum.IsDefined(KernelBackend))
         {
             throw new ArgumentOutOfRangeException(nameof(KernelBackend), KernelBackend, "Unknown kernel backend.");

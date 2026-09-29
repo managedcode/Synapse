@@ -48,11 +48,14 @@ internal sealed class Qwen2CpuAttention
             : null;
     }
 
-    /// <summary>Attends the first <paramref name="count"/> batch tokens after their KV writes.</summary>
-    public void Execute(int layer, int count)
+    /// <summary>
+    /// Attends the first <paramref name="count"/> batch tokens after their KV writes; tokens from
+    /// <paramref name="promptStart"/> on are prompt tokens and attend densely.
+    /// </summary>
+    public void Execute(int layer, int count, int promptStart)
     {
         _layer = layer;
-        _pages?.Prepare(layer, count);
+        _pages?.Prepare(layer, count, promptStart);
         var items = count * _dimensions.AttentionHeads;
         long attendedPositions = 0;
         for (var index = 0; index < count; index++)

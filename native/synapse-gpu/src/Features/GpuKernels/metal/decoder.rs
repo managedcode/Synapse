@@ -7,12 +7,14 @@ use std::ptr::NonNull;
 use objc2_metal::{MTLBuffer, MTLDevice, MTLResourceOptions};
 
 use super::MetalContext;
-use super::encoder::{Buffer, Submission, download, shared_buffer, upload, zero_fill};
+use super::encoder::{
+    Buffer, Submission, copy_regions, download, shared_buffer, upload, zero_fill,
+};
 use crate::gpu_kernels::GpuDeviceInfo;
-use crate::gpu_kernels::decoder::{BatchToken, DecoderPlan};
+use crate::gpu_kernels::decoder::{BatchToken, DecoderPlan, DecoderShape, HEAD_DIM};
 use crate::gpu_kernels::error::GpuError;
 use crate::gpu_kernels::params::{MAX_SLOTS, SlotTable};
-use crate::gpu_kernels::schedule::plan_attention;
+use crate::gpu_kernels::schedule::{METAL_RUN_TOKENS, plan_attention};
 use crate::gpu_kernels::step::{Activations, StepInputs, encode_step};
 
 /// One attention tile of FP32 keys (32 x 64 floats) after the last value position.
@@ -20,6 +22,12 @@ const SLOT_PADDING_BYTES: u64 = 32 * 64 * 4;
 
 unsafe extern "C" {
     fn getpagesize() -> i32;
+}
+
+/// One session's K and V and the positions its buffer holds, which is also the position stride (ADR-017).
+struct KvSlot {
+    buffer: Buffer,
+    capacity: u32,
 }
 
 /// A loaded dense decoder on the default Metal device.
@@ -31,7 +39,7 @@ pub struct MetalDecoder {
     cosines: Buffer,
     sines: Buffer,
     activations: Activations<Buffer>,
-    slots: Vec<Option<Buffer>>,
+    slots: Vec<Option<KvSlot>>,
 }
 
 impl MetalDecoder {
@@ -69,7 +77,9 @@ impl MetalDecoder {
         let activations =
             Activations::sizes(&plan).try_map(|name, bytes| shared_buffer(device, bytes, name))?;
         Ok(Self {
-            slots: vec![None; plan.shape.session_slots as usize],
+            slots: std::iter::repeat_with(|| None)
+                .take(plan.shape.session_slots as usize)
+                .collect(),
             context,
             plan,
             weights,
@@ -109,10 +119,15 @@ impl MetalDecoder {
             .map(|index| u32::try_from(index).unwrap_or(u32::MAX))
             .collect();
         upload(&self.activations.gather, &gather);
-        let attention = plan_attention(tokens, self.plan.shape.kv_heads);
+        let attention = plan_attention(tokens, self.plan.shape.kv_heads, METAL_RUN_TOKENS);
         upload(&self.activations.blocks, &attention.blocks);
 
-        let resident: Vec<&Buffer> = self.slots.iter().flatten().collect();
+        let resident: Vec<&Buffer> = self
+            .slots
+            .iter()
+            .flatten()
+            .map(|slot| &slot.buffer)
+            .collect();
         let mut submission = Submission::begin(&self.context, resident)?;
         let inputs = StepInputs {
             plan: &self.plan,
@@ -141,30 +156,106 @@ impl MetalDecoder {
         Ok(())
     }
 
+    /// Sizes `slot` for `positions` at once (ADR-017), so a known request allocates one buffer instead of growing.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GpuError::InvalidArgument`] for an unknown slot or more positions than the context, and
+    /// [`GpuError::OutOfMemory`] or [`GpuError::Device`] when the slot cannot be allocated or copied.
+    pub fn reserve(&mut self, slot: usize, positions: u32) -> Result<(), GpuError> {
+        if slot >= self.slots.len() || positions > self.plan.shape.context {
+            return Err(GpuError::invalid(
+                "reserve needs a known slot and at most the context positions",
+            ));
+        }
+
+        let current = self.slots[slot].as_ref().map_or(0, |kv| kv.capacity);
+        if positions > current {
+            let capacity = self.plan.shape.reserve_capacity(positions);
+            let grown = self.allocate_slot(capacity, self.slots[slot].as_ref())?;
+            self.slots[slot] = Some(grown);
+        }
+
+        Ok(())
+    }
+
+    /// Bytes of K and V allocated across every slot, without padding.
+    #[must_use]
+    pub fn kv_bytes(&self) -> u64 {
+        self.slots
+            .iter()
+            .flatten()
+            .map(|slot| self.plan.shape.slot_bytes(slot.capacity))
+            .sum()
+    }
+
+    /// Grows every slot the step writes beyond its capacity, then describes all slots for the kernels.
     fn prepare_slots(&mut self, tokens: &[BatchToken]) -> Result<SlotTable, GpuError> {
-        let bytes = self.plan.shape.slot_bytes();
+        let mut needed = vec![0_u32; self.slots.len()];
         for token in tokens {
             let slot = token.slot.unsigned_abs() as usize;
-            if self.slots[slot].is_none() {
-                // One tile of padding lets decode read a whole last tile; zero fill keeps unread keys finite.
-                let buffer =
-                    shared_buffer(&self.context.device, bytes + SLOT_PADDING_BYTES, "KV slot")?;
-                zero_fill(&self.context, &buffer)?;
-                self.slots[slot] = Some(buffer);
+            needed[slot] = needed[slot].max(token.position.unsigned_abs() + 1);
+        }
+
+        for (index, &need) in needed.iter().enumerate() {
+            let current = self.slots[index].as_ref().map_or(0, |slot| slot.capacity);
+            if need > current {
+                let grown = self.allocate_slot(
+                    self.plan.shape.next_capacity(need, current),
+                    self.slots[index].as_ref(),
+                )?;
+                self.slots[index] = Some(grown);
             }
         }
 
         let mut table = SlotTable {
             address: [0; MAX_SLOTS],
+            capacity: [0; MAX_SLOTS],
+            pad: 0,
         };
         for (index, slot) in self.slots.iter().enumerate() {
-            if let Some(buffer) = slot {
-                table.address[index] = buffer.gpuAddress();
+            if let Some(slot) = slot {
+                table.address[index] = slot.buffer.gpuAddress();
+                table.capacity[index] = slot.capacity;
             }
         }
 
         Ok(table)
     }
+
+    /// A zero-filled slot of `capacity` positions holding a copy of `previous` (ADR-017). One tile of padding
+    /// lets attention read a whole last tile; zero fill keeps unread keys finite.
+    fn allocate_slot(&self, capacity: u32, previous: Option<&KvSlot>) -> Result<KvSlot, GpuError> {
+        let shape = self.plan.shape;
+        let buffer = shared_buffer(
+            &self.context.device,
+            shape.slot_bytes(capacity) + SLOT_PADDING_BYTES,
+            "KV slot",
+        )?;
+        zero_fill(&self.context, &buffer)?;
+        if let Some(previous) = previous {
+            let regions = region_copies(&shape, previous.capacity, capacity);
+            copy_regions(&self.context, &previous.buffer, &buffer, &regions)?;
+        }
+
+        Ok(KvSlot { buffer, capacity })
+    }
+}
+
+/// `(source, target, length)` byte ranges that move every (K or V, layer, KV head) region of `from` positions
+/// to its place in a slot of `to` positions; the layout is `[K|V][layer][KV head][position][HEAD_DIM]`.
+fn region_copies(shape: &DecoderShape, from: u32, to: u32) -> Vec<(u64, u64, u64)> {
+    let row = u64::from(HEAD_DIM) * shape.kv_precision.element_bytes();
+    let regions = 2 * u64::from(shape.layer_count) * u64::from(shape.kv_heads);
+    (0..regions)
+        .map(|region| {
+            (
+                region * u64::from(from) * row,
+                region * u64::from(to) * row,
+                u64::from(from) * row,
+            )
+        })
+        .collect()
 }
 
 /// Wraps the page-aligned span that covers `[weights, weights + length)` as a no-copy shared buffer.

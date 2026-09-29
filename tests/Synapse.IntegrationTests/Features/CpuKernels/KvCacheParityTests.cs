@@ -71,7 +71,7 @@ public sealed class KvCacheParityTests
     [Test]
     public async Task KvCacheKeepsHeadsSeparateAndRejectsOutOfRangePositions()
     {
-        var cache = new Qwen2KvCache(layers: 2, capacity: 3, kvWidth: 8);
+        var cache = new Qwen2KvCache(layers: 2, maximumPositions: 3, kvWidth: 8, growthPositions: 1_024);
         float[] key = [0, 1, 2, 3, 4, 5, 6, 7];
         float[] value = [10, 11, 12, 13, 14, 15, 16, 17];
 

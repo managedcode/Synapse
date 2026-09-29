@@ -179,7 +179,25 @@
       "stage": "D1",
       "status": "in_progress",
       "dependsOn": ["TASK-CTX-004"],
-      "tests": ["TEST-CTX-006-1", "TEST-CTX-006-2", "TEST-CTX-006-3"]
+      "tests": ["TEST-CTX-006-1", "TEST-CTX-006-2", "TEST-CTX-006-3", "TEST-CTX-006-4"]
+    },
+    {
+      "id": "TASK-CTX-007",
+      "requirement": "REQ-CTX-007",
+      "slice": "LongContext",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-CTX-002"],
+      "tests": ["TEST-CTX-007-1", "TEST-CTX-007-2", "TEST-CTX-007-3", "TEST-CTX-007-4"]
+    },
+    {
+      "id": "TASK-CTX-008",
+      "requirement": "REQ-CTX-008",
+      "slice": "LongContext",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-CTX-007"],
+      "tests": ["TEST-CTX-008-1", "TEST-CTX-008-2", "TEST-CTX-008-3"]
     },
     {
       "id": "TASK-TOK-001",

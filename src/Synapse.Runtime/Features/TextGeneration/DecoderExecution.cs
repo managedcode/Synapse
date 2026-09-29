@@ -17,7 +17,8 @@ internal sealed record DecoderDimensions(
     float RopeTheta,
     float RmsNormEpsilon,
     RopeScaling? RopeScaling = null,
-    ModelLoading.KvPageActivation? KvPages = null)
+    ModelLoading.KvPageActivation? KvPages = null,
+    int KvGrowthPositions = 1024)
 {
     public int HeadDimension => HiddenSize / AttentionHeads;
 
@@ -35,10 +36,23 @@ internal interface IDecoderExecutor : IDisposable
     string KernelImplementation { get; }
 
     /// <summary>Evaluates prompt positions <c>0..n-1</c> and returns the final position's logits.</summary>
-    ReadOnlyMemory<float> Prefill(IReadOnlyList<int> tokens, Action<int>? evaluated = null);
+    ReadOnlyMemory<float> Prefill(IReadOnlyList<int> tokens, Action<int>? evaluated = null) =>
+        PrefillFrom(tokens, 0, evaluated);
+
+    /// <summary>
+    /// Evaluates positions <paramref name="start"/>..n-1 of the direct slot, whose K and V before <paramref name="start"/>
+    /// already hold the same tokens (ADR-018), and returns the final position's logits.
+    /// </summary>
+    ReadOnlyMemory<float> PrefillFrom(IReadOnlyList<int> tokens, int start, Action<int>? evaluated);
 
     /// <summary>Evaluates one token at <paramref name="position"/> and returns its logits.</summary>
     ReadOnlyMemory<float> Decode(int token, int position);
+
+    /// <summary>Bytes of KV currently allocated across every slot (ADR-017).</summary>
+    long AllocatedKvBytes { get; }
+
+    /// <summary>Sizes the direct slot for <paramref name="positions"/> at once, so a known request does not grow it.</summary>
+    void Reserve(int positions);
 }
 
 /// <summary>A weight read in place: its source byte range (Model IR) and physical encoding.</summary>

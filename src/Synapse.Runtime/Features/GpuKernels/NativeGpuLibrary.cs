@@ -11,7 +11,7 @@ namespace ManagedCode.Synapse.Runtime.Features.GpuKernels;
 /// </summary>
 internal sealed unsafe class NativeGpuLibrary
 {
-    public const uint ExpectedAbiVersion = 1;
+    public const uint ExpectedAbiVersion = 2;
     private const int StatusOk = 0;
     private const int StatusUnavailable = 3;
     private const int StatusOutOfMemory = 5;
@@ -23,6 +23,8 @@ internal sealed unsafe class NativeGpuLibrary
     private readonly delegate* unmanaged<uint, NativeDecoderDesc*, nint*, int> _create;
     private readonly delegate* unmanaged<nint, BatchToken*, nuint, float*, nuint, int> _forward;
     private readonly delegate* unmanaged<nint, void> _destroy;
+    private readonly delegate* unmanaged<nint, ulong> _kvBytes;
+    private readonly delegate* unmanaged<nint, uint, uint, int> _reserve;
 
     private NativeGpuLibrary(string path, nint handle)
     {
@@ -33,6 +35,8 @@ internal sealed unsafe class NativeGpuLibrary
         _forward = (delegate* unmanaged<nint, BatchToken*, nuint, float*, nuint, int>)
             Export(handle, path, "synapse_gpu_decoder_forward");
         _destroy = (delegate* unmanaged<nint, void>)Export(handle, path, "synapse_gpu_decoder_destroy");
+        _kvBytes = (delegate* unmanaged<nint, ulong>)Export(handle, path, "synapse_gpu_decoder_kv_bytes");
+        _reserve = (delegate* unmanaged<nint, uint, uint, int>)Export(handle, path, "synapse_gpu_decoder_reserve");
     }
 
     public string LibraryPath { get; }
@@ -107,7 +111,14 @@ internal sealed unsafe class NativeGpuLibrary
         }
     }
 
+    /// <summary>Sizes a KV slot for <paramref name="positions"/> at once (ADR-017).</summary>
+    public void Reserve(nint model, int slot, int positions) =>
+        ThrowIfFailed(_reserve(model, checked((uint)slot), checked((uint)positions)), backend: null);
+
     public void Destroy(nint model) => _destroy(model);
+
+    /// <summary>Bytes of K and V the model currently holds (ADR-017).</summary>
+    public long KvBytes(nint model) => checked((long)_kvBytes(model));
 
     private static uint BackendCode(KernelBackend backend) => backend switch
     {
@@ -211,4 +222,6 @@ internal unsafe struct NativeDecoderDesc
     public uint RopeLayout;
     public uint Activation;
     public uint KvPrecision;
+    public uint KvGrowthPositions;
+    public uint Pad;
 }

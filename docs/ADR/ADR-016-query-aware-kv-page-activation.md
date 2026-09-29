@@ -57,7 +57,11 @@ These papers are references for the design, not evidence for Synapse.
   prefix, the selection is every page and the result must equal dense
   attention within the existing decode tolerance. A test pins this.
 - **Scope of the first step.** Decode only. Prefill stays dense, so the whole
-  prompt is read once. The C# managed and native CPU backends implement it
+  prompt is read once. Every batched step names its prompt boundary
+  (`IBatchDecoder.Forward(tokens, promptStart)`): prompt tokens stay dense even
+  when one lands alone in a step, as the last token of a 641-token prompt in
+  64-token chunks or a one-token reused tail (ADR-018) does. Only tokens before
+  the boundary that are alone in their slot are decode units. The C# managed and native CPU backends implement it
   first as the reference semantics (`KvPageSelector`). The reference backend
   and GPU backends reject it at load until they implement it. The Metal
   kernels (page summaries updated with K, a bound-and-select kernel, and
@@ -90,7 +94,8 @@ These papers are references for the design, not evidence for Synapse.
 - Tests: `KeyBoundNeverUnderestimatesAPageScore`,
   `SelectionKeepsSinkWindowAndTheBestPage`,
   `RandomControlSelectsTheBudgetDeterministically`,
-  `KvPagesCoveringThePrefixEqualDense`, and
+  `KvPagesCoveringThePrefixEqualDense`,
+  `PromptTokensStayDenseEvenAloneInAStep`, and
   `KvPagesAreNamedAndRejectedWhereNotImplemented`. Quality comes from
   decode-mode scoring (`synapse score --scoring-rows 1 --kv-pages ...`), which
   sends every scored position through the decode path.

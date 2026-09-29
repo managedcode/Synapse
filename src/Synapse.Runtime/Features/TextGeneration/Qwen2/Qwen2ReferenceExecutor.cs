@@ -28,7 +28,7 @@ internal sealed class Qwen2ReferenceExecutor : IDecoderExecutor
             dimensions.FeedForwardSize,
             dimensions.VocabularySize,
             dimensions.ContextSize);
-        _cache = new Qwen2KvCache(dimensions.LayerCount, dimensions.ContextSize, dimensions.KvWidth);
+        _cache = new Qwen2KvCache(dimensions.LayerCount, dimensions.ContextSize, dimensions.KvWidth, dimensions.KvGrowthPositions);
         _parallelOptions = new ParallelOptions { MaxDegreeOfParallelism = threads };
         _rope = new RopeFrequencies(dimensions.HeadDimension, dimensions.RopeTheta, dimensions.RopeScaling);
     }
@@ -37,9 +37,13 @@ internal sealed class Qwen2ReferenceExecutor : IDecoderExecutor
 
     public string KernelImplementation => "reference-scalar-fp32";
 
-    public ReadOnlyMemory<float> Prefill(IReadOnlyList<int> tokens, Action<int>? evaluated = null)
+    public long AllocatedKvBytes => _cache.AllocatedBytes;
+
+    public void Reserve(int positions) => _cache.Reserve(positions);
+
+    public ReadOnlyMemory<float> PrefillFrom(IReadOnlyList<int> tokens, int start, Action<int>? evaluated)
     {
-        for (var index = 0; index < tokens.Count - 1; index++)
+        for (var index = start; index < tokens.Count - 1; index++)
         {
             _ = Forward(tokens[index], index, computeLogits: false);
             evaluated?.Invoke(index + 1);

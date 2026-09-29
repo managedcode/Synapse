@@ -148,9 +148,12 @@ code, pre { font-family: var(--mono); }
 .ctx-grid .bars li { grid-template-columns: 70px 1fr auto; }
 .bars .c4 b { background: #283849; }
 .ctx-tokens { font-size: 14px; font-weight: 600; color: #114e0b; }
+.ctx-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 24px; }
+.ctx-duo .panel-big span { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.ctx-duo .bars li { grid-template-columns: 112px 1fr auto; }
 .notyet { margin-top: 48px; padding: 30px; border: 1px dashed rgba(22, 22, 22, .25); border-radius: var(--r); }
 .notyet h3 { margin-bottom: 20px; font-size: 22px; font-weight: 650; letter-spacing: -.02em; }
-.notyet ul { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+.notyet ul { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; }
 .notyet li { display: grid; gap: 6px; font-size: 15px; color: var(--ink-2); }
 .notyet b { font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--ink); }
 
@@ -259,7 +262,7 @@ code, pre { font-family: var(--mono); }
   .step { align-items: flex-end; padding-bottom: 72px; }
   .scroll-hint { display: none; }
   .proof { gap: 14px 26px; }
-  .ctx-grid,
+  .ctx-grid, .ctx-duo,
   .bench, .notyet ul, .columns, .features, .pipe, .modes, .credits { grid-template-columns: 1fr; }
   .pipe li::after { display: none; }
   .climb { padding: 20px; }

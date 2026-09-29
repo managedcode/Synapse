@@ -53,6 +53,10 @@ Design references were studied from source (license noted, nothing copied):
     per core. All 17 Metal tests pass.
   - Measured: time to first token at 4k/8k/16k/32k went from 1.41/3.98/11.96/40.5 s to 1.34/3.63/10.28/32.6 s.
     llama.cpp takes 0.85/2.47/7.40/26.6 s.
+  - Done (2026-09-29): scores and outputs stay in registers as each lane's fragment pair (`lane_pair`, MLX's
+    layout), with no threadgroup round trip and no diagonal rescale. 32k time to first token is now 27.0 s and
+    16k is 9.0 s. `SYNAPSE_GPU_PROFILE=1` reports GPU time per kernel.
+  - Not taken: two eight-row halves per simdgroup share each K/V load but spilled (32k: 38.1 s).
   - Open: the prompt GEMM. At 512 tokens Synapse takes 179–185 ms against llama.cpp 108–126 ms, about
     2.2 TFLOPS. Three experiments did not close the gap:
     - half-precision weight tiles: -5%, rejected because the rounding changes the exact Q8_0 x FP32 profile;
@@ -82,6 +86,19 @@ Design references were studied from source (license noted, nothing copied):
   the equal-budget random control at every budget; 16-token pages with 2,048 tokens cost +3.4% at 8k and
   +6.2% at 16k. Open: needle tasks under the profile, the Metal kernels matched to the C# selection (the
   only way to measure speed and memory), then a cold tier for unselected pages.
+- [x] CTX.7 `TASK-CTX-007` (ADR-017): dynamic KV capacity. Slots grow in 1,024-position units and at least
+  double, up to the instance context. Metal passes each slot's capacity in the slot table and grows with a
+  blit copy; the CPU cache resizes. The tests failed first (the API was missing, then a 136-byte descriptor
+  broke the 128-byte size check), then passed. A slot that grows many times is bitwise equal to a full slot
+  on Metal and CPU. With `--context-size 131072` and a 4k prompt, Synapse peaks at 234 MiB (FP16 KV) and
+  290 MiB (FP32 KV), where llama.cpp with the same `-c` peaks at 1,645 and 3,159 MiB.
+  A request of known size reserves its slot once. Without that, a 32k prompt peaked at 686 MiB while growing;
+  with it, 534 MiB, the same as before dynamic KV. The reservation test was red first (4,096 positions), then
+  green.
+- [x] CTX.8 `TASK-CTX-008` (ADR-018): prompt prefix reuse on the direct session (`ReusePromptPrefix`). The tests
+  were red first (the API was missing), then green: bitwise equal to a cold run on CPU, the same greedy tokens on
+  Metal, and invalidated by other direct work. The `prefix-reuse` experiment measures a second question about a
+  long document.
 - [x] BENCH.1 context sweep (`experiments ... sweep`, `sweep-report`). Every engine and KV cache type at
   4k/8k/16k/32k on three axes: tokens, memory, and speed. It feeds the README (`long-context.svg`),
   `benchmarks/README.md` run T, and the site's interactive block.
@@ -92,6 +109,33 @@ Design references were studied from source (license noted, nothing copied):
     - llama.cpp perf lines with timestamps;
     - the footprint-versus-RSS asymmetry, now reported as both.
   - Multi-machine comparison follows ADR-009.
+- [x] REVIEW.1 independent review of the session's changes (2026-09-29, read-only agent), and fixes:
+  - Prefix reuse (high): a request that failed part way left stale remembered tokens, so a retry reused
+    overwritten K/V. `DirectSessionPrefix.Claim` now cuts the memory to the shared prefix before any write.
+    `FailedRequestKeepsOnlyThePrefixItDidNotOverwrite` was red first (699 reused, 300 expected), then green.
+  - KV pages (medium): a prompt token alone in a step (a 641-token prompt, a one-token reused tail) got
+    sparse attention. `IBatchDecoder.Forward(tokens, promptStart)` now names the prompt boundary, and prompt
+    tokens stay dense. `PromptTokensStayDenseEvenAloneInAStep` was red first, then green. The recorded CPU KV
+    page evidence is unaffected: its scoring starts at 2,048, 7,168, and 15,360, multiples of the 64-token
+    step, so no prompt token was ever alone in a step.
+  - Batch scheduler (medium, older): logits were sampled after the execution gate was released, so a direct
+    call could overwrite them first. Sampling now happens under the gate. No deterministic reproduction was
+    found; the fix is by construction.
+  - Low: CPU KV resize publishes capacity last; `AllocatedKvBytes` reads under the gate; Metal submissions end
+    an open encoder on every error path, and blit regions are validated before the encoder exists; the profile
+    mode keeps its command buffers in the step's GPU time; a test pins `ATT_RUN_HALVES × 8 = METAL_RUN_TOKENS`;
+    a SwiftLM server that never gets ready is killed; each readiness probe has its own 2 s timeout; sweep
+    summaries count failed runs (`FailedRunsStayVisibleInTheSummary`, written with the fix, not red first).
+  - Verification: .NET 261 of 261, Rust 26 of 26, clippy clean.
+- [ ] LONG.1 roadmap from the 2026-09-29 research (`synapse.brainstorm.md`), in order of gain per effort:
+  1. A persistent prefix cache: ZoneTree metadata keyed by model, tokenizer, RoPE, KV type, and prefix hash;
+     mmap payloads.
+  2. Paged KV blocks: pages as the unit of growth, Quest bounds, and quantization.
+  3. Quest-style decode on Metal, matched to `KvPageSelector`: absolute budgets and dense first layers.
+  4. Block-sparse prefill above 32k (XAttention or FlexPrefill style), checked against dense on the quality
+     suite.
+  5. Head dimension 128 on the GPU, for Qwen2.5-7B-Instruct-1M (needs the owner's approval to download).
+  6. GEMM counters (shader profiler) before any further kernel guesses.
 - [ ] GPU.11 ideas from the llama.cpp, MLX, and vLLM study that are not yet measured here: share one
   grouped-query K/V read across the query heads of a group in decode; concurrent dispatch with two command
   buffers per token; GPU arg-max; fused QKV, gate+up+SwiGLU, and residual+norm kernels; half K/V prefill

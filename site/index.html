@@ -169,28 +169,28 @@
       <div class="ctx-grid">
         <div><p class="ctx-label">Memory</p>
           <ul class="bars" data-metric="mem">
-            <li class="me"><span>Synapse</span><i><b style="--w:3.9%"></b></i><em>533 MiB</em></li>
+            <li class="me"><span>Synapse</span><i><b style="--w:4%"></b></i><em>534 MiB</em></li>
             <li class="c1"><span>llama.cpp</span><i><b style="--w:4%"></b></i><em>535 MiB</em></li>
             <li class="c4"><span>MLX</span><i><b style="--w:100%"></b></i><em>13,500 MiB</em></li>
           </ul>
           <p class="unit">peak footprint · KV cache <span data-kvm>384</span> MiB</p></div>
         <div><p class="ctx-label">First token</p>
           <ul class="bars" data-metric="ttft">
-            <li class="me"><span>Synapse</span><i><b style="--w:100%"></b></i><em>32.64 s</em></li>
-            <li class="c1"><span>llama.cpp</span><i><b style="--w:81.6%"></b></i><em>26.62 s</em></li>
-            <li class="c4"><span>MLX</span><i><b style="--w:47.5%"></b></i><em>15.51 s</em></li>
+            <li class="me"><span>Synapse</span><i><b style="--w:100%"></b></i><em>27.63 s</em></li>
+            <li class="c1"><span>llama.cpp</span><i><b style="--w:96.3%"></b></i><em>26.62 s</em></li>
+            <li class="c4"><span>MLX</span><i><b style="--w:56.1%"></b></i><em>15.51 s</em></li>
           </ul>
           <p class="unit">time to first token · lower is better</p></div>
         <div><p class="ctx-label">Full answer</p>
           <ul class="bars" data-metric="gen">
-            <li class="me"><span>Synapse</span><i><b style="--w:100%"></b></i><em>32.84 s</em></li>
-            <li class="c1"><span>llama.cpp</span><i><b style="--w:81.6%"></b></i><em>26.81 s</em></li>
-            <li class="c4"><span>MLX</span><i><b style="--w:53.7%"></b></i><em>17.62 s</em></li>
+            <li class="me"><span>Synapse</span><i><b style="--w:100%"></b></i><em>27.82 s</em></li>
+            <li class="c1"><span>llama.cpp</span><i><b style="--w:96.4%"></b></i><em>26.81 s</em></li>
+            <li class="c4"><span>MLX</span><i><b style="--w:63.3%"></b></i><em>17.62 s</em></li>
           </ul>
           <p class="unit" data-tokens>Synapse and llama.cpp stop after 19 tokens, MLX writes 128</p></div>
         <div><p class="ctx-label">Writing speed</p>
           <ul class="bars" data-metric="dec">
-            <li class="me"><span>Synapse</span><i><b style="--w:96.9%"></b></i><em>90.0</em></li>
+            <li class="me"><span>Synapse</span><i><b style="--w:99.2%"></b></i><em>92.2</em></li>
             <li class="c1"><span>llama.cpp</span><i><b style="--w:100%"></b></i><em>92.9</em></li>
             <li class="c4"><span>MLX</span><i><b style="--w:64.7%"></b></i><em>60.1</em></li>
           </ul>
@@ -199,6 +199,28 @@
       <p class="ctx-tokens" data-same>Same tokens: Synapse wrote the same tokens llama.cpp wrote. Right answer: Synapse 2/2, llama.cpp 2/2, MLX 0/2.</p>
     </article>
     <p class="fine reveal">MacBook Pro, Apple M2 Pro 19-core GPU. Qwen2.5 0.5B Q8_0, one prompt per context: repository text with a hidden number, then “state the number and summarize”, up to 128 tokens. Every engine gets the same text and its token IDs are checked. Median of 2 runs after a warm-up, one engine at a time. MLX runs its own 8-bit weights and cache format; Synapse and llama.cpp also map the 644 MiB model file. Perplexity on identical tokens matches llama.cpp within 0.01% at 4k–32k. <a href="https://github.com/managedcode/Synapse/blob/main/benchmarks/README.md">Run T and raw JSON ↗</a></p>
+
+    <div class="ctx-duo">
+      <article class="panel reveal">
+        <div class="panel-top"><h3>A big window, small memory</h3></div>
+        <p class="panel-big"><span>7×</span><small>less than llama.cpp</small></p>
+        <ul class="bars">
+          <li class="me"><span>Synapse</span><i><b style="--w:14.2%"></b></i><em>234 MiB</em></li>
+          <li class="c1"><span>llama.cpp</span><i><b style="--w:100%"></b></i><em>1,645 MiB</em></li>
+        </ul>
+        <p class="unit">peak footprint · 131k window, 4k prompt, FP16 KV · the KV cache grows with use instead of being reserved</p>
+      </article>
+      <article class="panel reveal">
+        <div class="panel-top"><h3>Second question, same document</h3></div>
+        <p class="panel-big"><span>0.13 s</span><small>to the first token</small></p>
+        <ul class="bars">
+          <li class="me"><span>Reuse prefix</span><i><b style="--w:0.6%"></b></i><em>0.13 s</em></li>
+          <li><span>Read it again</span><i><b style="--w:100%"></b></i><em>23.8 s</em></li>
+        </ul>
+        <p class="unit">30,000-token document · Metal, FP16 KV · the same answer either way</p>
+      </article>
+    </div>
+    <p class="fine reveal">One run per row, a fresh process each; diagnostics, not a paired verdict. <a href="https://github.com/managedcode/Synapse/blob/main/benchmarks/README.md">Runs U and V ↗</a></p>
 
     <article class="panel foundry reveal">
       <div class="panel-top"><h3>Also measured · Microsoft Foundry Local · 6 models</h3></div>
@@ -218,7 +240,8 @@
     <div class="notyet reveal">
       <h3>Not there yet. We say so.</h3>
       <ul>
-        <li><b>First token</b><span>On the Apple GPU the first token takes 1.2–1.6× llama.cpp's time (32.6 s vs 26.6 s at 32k). The prompt matrix multiply is the gap.</span></li>
+        <li><b>First token on short prompts</b><span>On the Apple GPU the first token takes 1.5× llama.cpp's time at 4k, 1.04× at 32k (27.6 s vs 26.6 s). The prompt matrix multiply is the gap.</span></li>
+        <li><b>Past 32k</b><span>The 0.5B model is rated for 32k. Longer windows need head size 128 kernels and a 1M-context model, which are next.</span></li>
         <li><b>Smart context on CPU only</b><span>Reading only the relevant KV pages costs +3.4% perplexity while reading 30% of an 8k context. The GPU kernels are next.</span></li>
         <li><b>CUDA untested</b><span>Metal runs. The CUDA backend is written but has not run on an NVIDIA GPU yet.</span></li>
         <li><b>One family</b><span>Only Qwen2 runs today. More model families are next.</span></li>

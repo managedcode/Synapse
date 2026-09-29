@@ -29,6 +29,13 @@ evaluation), and ADR-012 (GPU execution). The plan is `gpu-kernels.plan.md`.
   covers the prefix equals dense attention bitwise. A seeded random selection
   at the same budget is the control. Backends that do not implement it fail
   at load.
+- `REQ-CTX-007`: KV memory follows the context in use (ADR-017). A slot grows on
+  demand up to the instance context. Growth never changes the numbers, and the
+  allocated KV bytes are observable.
+- `REQ-CTX-008`: With `ReusePromptPrefix`, the direct session reuses the K and V
+  of the longest token prefix it already holds (ADR-018). It evaluates only the
+  new tokens and reports how many were reused. Any other direct use
+  invalidates the remembered tokens.
 
 ## Acceptance criteria and tests
 
@@ -50,6 +57,14 @@ evaluation), and ADR-012 (GPU execution). The plan is `gpu-kernels.plan.md`.
 | `AC-CTX-006-1` the page bound never underestimates a query-key product; selection keeps the sink, the window, and the best page; the random control is deterministic and honours the budget | `TEST-CTX-006-1` `KeyBoundNeverUnderestimatesAPageScore`, `SelectionKeepsSinkWindowAndTheBestPage`, `RandomControlSelectsTheBudgetDeterministically` |
 | `AC-CTX-006-2` a covering budget equals dense logits bitwise, and a small budget changes them | `TEST-CTX-006-2` `KvPagesCoveringThePrefixEqualDense` |
 | `AC-CTX-006-3` the profile is named in the runtime profile and rejected with ADR-016 on the reference and Metal backends | `TEST-CTX-006-3` `KvPagesAreNamedAndRejectedWhereNotImplemented` |
+| `AC-CTX-006-4` prompt tokens attend densely even alone in a step (a 641-token prompt in 64-token chunks, a one-token reused tail) | `TEST-CTX-006-4` `PromptTokensStayDenseEvenAloneInAStep` |
+| `AC-CTX-007-1` the CPU cache grows by unit and doubling, keeps its contents, and rejects positions at the context | `TEST-CTX-007-1` `CpuKvCacheGrowsAndKeepsContents` |
+| `AC-CTX-007-2` a slot that grows many times gives bitwise the logits of a full-size slot on Metal and CPU, with fewer bytes | `TEST-CTX-007-2` `GrowingKvSlotMatchesFullSlotBitwise` |
+| `AC-CTX-007-3` allocated KV bytes follow the positions in use (1,024 then 2,048 positions) | `TEST-CTX-007-3` `KvBytesFollowTheContextInUse`, Rust `kv_capacity_grows_by_unit_and_doubling_up_to_the_context` |
+| `AC-CTX-007-4` a request of known size reserves its slot once (3,072 positions, not 4,096 by growth) | `TEST-CTX-007-4` `GenerateReservesPromptAndOutputOnce` |
+| `AC-CTX-008-1` a reused prefix is skipped and the answer equals a cold run: bitwise on CPU, the same greedy tokens on Metal | `TEST-CTX-008-1` `ReusedPrefixSkipsSharedTokensAndMatchesAColdRunOnCpu`, `ReusedPrefixMatchesAColdRunOnMetal` |
+| `AC-CTX-008-2` an identical prompt re-evaluates only its last token, and other direct work invalidates the reuse | `TEST-CTX-008-2` `IdenticalPromptReevaluatesOnlyItsLastTokenAndOtherDirectWorkInvalidates` |
+| `AC-CTX-008-3` a request that fails part way keeps only the prefix it never overwrote, so a retry reuses no stale K or V | `TEST-CTX-008-3` `FailedRequestKeepsOnlyThePrefixItDidNotOverwrite` |
 
 ## Current evidence
 

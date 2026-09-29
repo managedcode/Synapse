@@ -30,6 +30,8 @@ measures Microsoft Foundry Local alone on six models from four families.
 | R. Long-context answers, 4 engines, 4k to 32k | Metal FP32/FP16 KV, native CPU | GPU / CPU 8 | 1 measured per case | [GPU](results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-long-context-quality-diagnostic.json), [CPU](results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-long-context-quality-cpu-diagnostic.json) |
 | S. KV page activation quality (ADR-016) | Native CPU, C# page selection | CPU 8 | 1 measured per row | [JSON](results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-kv-page-activation-cpu-diagnostic.json) |
 | **T. Context sweep, 4k to 32k, tokens + memory + speed (main README)** | Metal FP32/FP16 KV with prompt attention reading K/V directly; native CPU | GPU / CPU 8 | 1 warm-up + 2 measured, rotated | [JSON](results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-context-sweep-diagnostic.json), [prompt IDs](scenarios/context-sweep/) |
+| U. Dynamic KV memory, 131k window (ADR-017) | Metal FP16/FP32 KV, growing slots with reservation | GPU | 1 measured per row | [JSON](results/2026-09-29-m2-pro-qwen2.5-0.5b-q8_0-dynamic-kv-memory-diagnostic.json) |
+| V. Second question about a 30k-token document (ADR-018) | Metal FP16 KV, prompt prefix reuse | GPU | 1 measured per row | [JSON](results/2026-09-29-m2-pro-qwen2.5-0.5b-q8_0-prefix-reuse-diagnostic.json) |
 
 Local machine: MacBook Pro, Apple M2 Pro (8 performance + 4 efficiency cores,
 19-core GPU), 32 GB, macOS 27.0 arm64. Every CPU sample starts a new process.
@@ -214,44 +216,48 @@ invalid evidence is listed and makes that reporting job fail.
 | 4096 | llamacpp-metal | f32 | 96 | 876 | 174 | 0.96 | 3.01 | 62.1 | 128 | 2/2 | 128 |
 | 4096 | llamacpp-metal | q8_0 | 26 | 808 | 103 | 0.92 | 1.97 | 120.4 | 128 | 2/2 | 59 |
 | 4096 | mlx-swiftlm | native | — | 657 | 1138 | 0.81 | 1.70 | 143.1 | 128 | 2/2 | 38 |
-| 4096 | synapse-metal | f16 | 48 | 606 | 174 | 1.34 | 2.24 | 139.8 | 128 | 2/2 | 128 |
-| 4096 | synapse-metal | f32 | 96 | 606 | 222 | 1.36 | 2.32 | 132.2 | 128 | 2/2 | 128 |
+| 4096 | synapse-metal | f16 | 48 | 605 | 173 | 1.26 | 2.11 | 148.4 | 128 | 2/2 | 128 |
+| 4096 | synapse-metal | f32 | 96 | 602 | 222 | 1.30 | 2.21 | 140.3 | 128 | 2/2 | 128 |
 | 4096 | synapse-native | f32 | 96 | 697 | 161 | 15.68 | 17.61 | 65.8 | 128 | 2/2 | 51 |
 | 8192 | llamacpp-cpu | f16 | 96 | 1270 | 703 | 32.23 | 34.60 | 53.6 | 128 | 2/2 | 43 |
 | 8192 | llamacpp-metal | f16 | 96 | 884 | 181 | 2.47 | 3.47 | 127.3 | 128 | 2/2 | 128 |
 | 8192 | llamacpp-metal | f32 | 192 | 981 | 277 | 2.64 | 6.17 | 36.0 | 128 | 2/2 | 128 |
 | 8192 | llamacpp-metal | q8_0 | 51 | 841 | 137 | 2.51 | 3.64 | 112.3 | 128 | 2/2 | 52 |
 | 8192 | mlx-swiftlm | native | — | 656 | 1898 | 2.05 | 3.16 | 114.4 | 128 | 0/2 | 1 |
-| 8192 | synapse-metal | f16 | 96 | 607 | 223 | 3.63 | 4.62 | 129.1 | 128 | 2/2 | 128 |
-| 8192 | synapse-metal | f32 | 192 | 606 | 318 | 3.82 | 4.88 | 120.0 | 128 | 2/2 | 128 |
+| 8192 | synapse-metal | f16 | 96 | 606 | 223 | 3.30 | 4.22 | 137.0 | 128 | 2/2 | 76 |
+| 8192 | synapse-metal | f32 | 192 | 607 | 319 | 3.54 | 4.51 | 130.8 | 128 | 2/2 | 128 |
 | 8192 | synapse-native | f32 | 192 | 805 | 265 | 59.75 | 62.89 | 40.4 | 128 | 2/2 | 67 |
 | 16384 | llamacpp-metal | f16 | 192 | 1004 | 300 | 7.40 | 8.50 | 115.9 | 128 | 0/2 | 128 |
 | 16384 | llamacpp-metal | f32 | 384 | 1189 | 487 | 8.10 | 14.23 | 20.7 | 128 | 0/2 | 128 |
 | 16384 | llamacpp-metal | q8_0 | 102 | 909 | 204 | 7.55 | 8.88 | 95.2 | 128 | 0/2 | 1 |
 | 16384 | mlx-swiftlm | native | — | 657 | 4401 | 5.32 | 6.76 | 88.3 | 128 | 0/2 | 42 |
-| 16384 | synapse-metal | f16 | 192 | 610 | 328 | 10.28 | 11.40 | 112.6 | 128 | 0/2 | 128 |
-| 16384 | synapse-metal | f32 | 384 | 612 | 520 | 11.06 | 12.34 | 99.1 | 128 | 0/2 | 128 |
+| 16384 | synapse-metal | f16 | 192 | 606 | 327 | 8.99 | 10.06 | 118.1 | 128 | 0/2 | 128 |
+| 16384 | synapse-metal | f32 | 384 | 607 | 521 | 9.89 | 11.11 | 104.7 | 128 | 0/2 | 128 |
 | 32768 | llamacpp-metal | f16 | 384 | 1208 | 535 | 26.62 | 26.81 | 92.9 | 19 | 2/2 | 18 |
 | 32768 | llamacpp-metal | f32 | 768 | 1610 | 906 | 27.36 | 29.04 | 10.7 | 19 | 2/2 | 18 |
 | 32768 | llamacpp-metal | q8_0 | 204 | 1049 | 344 | 25.52 | 25.76 | 75.1 | 19 | 2/2 | 18 |
 | 32768 | mlx-swiftlm | native | — | 657 | 13500 | 15.51 | 17.62 | 60.1 | 128 | 0/2 | 0 |
-| 32768 | synapse-metal | f16 | 384 | 624 | 533 | 32.64 | 32.84 | 90.0 | 19 | 2/2 | 18 |
-| 32768 | synapse-metal | f32 | 768 | 623 | 917 | 35.40 | 35.64 | 73.3 | 19 | 2/2 | 18 |
+| 32768 | synapse-metal | f16 | 384 | 601 | 534 | 27.63 | 27.82 | 92.2 | 19 | 2/2 | 18 |
+| 32768 | synapse-metal | f32 | 768 | 612 | 917 | 37.38 | 37.72 | 53.8 | 19 | 2/2 | 18 |
 
 
 **Reading it**
 - **Engine agreement.**
-  - Synapse Metal wrote the same 128 tokens as llama.cpp at 4k, 8k, and
-    16k, and the same whole answer at 32k.
+  - Synapse Metal wrote the same 128 tokens as llama.cpp at 4k and 16k, and
+    the same whole answer at 32k. At 8k the FP16 output parts after 76
+    tokens at a near-tie (FP32 KV keeps all 128). llama.cpp's own FP32 and
+    Q8 caches also leave its FP16 output at 32k after 18 tokens.
   - At 16k every engine missed the hidden number, and at 8k MLX (with its
     own 8-bit weights) missed it too. These are model limits, not engine
     errors.
-- **Writing speed.** Synapse with FP16 KV matches llama.cpp with FP16 KV.
-  With FP32 KV, llama.cpp falls to 10.7 tokens/s at 32k, while Synapse keeps
-  73.
-- **Time to first token.** Synapse is 1.2–1.6× llama.cpp and 1.6–2.1× MLX.
-  This is the open gap: the prompt matrix multiply is about 1.55× slower at
-  512 tokens.
+- **Writing speed.** Synapse with FP16 KV matches llama.cpp with FP16 KV
+  (92.2 against 92.9 tokens/s at 32k). With FP32 KV, llama.cpp falls to 10.7
+  tokens/s at 32k, while Synapse keeps 53.8.
+- **Time to first token.** Prompt attention now reads K and V straight from
+  the cache, with the softmax state in registers. Synapse is 1.04× llama.cpp
+  at 32k (27.6 s against 26.6 s), 1.2× at 16k, and 1.5× at 4k. MLX is
+  1.6–1.8× faster. What is left is the prompt matrix multiply, about 1.55×
+  slower at 512 tokens.
 - **Memory.**
   - The footprint counts memory the process owns. Synapse and llama.cpp
     also map the 644 MiB model file, while MLX copies its weights in. MLX
@@ -264,7 +270,46 @@ invalid evidence is listed and makes that reporting job fail.
     verdict.
   - Across two Synapse runs of identical decode code, 4k and 8k decode
     varied by 4–6%.
+  - Synapse FP32 KV at 32k is sensitive to heat. Repeated runs of the same
+    code gave a 31–37 s first token and 45–73 tokens/s; the table keeps the
+    sweep's own medians.
   - CPU rows run up to 8k only.
+
+## U. Dynamic KV memory (ADR-017)
+
+[JSON](results/2026-09-29-m2-pro-qwen2.5-0.5b-q8_0-dynamic-kv-memory-diagnostic.json).
+One fresh process per row, `/usr/bin/time -l` peak footprint.
+
+| Window | Prompt | KV | Synapse | llama.cpp |
+|---:|---|---|---:|---:|
+| 131,072 (YaRN ×4) | 3,904 tokens | f16 | 234 MiB | 1,645 MiB |
+| 131,072 (YaRN ×4) | 3,904 tokens | f32 | 282 MiB | 3,159 MiB |
+| 32,768 | 32,640 tokens | f16 | 534 MiB | 535 MiB (run T) |
+
+- The KV cache grows in 1,024-position steps and at least doubles, instead of
+  being reserved for the whole window. `Generate` reserves the prompt plus
+  the maximum answer once. Without that reservation, growing through 32k
+  peaked at 686 MiB.
+- llama.cpp reserves the whole `-c` window, so its footprint follows the
+  window, not the prompt.
+
+## V. Second question about the same document (ADR-018)
+
+[JSON](results/2026-09-29-m2-pro-qwen2.5-0.5b-q8_0-prefix-reuse-diagnostic.json).
+Metal, FP16 KV, a 32k window, and the first 30,000 tokens of the pinned
+haystack. One model asks two questions, 32 new tokens each.
+
+| Prefix reuse | Question | Prompt tokens | Reused | First token |
+|---|---:|---:|---:|---:|
+| off | 1 | 30,031 | 0 | 23.46 s |
+| off | 2 | 30,027 | 0 | 23.76 s |
+| on | 1 | 30,031 | 0 | 23.49 s |
+| on | 2 | 30,027 | 30,015 | **0.13 s** |
+
+- With reuse on and off the answers are the same text.
+- Reuse is in-process and opt-in (`ModelLoadOptions.ReusePromptPrefix`). A
+  persistent prefix cache across processes is the next step.
+- One run per row: a diagnostic, not a paired verdict.
 
 ## P–S. Quality on long prompts (ADR-014, ADR-015, ADR-016)
 

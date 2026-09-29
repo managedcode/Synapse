@@ -2,7 +2,10 @@ using System.Globalization;
 using System.Text;
 using ManagedCode.Synapse.Runtime.Features.Tokenization;
 
-/// <summary>One sweep cell: medians of the measured (non-warm-up) samples on the three axes.</summary>
+/// <summary>
+/// One sweep cell: medians of the successful measured (non-warm-up) samples on the three axes. Failed runs count toward
+/// <see cref="MeasuredRuns"/> and <see cref="FailedRuns"/>, so a crash never hides behind a clean-looking cell.
+/// </summary>
 internal sealed record SweepRow(
     int Context,
     string Subject,
@@ -19,6 +22,7 @@ internal sealed record SweepRow(
     int GeneratedTokens,
     int CorrectRuns,
     int MeasuredRuns,
+    int FailedRuns,
     int? TokensMatchingReference);
 
 internal static class SweepReport
@@ -32,10 +36,11 @@ internal static class SweepReport
         IReadOnlyList<SweepSample> samples)
     {
         var rows = new List<SweepRow>();
-        foreach (var cell in samples.Where(sample => !sample.Warmup && sample.Run.ExitCode == 0)
+        foreach (var cell in samples.Where(sample => !sample.Warmup)
             .GroupBy(sample => (sample.Context, sample.Subject, sample.KvCache)))
         {
-            var runs = cell.Select(sample => sample.Run).ToArray();
+            var runs = cell.Select(sample => sample.Run).Where(run => run.ExitCode == 0).ToArray();
+            var first = runs.FirstOrDefault();
             var reference = samples.FirstOrDefault(sample => !sample.Warmup && sample.Context == cell.Key.Context &&
                 $"{sample.Subject}/{sample.KvCache}" == referenceCell &&
                 sample.Run.ExitCode == 0);
@@ -43,8 +48,8 @@ internal static class SweepReport
                 cell.Key.Context,
                 cell.Key.Subject,
                 cell.Key.KvCache,
-                runs[0].PromptTokens,
-                runs[0].TokenIdsIdentical,
+                first?.PromptTokens,
+                first?.TokenIdsIdentical,
                 model.WeightsBytes / Mebibyte,
                 model.KvBytesPerToken(cell.Key.KvCache) * cell.Key.Context / Mebibyte,
                 Median(runs.Select(run => run.PeakFootprintBytes / Mebibyte)),
@@ -52,10 +57,11 @@ internal static class SweepReport
                 Median(runs.Select(run => run.TimeToFirstTokenMilliseconds)),
                 Median(runs.Select(run => run.GenerationMilliseconds)),
                 Median(runs.Select(run => run.DecodeTokensPerSecond)),
-                runs[0].GeneratedTokens,
-                cell.Count(sample => sample.Correct),
-                runs.Length,
-                reference is null ? null : MatchingPrefix(tokenizer, reference.Run.Output, runs[0].Output)));
+                first?.GeneratedTokens ?? 0,
+                cell.Count(sample => sample.Correct && sample.Run.ExitCode == 0),
+                cell.Count(),
+                cell.Count() - runs.Length,
+                reference is null || first is null ? null : MatchingPrefix(tokenizer, reference.Run.Output, first.Output)));
         }
 
         return rows;
@@ -74,7 +80,7 @@ internal static class SweepReport
                 $"{Format(row.PeakResidentMebibytes, "F0")} | " +
                 $"{Format(row.PeakFootprintMebibytes, "F0")} | {Format(row.TimeToFirstTokenMilliseconds / 1000, "F2")} | " +
                 $"{Format(row.GenerationMilliseconds / 1000, "F2")} | {Format(row.DecodeTokensPerSecond, "F1")} | " +
-                $"{row.GeneratedTokens} | {row.CorrectRuns}/{row.MeasuredRuns} | {Format(row.TokensMatchingReference, "F0")} |"));
+                $"{row.GeneratedTokens} | {row.CorrectRuns}/{row.MeasuredRuns}{(row.FailedRuns > 0 ? $", {row.FailedRuns} failed" : string.Empty)} | {Format(row.TokensMatchingReference, "F0")} |"));
         }
 
         return text.ToString();

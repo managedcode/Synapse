@@ -99,7 +99,13 @@ pub struct DecoderDesc {
     pub rope_layout: u32,
     pub activation: u32,
     pub kv_precision: u32,
+    /// KV slots grow in multiples of this many positions, at least doubling (ADR-017); a positive multiple of 64.
+    pub kv_growth_positions: u32,
+    pub pad: u32,
 }
+
+// The C ABI descriptor layout is mirrored in C# (`NativeDecoderDesc`); both sides pin its size.
+const _: () = assert!(std::mem::size_of::<DecoderDesc>() == 136);
 
 /// One token of a batched step: its KV slot, token ID, position, and logits row or `-1` (ADR-007).
 #[repr(C)]
@@ -126,6 +132,7 @@ pub struct DecoderShape {
     pub logits_rows: u32,
     pub rms_epsilon: f32,
     pub kv_precision: KvPrecision,
+    pub kv_growth: u32,
 }
 
 impl DecoderShape {
@@ -147,14 +154,43 @@ impl DecoderShape {
         self.hidden + 2 * self.kv_width()
     }
 
-    /// Bytes of one slot's K and V cache for the whole context.
+    /// Bytes of K and V one position occupies across layers and KV heads.
     #[must_use]
-    pub const fn slot_bytes(&self) -> u64 {
+    pub const fn kv_bytes_per_position(&self) -> u64 {
         2 * self.layer_count as u64
             * self.kv_heads as u64
-            * self.context as u64
             * HEAD_DIM as u64
             * self.kv_precision.element_bytes()
+    }
+
+    /// Bytes of one slot's K and V cache for `capacity` positions.
+    #[must_use]
+    pub const fn slot_bytes(&self, capacity: u32) -> u64 {
+        self.kv_bytes_per_position() * capacity as u64
+    }
+
+    /// ADR-017 reservation: exactly the positions a request will use, rounded up to the growth unit and capped at
+    /// the context, so a known prompt and output length allocate once.
+    #[must_use]
+    pub const fn reserve_capacity(&self, positions: u32) -> u32 {
+        let rounded = positions
+            .div_ceil(self.kv_growth)
+            .saturating_mul(self.kv_growth);
+        if rounded < self.context {
+            rounded
+        } else {
+            self.context
+        }
+    }
+
+    /// ADR-017 growth: the need rounded up to the growth unit, at least double the current capacity, never
+    /// beyond the context.
+    #[must_use]
+    pub fn next_capacity(&self, needed: u32, current: u32) -> u32 {
+        let rounded = needed
+            .div_ceil(self.kv_growth)
+            .saturating_mul(self.kv_growth);
+        rounded.max(current.saturating_mul(2)).min(self.context)
     }
 }
 

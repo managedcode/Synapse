@@ -20,8 +20,11 @@ internal interface IBatchDecoder
     /// <summary>Logit rows one step may request.</summary>
     int LogitsRowCapacity { get; }
 
-    /// <summary>Evaluates one step. Logits rows must be exactly <c>0..k-1</c> in token order.</summary>
-    void Forward(ReadOnlySpan<BatchToken> tokens);
+    /// <summary>
+    /// Evaluates one step. Logits rows must be exactly <c>0..k-1</c> in token order. Tokens from index
+    /// <paramref name="promptStart"/> on are prompt tokens: they always attend densely, even alone in their slot (ADR-016).
+    /// </summary>
+    void Forward(ReadOnlySpan<BatchToken> tokens, int promptStart);
 
     ReadOnlySpan<float> GetLogits(int row);
 }

@@ -71,9 +71,13 @@ internal sealed class Qwen2CpuExecutor : IDecoderExecutor, IBatchDecoder
 
     public int LogitsRowCapacity => _scratch.LogitsRows;
 
-    public ReadOnlyMemory<float> Prefill(IReadOnlyList<int> tokens, Action<int>? evaluated = null)
+    public long AllocatedKvBytes => _slots.AllocatedBytes;
+
+    public void Reserve(int positions) => _slots[0].Reserve(positions);
+
+    public ReadOnlyMemory<float> PrefillFrom(IReadOnlyList<int> tokens, int first, Action<int>? evaluated)
     {
-        for (var start = 0; start < tokens.Count; start += _prefillTokens)
+        for (var start = first; start < tokens.Count; start += _prefillTokens)
         {
             var count = Math.Min(_prefillTokens, tokens.Count - start);
             for (var index = 0; index < count; index++)
@@ -82,7 +86,7 @@ internal sealed class Qwen2CpuExecutor : IDecoderExecutor, IBatchDecoder
                 _batch[index] = new BatchToken(0, tokens[position], position, position == tokens.Count - 1 ? 0 : -1);
             }
 
-            Forward(_batch.AsSpan(0, count));
+            Forward(_batch.AsSpan(0, count), promptStart: 0);
             evaluated?.Invoke(start + count);
         }
 
@@ -92,11 +96,11 @@ internal sealed class Qwen2CpuExecutor : IDecoderExecutor, IBatchDecoder
     public ReadOnlyMemory<float> Decode(int token, int position)
     {
         _batch[0] = new BatchToken(0, token, position, 0);
-        Forward(_batch.AsSpan(0, 1));
+        Forward(_batch.AsSpan(0, 1), promptStart: 1);
         return LogitsRow(0);
     }
 
-    public void Forward(ReadOnlySpan<BatchToken> tokens)
+    public void Forward(ReadOnlySpan<BatchToken> tokens, int promptStart)
     {
         var logitsRows = Validate(tokens);
         tokens.CopyTo(_batch);
@@ -112,7 +116,7 @@ internal sealed class Qwen2CpuExecutor : IDecoderExecutor, IBatchDecoder
 
         for (var layer = 0; layer < _dimensions.LayerCount; layer++)
         {
-            ExecuteLayer(layer, tokens.Length);
+            ExecuteLayer(layer, tokens.Length, promptStart);
         }
 
         if (logitsRows > 0)
@@ -152,7 +156,7 @@ internal sealed class Qwen2CpuExecutor : IDecoderExecutor, IBatchDecoder
         return rows;
     }
 
-    private void ExecuteLayer(int layer, int count)
+    private void ExecuteLayer(int layer, int count, int promptStart)
     {
         var weights = _weights.Layers[layer];
         var matrices = _layers[layer];
@@ -161,7 +165,7 @@ internal sealed class Qwen2CpuExecutor : IDecoderExecutor, IBatchDecoder
         _qkv.Prepare(matrices, weights, count, threads);
         _pool.Run(_qkv);
         RotateAndStore(layer, count);
-        _attention.Execute(layer, count);
+        _attention.Execute(layer, count, promptStart);
         Quantize(_scratch.Attention, _scratch.HiddenActivations, count);
         _residual.Prepare(matrices.Output, _scratch.HiddenActivations, count, threads);
         _pool.Run(_residual);

@@ -226,3 +226,84 @@ and asked for comparisons across systems.
   `--ctx-size` option selects a rotating KV cache, which would silently drop
   early context, so it runs without that option. The chat API can only confirm
   the prompt token count, not the IDs.
+
+## 2026-09-29 research: Metal kernels, long context, C#, and Orleans
+
+Three research passes (web plus source reading; nothing copied) and our own
+profiling. The owner asked whether C# and Orleans are worth keeping, how to
+make large and dynamic context practical, and how to optimize the Mac first.
+
+- **Where the time goes** (`SYNAPSE_GPU_PROFILE=1`, per-kernel GPU time):
+  - At 4k the prompt GEMM takes 74% and attention 21%.
+  - At 32k attention takes 70%.
+  - Host code, C# and Rust together, costs 0.3% of wall time (38,380 ms of
+    GPU time in a 38,490 ms prefill).
+- **GEMM (open).** It runs at about 3.1 TFLOPS against an estimated 4 for
+  llama.cpp. llama.cpp uses the same 64×32 tile and simdgroup geometry.
+  - Five experiments each moved the result by 5% or less: half weights,
+    half weights plus half activations, contiguous 8×8 blocks, grid order,
+    and explicit unrolling.
+  - The epilogue costs 5%.
+  - 64×64 tiles spilled (3–4× slower).
+  - llama.cpp's concurrent dispatch is worth only 3–5% to llama.cpp itself.
+  - The remaining gap needs shader-profiler counters (occupancy, spills), not
+    more guesses.
+- **Attention (improved).**
+  - `simdgroup_matrix::thread_elements()` is typed as the whole 8×8 vector,
+    so indexing it made the compiler spill. The lane's pair must be
+    reinterpreted as `float2`, as MLX does.
+  - Keeping scores and outputs as plain `float2` registers and building
+    matrices only for each multiply removed the threadgroup round trip and
+    the diagonal rescale.
+  - 32k time to first token went from 32.6 s to 27.0 s (llama.cpp 26.6 s,
+    MLX 15.5 s).
+  - Two eight-row halves per simdgroup share each K/V load but spilled
+    (38.1 s), so one half is used.
+- **Long context.**
+  - Qwen2.5-0.5B is rated for 32k; YaRN ×4 to 128k is documented only for 7B
+    and up. The practical long-context target is Qwen2.5-7B-Instruct-1M
+    (native to 256k, 56 KiB/token), which needs a download and head
+    dimension 128 on the GPU.
+  - Dynamic YaRN or NTK needs pre-RoPE keys or re-rotation, so a fixed
+    factor per session is preferred.
+  - The biggest wins, in order:
+    1. an MLX-level prefill kernel;
+    2. a persistent prefix cache (ZoneTree metadata, mmap payloads), which
+       turns a repeated 128k document from minutes of prefill into I/O;
+    3. block-sparse prefill (XAttention/FlexPrefill style) above 32k;
+    4. Quest-style decode with absolute 2–4k token budgets, keeping the
+       first layers dense;
+    5. fused q8_0 KV.
+  - Sliding windows and eviction lose information and conflict with prefix
+    reuse (SCBench).
+- **Dynamic context (ADR-017).**
+  - Done: KV grows on demand.
+  - Configuring 131,072 tokens with a 4k prompt now peaks at 234 MiB (FP16)
+    against llama.cpp's 1,645 MiB with the same `-c`.
+  - Paged KV blocks are the next form: no copies, and the page as the unit
+    of Quest bounds, quantization, and disk persistence.
+- **C#.** No speed cost on the GPU path (0.3%), and on CPU the Rust kernels
+  do the hot work.
+  - Value: the .NET SDK and NuGet surface, the portable tested reference
+    path, and the tooling.
+  - Cost: two languages, an FFI boundary, and a kernel set in C#, Rust, and
+    Metal.
+  - Verdict: keep C# if a .NET-consumable engine is a product goal. A
+    Rust-only host would be simpler otherwise.
+- **Orleans** (AGENTS.md makes it the control plane; changing that is the
+  owner's call).
+  - It adds nothing on one machine, and the design already keeps it off the
+    local path.
+  - On several machines, pipeline parallelism buys capacity, not
+    single-stream speed. llama.cpp RPC drops from 20.4 to 15.2 tok/s on 1→4
+    nodes (Qwen3-235B, Jeff Geerling). Tensor parallelism helps only over
+    RDMA (Thunderbolt 5), and this M2 Pro has Thunderbolt 4.
+  - No comparable system (exo, llama.cpp RPC, distributed-llama, MLX
+    distributed, Petals, prima.cpp) uses an actor framework. vLLM is
+    reducing Ray to a launcher.
+  - Orleans' storage-backed membership and default failure detection
+    (about 90 s) fit 2–8 pinned multi-GB stages poorly.
+  - Recommendation: keep Orleans out of the data path (as today) and defer
+    it until a measured multi-machine, multi-user workload needs it. First
+    experiment: a two-node pipeline of a 7B model over Thunderbolt 4 and
+    10 GbE, measuring per-hop latency and tok/s against one node.

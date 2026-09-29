@@ -63,6 +63,57 @@ pub fn download(buffer: &Buffer, destination: &mut [f32]) {
     }
 }
 
+/// Copies `(source offset, target offset, length)` byte regions from `source` into `target` and waits.
+///
+/// # Errors
+///
+/// Returns [`GpuError::Device`] when the command buffer cannot be created or fails.
+pub fn copy_regions(
+    context: &MetalContext,
+    source: &Buffer,
+    target: &Buffer,
+    regions: &[(u64, u64, u64)],
+) -> Result<(), GpuError> {
+    let mut checked = Vec::with_capacity(regions.len());
+    for &(from, to, length) in regions {
+        let (Ok(from), Ok(to), Ok(length)) = (
+            usize::try_from(from),
+            usize::try_from(to),
+            usize::try_from(length),
+        ) else {
+            return Err(GpuError::invalid("a KV copy region overflows usize"));
+        };
+        if from.saturating_add(length) > source.length()
+            || to.saturating_add(length) > target.length()
+        {
+            return Err(GpuError::invalid(
+                "a KV copy region lies outside its buffer",
+            ));
+        }
+
+        checked.push((from, to, length));
+    }
+
+    // Every region is validated before the encoder exists, so no error path drops an unended encoder.
+    let command = new_command(context)?;
+    let blit = command
+        .blitCommandEncoder()
+        .ok_or_else(|| GpuError::Device("the command buffer returned no blit encoder".into()))?;
+    for (from, to, length) in checked {
+        // SAFETY: both ranges were checked against their buffer lengths above.
+        unsafe {
+            blit.copyFromBuffer_sourceOffset_toBuffer_destinationOffset_size(
+                source, from, target, to, length,
+            );
+        }
+    }
+
+    blit.endEncoding();
+    command.commit();
+    command.waitUntilCompleted();
+    check(&command)
+}
+
 /// Fills a buffer with zeros on the GPU and waits, so no allocation exposes unspecified bytes to a kernel.
 pub fn zero_fill(context: &MetalContext, buffer: &Buffer) -> Result<(), GpuError> {
     let command = new_command(context)?;
@@ -97,12 +148,17 @@ fn check(command: &ProtocolObject<dyn MTLCommandBuffer>) -> Result<(), GpuError>
 }
 
 /// One step's submissions: a current command buffer and compute encoder, plus those already committed.
+///
+/// Dropping a submission on an error path ends a still-open encoder, so Metal never releases an unended one.
 pub struct Submission<'a> {
     context: &'a MetalContext,
     resident: Vec<&'a Buffer>,
     committed: Vec<CommandBuffer>,
     command: CommandBuffer,
     encoder: ComputeEncoder,
+    encoding: bool,
+    /// `SYNAPSE_GPU_PROFILE`: every dispatch runs in its own command buffer and its GPU time is summed per kernel.
+    profile: Option<Vec<(Kernel, f64)>>,
 }
 
 impl<'a> Submission<'a> {
@@ -115,13 +171,15 @@ impl<'a> Submission<'a> {
             committed: Vec::new(),
             command,
             encoder,
+            encoding: true,
+            profile: std::env::var_os("SYNAPSE_GPU_PROFILE").map(|_| Vec::new()),
         })
     }
 
     /// Commits the last command buffer, waits for all of them, reports the first failure, and returns the
     /// summed GPU seconds.
-    pub fn finish(self) -> Result<f64, GpuError> {
-        self.encoder.endEncoding();
+    pub fn finish(mut self) -> Result<f64, GpuError> {
+        self.end_encoding();
         self.command.commit();
         self.command.waitUntilCompleted();
         let mut gpu_seconds = 0.0;
@@ -131,7 +189,28 @@ impl<'a> Submission<'a> {
             gpu_seconds += command.GPUEndTime() - command.GPUStartTime();
         }
 
+        if let Some(profile) = &self.profile {
+            report_profile(profile);
+        }
+
         Ok(gpu_seconds)
+    }
+
+    fn end_encoding(&mut self) {
+        if self.encoding {
+            self.encoder.endEncoding();
+            self.encoding = false;
+        }
+    }
+
+    /// Ends and commits the current command buffer, opens the next one, and returns the committed buffer.
+    fn reopen(&mut self) -> Result<CommandBuffer, GpuError> {
+        self.end_encoding();
+        self.command.commit();
+        let (command, encoder) = Self::open(self.context, &self.resident)?;
+        self.encoder = encoder;
+        self.encoding = true;
+        Ok(std::mem::replace(&mut self.command, command))
     }
 
     fn open(
@@ -211,17 +290,54 @@ impl StepBackend for Submission<'_> {
 
         self.encoder
             .dispatchThreadgroups_threadsPerThreadgroup(size(groups), size(threads));
+        if self.profile.is_some() {
+            let done = self.reopen()?;
+            done.waitUntilCompleted();
+            check(&done)?;
+            let seconds = done.GPUEndTime() - done.GPUStartTime();
+            // Kept, so the step's summed GPU time still covers every dispatch.
+            self.committed.push(done);
+            if let Some(profile) = self.profile.as_mut() {
+                profile.push((kernel, seconds));
+            }
+        }
+
         Ok(())
     }
 
     fn flush(&mut self) -> Result<(), GpuError> {
-        let (command, encoder) = Self::open(self.context, &self.resident)?;
-        self.encoder.endEncoding();
-        self.command.commit();
-        self.committed
-            .push(std::mem::replace(&mut self.command, command));
-        self.encoder = encoder;
+        let done = self.reopen()?;
+        self.committed.push(done);
         Ok(())
+    }
+}
+
+impl Drop for Submission<'_> {
+    fn drop(&mut self) {
+        self.end_encoding();
+    }
+}
+
+/// Prints the summed GPU milliseconds and dispatch count of each kernel, largest first, to standard error.
+fn report_profile(profile: &[(Kernel, f64)]) {
+    let mut totals: Vec<(String, f64, usize)> = Vec::new();
+    for (kernel, seconds) in profile {
+        let name = format!("{kernel:?}");
+        match totals.iter_mut().find(|entry| entry.0 == name) {
+            Some(entry) => {
+                entry.1 += seconds;
+                entry.2 += 1;
+            }
+            None => totals.push((name, *seconds, 1)),
+        }
+    }
+
+    totals.sort_by(|left, right| right.1.total_cmp(&left.1));
+    for (name, seconds, count) in totals {
+        eprintln!(
+            "synapse-gpu profile {name}: {:.3} ms over {count} dispatches",
+            seconds * 1e3
+        );
     }
 }
 

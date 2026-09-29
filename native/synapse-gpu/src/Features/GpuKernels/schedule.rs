@@ -7,8 +7,11 @@
 use super::params::AttentionBlock;
 use crate::gpu_kernels::decoder::BatchToken;
 
-/// Prompt-run tokens per block (rows of one simdgroup).
+/// Prompt-run tokens per block on backends whose attention holds one eight-row half per simdgroup (CUDA).
 pub const RUN_TOKENS: usize = 8;
+/// Prompt-run tokens per block on Metal: `ATT_RUN_HALVES` eight-row halves per simdgroup. Two halves share each K/V
+/// load but spilled registers on an M2 Pro, so Metal uses one.
+pub const METAL_RUN_TOKENS: usize = 8;
 /// Keys per attention tile.
 pub const ATTENTION_KEYS: u32 = 32;
 /// Block-split pairs the partial buffer holds.
@@ -28,9 +31,9 @@ pub struct AttentionPlan {
     pub splits: u32,
 }
 
-/// Builds the attention plan for validated step tokens.
+/// Builds the attention plan for validated step tokens; prompt runs are cut into blocks of `run_tokens`.
 #[must_use]
-pub fn plan_attention(tokens: &[BatchToken], kv_heads: u32) -> AttentionPlan {
+pub fn plan_attention(tokens: &[BatchToken], kv_heads: u32, run_tokens: usize) -> AttentionPlan {
     let mut runs = Vec::new();
     let mut singles = Vec::new();
     let mut start = 0;
@@ -48,7 +51,7 @@ pub fn plan_attention(tokens: &[BatchToken], kv_heads: u32) -> AttentionPlan {
         } else {
             let mut first = start;
             while first < end {
-                let count = RUN_TOKENS.min(end - first);
+                let count = run_tokens.min(end - first);
                 runs.push((first, count));
                 first += count;
             }

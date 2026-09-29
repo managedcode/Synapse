@@ -43,5 +43,8 @@ internal sealed class Qwen2KvSlots(DecoderDimensions dimensions, int slotCount)
     public int Count => _slots.Length;
 
     public Qwen2KvCache this[int slot] =>
-        _slots[slot] ??= new Qwen2KvCache(dimensions.LayerCount, dimensions.ContextSize, dimensions.KvWidth);
+        _slots[slot] ??= new Qwen2KvCache(dimensions.LayerCount, dimensions.ContextSize, dimensions.KvWidth, dimensions.KvGrowthPositions);
+
+    /// <summary>Bytes of K and V allocated across every slot.</summary>
+    public long AllocatedBytes => _slots.Sum(slot => slot?.AllocatedBytes ?? 0);
 }

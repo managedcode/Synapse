@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "kind": "prefix-reuse-diagnostic",
+  "recorded_at": "2026-09-28T22:58:13.876143+00:00",
+  "model_path": "/Users/ksemenenko/Developer/Synapse/artifacts/models/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.gguf",
+  "context_size": 32768,
+  "runs": [
+    {
+      "reuse_prompt_prefix": false,
+      "turn": 1,
+      "prompt_tokens": 30031,
+      "reused_prompt_tokens": 0,
+      "time_to_first_token_milliseconds": 23456.2061,
+      "elapsed_milliseconds": 23776.3347,
+      "output": "This text is about the Synapse project, a local-first inference engine developed by ManagedCode, which uses the .NET and Rust toolchains, a portable reference"
+    },
+    {
+      "reuse_prompt_prefix": false,
+      "turn": 2,
+      "prompt_tokens": 30027,
+      "reused_prompt_tokens": 0,
+      "time_to_first_token_milliseconds": 23763.1728,
+      "elapsed_milliseconds": 24074.4896,
+      "output": "Based on the information provided, the canonical languages that appear in the Synapse repository are:\n\n1. C#\n2. Rust\n3. Python\n4."
+    },
+    {
+      "reuse_prompt_prefix": true,
+      "turn": 1,
+      "prompt_tokens": 30031,
+      "reused_prompt_tokens": 0,
+      "time_to_first_token_milliseconds": 23485.2661,
+      "elapsed_milliseconds": 23810.9545,
+      "output": "This text is about the Synapse project, a local-first inference engine developed by ManagedCode, which uses the .NET and Rust toolchains, a portable reference"
+    },
+    {
+      "reuse_prompt_prefix": true,
+      "turn": 2,
+      "prompt_tokens": 30027,
+      "reused_prompt_tokens": 30015,
+      "time_to_first_token_milliseconds": 131.9046,
+      "elapsed_milliseconds": 443.5178,
+      "output": "Based on the information provided, the canonical languages that appear in the Synapse repository are:\n\n1. C#\n2. Rust\n3. Python\n4."
+    }
+  ],
+  "host": "owner MacBook Pro, Apple M2 Pro (19-core GPU), 32 GB, macOS 27",
+  "decision": "ADR-018",
+  "setup": "Metal, FP16 KV, context 32,768; document = the first 30,000 tokens of the pinned haystack; two chat questions per loaded model; 32 new tokens each",
+  "findings": [
+    "With reuse the second question reused 30,015 prompt tokens and reached its first token in 0.13 s instead of 23.8 s.",
+    "Answers with and without reuse are identical text."
+  ],
+  "limitations": [
+    "One run per row; not a paired benchmark.",
+    "In-process reuse only; a persistent prefix cache across processes is a separate step (LONG.1)."
+  ]
+}

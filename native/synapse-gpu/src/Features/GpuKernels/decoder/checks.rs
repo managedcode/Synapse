@@ -27,6 +27,7 @@ pub(super) fn validate_shape(desc: &DecoderDesc) -> Result<DecoderShape, GpuErro
             KV_F16 => KvPrecision::F16,
             other => return Err(GpuError::invalid(format!("unknown KV precision {other}"))),
         },
+        kv_growth: desc.kv_growth_positions,
     })
 }
 
@@ -62,6 +63,12 @@ fn check_dimensions(desc: &DecoderDesc) -> Result<(), GpuError> {
     if positive.contains(&0) || !desc.rms_epsilon.is_finite() || desc.rms_epsilon <= 0.0 {
         return Err(GpuError::invalid(
             "every dimension must be positive and epsilon finite",
+        ));
+    }
+
+    if desc.kv_growth_positions == 0 || !desc.kv_growth_positions.is_multiple_of(64) {
+        return Err(GpuError::invalid(
+            "the KV growth unit must be a positive multiple of 64 positions",
         ));
     }
 

@@ -112,6 +112,27 @@ public sealed class KvPageActivationTests
     }
 
     [Test]
+    public async Task PromptTokensStayDenseEvenAloneInAStep()
+    {
+        // 641 = 10 × 64 + 1: the last prompt token is the only token of its prefill step.
+        int[] prompt = [.. Enumerable.Range(0, 641).Select(index => (index * 7919 % 150_000) + 100)];
+        int[] document = [.. prompt.Take(600)];
+        using var dense = Load(activation: null);
+        using var sparse = Load(new KvPageActivation(1, 64));
+        using var reusing = Load(new KvPageActivation(1, 64), reusePrefix: true);
+
+        var expected = dense.EvaluatePromptLogits(prompt);
+        var actual = sparse.EvaluatePromptLogits(prompt);
+        _ = reusing.Generate(document, 2);
+        var reused = reusing.Generate([.. document, 12095], 3);
+        var cold = sparse.Generate([.. document, 12095], 3);
+
+        await Assert.That(actual).IsEquivalentTo(expected);
+        await Assert.That(reused.ReusedPromptTokens).IsEqualTo(document.Length);
+        await Assert.That(reused.GeneratedTokens).IsEquivalentTo(cold.GeneratedTokens);
+    }
+
+    [Test]
     public async Task KvPagesAreNamedAndRejectedWhereNotImplemented()
     {
         using var named = Load(new KvPageActivation(2, 128));
@@ -130,7 +151,7 @@ public sealed class KvPageActivationTests
         await Assert.That(() => new KvPageActivation(-1, 64).Validate()).Throws<ArgumentOutOfRangeException>();
     }
 
-    private static Qwen2Model Load(KvPageActivation? activation) => (Qwen2Model)ModelLoader.Load(
+    private static Qwen2Model Load(KvPageActivation? activation, bool reusePrefix = false) => (Qwen2Model)ModelLoader.Load(
         ReferenceBenchmarkFixture.GetModelPath(),
         new ModelLoadOptions
         {
@@ -138,6 +159,7 @@ public sealed class KvPageActivationTests
             MaximumParallelism = 8,
             KernelBackend = KernelBackend.Managed,
             KvPageActivation = activation,
+            ReusePromptPrefix = reusePrefix,
         });
 
     private static float[] Values(Random random, int count, float scale = 1) =>

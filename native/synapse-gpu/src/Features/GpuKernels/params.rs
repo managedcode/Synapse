@@ -8,6 +8,9 @@ pub const MAX_SLOTS: usize = 65;
 #[derive(Clone, Copy)]
 pub struct SlotTable {
     pub address: [u64; MAX_SLOTS],
+    /// Allocated positions of each slot: the position stride of its K and V regions (ADR-017).
+    pub capacity: [u32; MAX_SLOTS],
+    pub pad: u32,
 }
 
 #[repr(C)]
@@ -116,7 +119,7 @@ pub struct SwigluArgs {
 }
 
 const _: () = {
-    assert!(size_of::<SlotTable>() == 520);
+    assert!(size_of::<SlotTable>() == 784);
     assert!(size_of::<EmbedArgs>() == 24);
     assert!(size_of::<NormArgs>() == 40);
     assert!(size_of::<MatmulSegment>() == 24);

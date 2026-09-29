@@ -19,9 +19,12 @@ struct batch_token {
     int logits_row;
 };
 
-// GPU addresses (`MTLBuffer.gpuAddress`) of each KV slot buffer; null for an unallocated slot.
+// GPU addresses (`MTLBuffer.gpuAddress`) of each KV slot buffer, null for an unallocated slot, and each slot's
+// allocated positions, which are also the position stride of its K and V regions (ADR-017).
 struct slot_table {
     device float * address[SYNAPSE_MAX_SLOTS];
+    uint capacity[SYNAPSE_MAX_SLOTS];
+    uint pad;
 };
 
 struct embed_args {

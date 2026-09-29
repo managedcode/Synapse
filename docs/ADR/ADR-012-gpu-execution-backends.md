@@ -61,7 +61,9 @@ source of weights, and GGUF is only one adapter.
     per tile and one Q8_0 block per K step.
 
   Prompt-run and decode attention both read K/V directly from the slot, with little threadgroup memory,
-  and the simdgroups of one KV head share cache lines. The earlier prompt kernel staged a K/V tile in
+  and the simdgroups of one KV head share cache lines. Scores and outputs stay in registers as each lane's
+  element pair of the 8×8 fragments (the Apple layout that MLX also relies on), so the softmax needs no
+  threadgroup round trip and the output is rescaled per row without a diagonal multiply. The earlier prompt kernel staged a K/V tile in
   26.5 KiB of threadgroup memory, which allowed one threadgroup per core; reading directly cut 32k time to
   first token by 20% (2026-09-28). A long decode context splits its keys and merges them in a reduce
   kernel.

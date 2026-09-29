@@ -22,8 +22,11 @@ struct batch_token {
     int logits_row;
 };
 
+// Mirrors the Rust SlotTable (784 bytes). CUDA slots are full size, so capacity always equals the context.
 struct slot_table {
     float * address[SYNAPSE_MAX_SLOTS];
+    unsigned int capacity[SYNAPSE_MAX_SLOTS];
+    unsigned int pad;
 };
 
 struct embed_args {

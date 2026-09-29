@@ -17,11 +17,13 @@ public sealed class Qwen2Model : ITextGenerationModel
     private readonly IDecoderExecutor _executor;
     private readonly ContinuousBatchScheduler? _scheduler;
     private readonly object _executionGate = new();
+    private readonly DirectSessionPrefix _direct;
 
     private Qwen2Model(GgufFile file, ModelLoadOptions options)
     {
         _file = file;
         Dimensions = Qwen2ModelComposition.ReadDimensions(file, options);
+        _direct = new DirectSessionPrefix(options.ReusePromptPrefix);
         var pool = options.KernelBackend == KernelBackend.Reference ? null : new CpuWorkerPool(options.MaximumParallelism);
         try
         {
@@ -92,6 +94,18 @@ public sealed class Qwen2Model : ITextGenerationModel
 
     internal DecoderDimensions Dimensions { get; }
 
+    /// <summary>Bytes of KV currently allocated across the executor's slots (ADR-017); waits for a running step.</summary>
+    internal long AllocatedKvBytes
+    {
+        get
+        {
+            lock (_executionGate)
+            {
+                return _executor.AllocatedKvBytes;
+            }
+        }
+    }
+
     /// <summary>Loads a supported Qwen2 Q8_0 GGUF file through a read-only memory map.</summary>
     public static Qwen2Model Load(string modelPath, int contextSize = 512) =>
         Load(modelPath, contextSize, Environment.ProcessorCount);
@@ -134,8 +148,11 @@ public sealed class Qwen2Model : ITextGenerationModel
         {
             var timer = Stopwatch.StartNew();
             var promptCount = promptTokens.Count;
-            var logits = _executor.Prefill(
+            var reused = _direct.Claim(promptTokens);
+            _executor.Reserve(promptCount + maximumNewTokens);
+            var logits = _executor.PrefillFrom(
                 promptTokens,
+                reused,
                 progress is null ? null : evaluated => progress.Report(new(evaluated, promptCount, 0, timer.Elapsed)));
             var generated = new List<int>(maximumNewTokens);
             var timeToFirstToken = TimeSpan.Zero;
@@ -153,7 +170,11 @@ public sealed class Qwen2Model : ITextGenerationModel
                 logits = _executor.Decode(token, promptTokens.Count + index);
             }
 
-            return new TextGenerationResult([.. promptTokens], generated, timeToFirstToken, timer.Elapsed);
+            _direct.Remember(promptTokens, generated);
+            return new TextGenerationResult([.. promptTokens], generated, timeToFirstToken, timer.Elapsed)
+            {
+                ReusedPromptTokens = reused,
+            };
         }
     }
 
@@ -177,6 +198,8 @@ public sealed class Qwen2Model : ITextGenerationModel
         ArgumentOutOfRangeException.ThrowIfGreaterThan(firstScoredPosition, tokens.Count - 2);
         lock (_executionGate)
         {
+            _direct.Clear();
+            _executor.Reserve(tokens.Count);
             var timer = Stopwatch.StartNew();
             var evaluatedTotal = tokens.Count - 1;
             return TokenScoring.Score(
@@ -201,6 +224,8 @@ public sealed class Qwen2Model : ITextGenerationModel
         ValidatePrompt(promptTokens, 0, allowEmptyOutput: true);
         lock (_executionGate)
         {
+            _direct.Clear();
+            _executor.Reserve(promptTokens.Count);
             return _executor.Prefill(promptTokens).ToArray();
         }
     }
@@ -211,6 +236,8 @@ public sealed class Qwen2Model : ITextGenerationModel
         ValidatePrompt([.. promptTokens, .. continuation], 0, allowEmptyOutput: true);
         lock (_executionGate)
         {
+            _direct.Clear();
+            _executor.Reserve(promptTokens.Count + continuation.Count);
             var logits = _executor.Prefill(promptTokens);
             for (var index = 0; index < continuation.Count; index++)
             {
@@ -224,18 +251,6 @@ public sealed class Qwen2Model : ITextGenerationModel
     private ContinuousBatchScheduler RequireScheduler() => _scheduler
         ?? throw new NotSupportedException("The reference backend serializes requests and has no batching scheduler.");
 
-    private void ValidatePrompt(IReadOnlyList<int> promptTokens, int maximumNewTokens, bool allowEmptyOutput)
-    {
-        ArgumentNullException.ThrowIfNull(promptTokens);
-        if (promptTokens.Count == 0 || maximumNewTokens < (allowEmptyOutput ? 0 : 1) ||
-            promptTokens.Count + maximumNewTokens > ContextSize)
-        {
-            throw new ArgumentOutOfRangeException(nameof(maximumNewTokens));
-        }
-
-        foreach (var token in promptTokens)
-        {
-            ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual((uint)token, (uint)VocabularySize, nameof(promptTokens));
-        }
-    }
+    private void ValidatePrompt(IReadOnlyList<int> promptTokens, int maximumNewTokens, bool allowEmptyOutput) =>
+        PromptLimits.Validate(promptTokens, maximumNewTokens, allowEmptyOutput, ContextSize, VocabularySize);
 }
