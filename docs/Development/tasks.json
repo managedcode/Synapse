@@ -250,6 +250,87 @@
       "slice": "GpuKernels",
       "stage": "D1",
       "status": "in_progress"
+    },
+    {
+      "id": "TASK-GPU-006",
+      "requirement": "REQ-GPU-006",
+      "slice": "GpuKernels",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-GPU-003"],
+      "tests": ["TEST-GPU-006-1", "TEST-GPU-006-2"]
+    },
+    {
+      "id": "TASK-LDP-001",
+      "requirement": "REQ-LDP-001",
+      "slice": "LayerDrop",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-GPU-006"],
+      "tests": ["TEST-LDP-001-1", "TEST-LDP-001-2"]
+    },
+    {
+      "id": "TASK-LDP-002",
+      "requirement": "REQ-LDP-002",
+      "slice": "LayerDrop",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-LDP-001"],
+      "tests": ["TEST-LDP-002-1", "TEST-LDP-002-2"]
+    },
+    {
+      "id": "TASK-LDP-003",
+      "requirement": "REQ-LDP-003",
+      "slice": "LayerDrop",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-LDP-001"],
+      "tests": ["TEST-LDP-003-1", "TEST-LDP-003-2"]
+    },
+    {
+      "id": "TASK-LDP-004",
+      "requirement": "REQ-LDP-004",
+      "slice": "LayerDrop",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-LDP-002"],
+      "tests": ["TEST-LDP-004-1"]
+    },
+    {
+      "id": "TASK-SPC-001",
+      "requirement": "REQ-SPC-001",
+      "slice": "Speculation",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-GPU-006"],
+      "tests": ["TEST-SPC-001-1", "TEST-SPC-001-2"]
+    },
+    {
+      "id": "TASK-SPC-002",
+      "requirement": "REQ-SPC-002",
+      "slice": "Speculation",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-SPC-001"],
+      "tests": ["TEST-SPC-002-1", "TEST-SPC-002-2"]
+    },
+    {
+      "id": "TASK-SPC-003",
+      "requirement": "REQ-SPC-003",
+      "slice": "Speculation",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-SPC-001", "TASK-LDP-004"],
+      "tests": ["TEST-SPC-003-1"]
+    },
+    {
+      "id": "TASK-QNT-005",
+      "requirement": "REQ-QNT-005",
+      "slice": "Quantization",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-GPU-006"],
+      "tests": ["TEST-QNT-005-1", "TEST-QNT-005-2", "TEST-QNT-005-3", "TEST-QNT-005-4", "TEST-QNT-005-5"]
     }
   ]
 }

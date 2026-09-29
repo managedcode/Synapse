@@ -11,7 +11,7 @@ namespace ManagedCode.Synapse.Runtime.Features.GpuKernels;
 /// </summary>
 internal sealed unsafe class NativeGpuLibrary
 {
-    public const uint ExpectedAbiVersion = 2;
+    public const uint ExpectedAbiVersion = 3;
     private const int StatusOk = 0;
     private const int StatusUnavailable = 3;
     private const int StatusOutOfMemory = 5;
@@ -193,6 +193,9 @@ internal struct NativeDecoderLayerOffsets
     public ulong Gate;
     public ulong Up;
     public ulong Down;
+
+    /// <summary>GGML type IDs of Q, K, V, O, gate, up, and down, four bits each from the lowest (ADR-021).</summary>
+    public ulong Encodings;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -218,10 +221,13 @@ internal unsafe struct NativeDecoderDesc
     public uint StepTokens;
     public uint LogitsRows;
     public float RmsEpsilon;
-    public uint MatrixEncoding;
+    /// <summary>GGML type ID of the token embedding (ADR-021).</summary>
+    public uint EmbeddingEncoding;
     public uint RopeLayout;
     public uint Activation;
     public uint KvPrecision;
     public uint KvGrowthPositions;
-    public uint Pad;
+
+    /// <summary>GGML type ID of the output projection (ADR-021).</summary>
+    public uint OutputEncoding;
 }

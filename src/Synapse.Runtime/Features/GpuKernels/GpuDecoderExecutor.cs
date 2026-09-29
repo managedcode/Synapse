@@ -13,8 +13,6 @@ namespace ManagedCode.Synapse.Runtime.Features.GpuKernels;
 /// </summary>
 internal sealed unsafe class GpuDecoderExecutor : IDecoderExecutor, IBatchDecoder
 {
-    private const ulong NoTensor = ulong.MaxValue;
-    private const uint EncodingQ8Zero = 8;
     private readonly NativeGpuLibrary _library;
     private readonly DecoderDimensions _dimensions;
     private readonly BatchToken[] _batch;
@@ -37,7 +35,7 @@ internal sealed unsafe class GpuDecoderExecutor : IDecoderExecutor, IBatchDecode
         _prefillTokens = capacity.PrefillTokens;
         SessionSlots = capacity.SessionSlots;
         var backendName = KernelBackendNames.ToName(backend);
-        RuntimeProfile = $"{backendName}-{layout.Architecture}-q8_0xf32" +
+        RuntimeProfile = $"{backendName}-{layout.Architecture}-{GpuLayoutMapping.WeightsLabel(layout)}xf32" +
             (kvPrecision == KvCachePrecision.Fp16 ? "-kvf16" : string.Empty);
         KernelImplementation = backendName +
             (device.AppleFamily > 0 ? $"-apple{device.AppleFamily}" : string.Empty) + "-" + Slug(device.Name);
@@ -141,7 +139,7 @@ internal sealed unsafe class GpuDecoderExecutor : IDecoderExecutor, IBatchDecode
     {
         var dimensions = layout.Dimensions;
         var (cosines, sines) = BuildRopeTables(dimensions);
-        var layers = layout.Layers.Select(layer => Offsets(weights, layer)).ToArray();
+        var layers = layout.Layers.Select(layer => GpuLayoutMapping.Offsets(weights, layer)).ToArray();
         fixed (NativeDecoderLayerOffsets* layerPointer = layers)
         fixed (float* cosinePointer = cosines)
         fixed (float* sinePointer = sines)
@@ -153,9 +151,9 @@ internal sealed unsafe class GpuDecoderExecutor : IDecoderExecutor, IBatchDecode
                 Layers = layerPointer,
                 RopeCosines = cosinePointer,
                 RopeSines = sinePointer,
-                TokenEmbedding = Offset(weights, layout.TokenEmbedding, WeightEncoding.GgmlQ8Zero),
-                OutputNorm = Offset(weights, layout.OutputNorm, WeightEncoding.Fp32),
-                Output = Offset(weights, layout.Output, WeightEncoding.GgmlQ8Zero),
+                TokenEmbedding = GpuLayoutMapping.Matrix(weights, layout.TokenEmbedding).Offset,
+                OutputNorm = GpuLayoutMapping.Offset(weights, layout.OutputNorm, WeightEncoding.Fp32),
+                Output = GpuLayoutMapping.Matrix(weights, layout.Output).Offset,
                 LayerCount = (uint)dimensions.LayerCount,
                 Hidden = (uint)dimensions.HiddenSize,
                 FeedForward = (uint)dimensions.FeedForwardSize,
@@ -168,7 +166,8 @@ internal sealed unsafe class GpuDecoderExecutor : IDecoderExecutor, IBatchDecode
                 StepTokens = (uint)capacity.StepTokens,
                 LogitsRows = (uint)capacity.LogitsRows,
                 RmsEpsilon = dimensions.RmsNormEpsilon,
-                MatrixEncoding = EncodingQ8Zero,
+                EmbeddingEncoding = GpuLayoutMapping.Matrix(weights, layout.TokenEmbedding).Encoding,
+                OutputEncoding = GpuLayoutMapping.Matrix(weights, layout.Output).Encoding,
                 RopeLayout = layout.RopeLayout == RotaryLayout.NeoX ? 0u : 1u,
                 Activation = 0,
                 KvPrecision = kvPrecision == KvCachePrecision.Fp16 ? 1u : 0u,
@@ -176,41 +175,6 @@ internal sealed unsafe class GpuDecoderExecutor : IDecoderExecutor, IBatchDecode
             };
             return _library.CreateDecoder(backend, description);
         }
-    }
-
-    private static NativeDecoderLayerOffsets Offsets(IMappedWeights weights, DenseDecoderLayer layer) => new()
-    {
-        AttentionNorm = Offset(weights, layer.AttentionNorm, WeightEncoding.Fp32),
-        Query = Offset(weights, layer.Query, WeightEncoding.GgmlQ8Zero),
-        Key = Offset(weights, layer.Key, WeightEncoding.GgmlQ8Zero),
-        Value = Offset(weights, layer.Value, WeightEncoding.GgmlQ8Zero),
-        QueryBias = Optional(weights, layer.QueryBias),
-        KeyBias = Optional(weights, layer.KeyBias),
-        ValueBias = Optional(weights, layer.ValueBias),
-        QueryNorm = NoTensor,
-        KeyNorm = NoTensor,
-        AttentionOutput = Offset(weights, layer.AttentionOutput, WeightEncoding.GgmlQ8Zero),
-        FeedForwardNorm = Offset(weights, layer.FeedForwardNorm, WeightEncoding.Fp32),
-        Gate = Offset(weights, layer.Gate, WeightEncoding.GgmlQ8Zero),
-        Up = Offset(weights, layer.Up, WeightEncoding.GgmlQ8Zero),
-        Down = Offset(weights, layer.Down, WeightEncoding.GgmlQ8Zero),
-    };
-
-    private static ulong Optional(IMappedWeights weights, DecoderWeight? weight) =>
-        weight is { } present ? Offset(weights, present, WeightEncoding.Fp32) : NoTensor;
-
-    private static ulong Offset(IMappedWeights weights, DecoderWeight weight, WeightEncoding expected)
-    {
-        if (!string.Equals(weight.Source.File, weights.SourceFile, StringComparison.Ordinal))
-        {
-            throw new NotSupportedException(
-                $"GPU backends read one mapped file; '{weight.Source.File}' differs from '{weights.SourceFile}'.");
-        }
-
-        return weight.Encoding == expected
-            ? checked((ulong)weight.Source.Offset)
-            : throw new NotSupportedException(
-                $"GPU backends read this tensor as {expected}; the package stores {weight.Encoding}.");
     }
 
     /// <summary>Cosines and sines for every position, from the same frequencies every CPU backend uses.</summary>
@@ -231,7 +195,8 @@ internal sealed unsafe class GpuDecoderExecutor : IDecoderExecutor, IBatchDecode
 
     static GpuDecoderExecutor()
     {
-        if (Unsafe.SizeOf<BatchToken>() != 16 || sizeof(NativeDecoderDesc) != 136 || sizeof(NativeGpuDeviceInfo) != 152)
+        if (Unsafe.SizeOf<BatchToken>() != 16 || sizeof(NativeDecoderDesc) != 136 || sizeof(NativeDecoderLayerOffsets) != 120 ||
+            sizeof(NativeGpuDeviceInfo) != 152)
         {
             throw new PlatformNotSupportedException("GPU ABI struct layouts differ from the native library.");
         }

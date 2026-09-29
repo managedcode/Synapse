@@ -5,6 +5,12 @@
 //! shape and byte range before a backend reads them.
 
 mod checks;
+mod encoding;
+mod segments;
+
+pub use encoding::{
+    ALL_Q8_0, ENCODING_Q4_K, ENCODING_Q6_K, ENCODING_Q8_0, Encoding, Matrix, unpack,
+};
 
 use super::error::GpuError;
 use checks::{RangeCheck, check_layer, validate_shape};
@@ -13,16 +19,16 @@ use checks::{RangeCheck, check_layer, validate_shape};
 pub const Q8_0_BLOCK_BYTES: u64 = 34;
 /// Values in one `Q8_0` block.
 pub const Q8_0_BLOCK_VALUES: u32 = 32;
-/// Head dimension the kernels are specialized for.
-pub const HEAD_DIM: u32 = 64;
+/// Head dimensions the Metal kernels compile for (Qwen2.5-0.5B uses 64, Qwen2.5-7B and larger use 128).
+pub const METAL_HEAD_DIMS: [u32; 2] = [64, 128];
+/// Head dimension the CUDA kernels are written for.
+pub const CUDA_HEAD_DIM: u32 = 64;
 /// Largest number of KV slots a model instance can own.
 pub const MAX_SLOTS: u32 = 65;
 /// Largest query-head group per KV head (one simdgroup row block).
 pub const MAX_GROUP: u32 = 8;
 /// Offset of a tensor the architecture does not have (for example a bias).
 pub const NO_TENSOR: u64 = u64::MAX;
-/// GGML type ID of `Q8_0`, the only matrix encoding the kernels implement today.
-pub const ENCODING_Q8_0: u32 = 8;
 /// Rotate the first half of a head against the second half.
 pub const ROPE_NEOX: u32 = 0;
 /// `silu(gate) * up`.
@@ -69,7 +75,22 @@ pub struct DecoderLayerOffsets {
     pub gate: u64,
     pub up: u64,
     pub down: u64,
+    /// GGML type IDs of Q, K, V, O, gate, up, and down, four bits each from the lowest (ADR-021).
+    pub encodings: u64,
 }
+
+impl DecoderLayerOffsets {
+    /// The encoding of one of this layer's matrices.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GpuError::Unavailable`] for an unimplemented encoding.
+    pub fn encoding(&self, matrix: Matrix) -> Result<Encoding, GpuError> {
+        unpack(self.encodings, matrix)
+    }
+}
+
+const _: () = assert!(std::mem::size_of::<DecoderLayerOffsets>() == 120);
 
 /// The C ABI model description (ADR-012). Pointers stay owned by the caller for the model's lifetime.
 #[repr(C)]
@@ -95,13 +116,15 @@ pub struct DecoderDesc {
     pub step_tokens: u32,
     pub logits_rows: u32,
     pub rms_epsilon: f32,
-    pub matrix_encoding: u32,
+    /// GGML type ID of the token embedding (ADR-021).
+    pub embedding_encoding: u32,
     pub rope_layout: u32,
     pub activation: u32,
     pub kv_precision: u32,
     /// KV slots grow in multiples of this many positions, at least doubling (ADR-017); a positive multiple of 64.
     pub kv_growth_positions: u32,
-    pub pad: u32,
+    /// GGML type ID of the output projection (ADR-021).
+    pub output_encoding: u32,
 }
 
 // The C ABI descriptor layout is mirrored in C# (`NativeDecoderDesc`); both sides pin its size.
@@ -125,6 +148,8 @@ pub struct DecoderShape {
     pub feed_forward: u32,
     pub heads: u32,
     pub kv_heads: u32,
+    /// 64 or 128 on Metal (compiled per model), 64 on CUDA.
+    pub head_dim: u32,
     pub vocabulary: u32,
     pub context: u32,
     pub session_slots: u32,
@@ -145,7 +170,14 @@ impl DecoderShape {
     /// Width of the packed K or V projection.
     #[must_use]
     pub const fn kv_width(&self) -> u32 {
-        self.kv_heads * HEAD_DIM
+        self.kv_heads * self.head_dim
+    }
+
+    /// Floats in one row of the attention partial buffer: the head's output values, the running maximum, and
+    /// the running sum.
+    #[must_use]
+    pub const fn partial_row_floats(&self) -> u32 {
+        self.head_dim + 2
     }
 
     /// Floats in one token row of the packed Q|K|V projection.
@@ -159,7 +191,7 @@ impl DecoderShape {
     pub const fn kv_bytes_per_position(&self) -> u64 {
         2 * self.layer_count as u64
             * self.kv_heads as u64
-            * HEAD_DIM as u64
+            * self.head_dim as u64
             * self.kv_precision.element_bytes()
     }
 
@@ -204,6 +236,8 @@ pub struct DecoderPlan {
     pub output: u64,
     pub weights_length: u64,
     pub rope_floats: usize,
+    pub embedding_encoding: Encoding,
+    pub output_encoding: Encoding,
 }
 
 impl DecoderPlan {
@@ -225,8 +259,16 @@ impl DecoderPlan {
             length: desc.weights_length,
         };
         let (hidden, vocab) = (u64::from(shape.hidden), u64::from(shape.vocabulary));
-        ranges.q8(desc.token_embedding, vocab, hidden, "token_embd")?;
-        ranges.q8(desc.output, vocab, hidden, "output")?;
+        let embedding_encoding = Encoding::from_id(desc.embedding_encoding)?;
+        let output_encoding = Encoding::from_id(desc.output_encoding)?;
+        ranges.matrix(
+            desc.token_embedding,
+            vocab,
+            hidden,
+            embedding_encoding,
+            "token_embd",
+        )?;
+        ranges.matrix(desc.output, vocab, hidden, output_encoding, "output")?;
         ranges.f32(desc.output_norm, hidden, "output_norm")?;
         for (index, layer) in layers.iter().enumerate() {
             check_layer(&ranges, &shape, layer).map_err(|error| match error {
@@ -237,7 +279,7 @@ impl DecoderPlan {
             })?;
         }
 
-        let rope_floats = usize::try_from(u64::from(shape.context) * u64::from(HEAD_DIM / 2))
+        let rope_floats = usize::try_from(u64::from(shape.context) * u64::from(shape.head_dim / 2))
             .map_err(|_| GpuError::invalid("RoPE table length overflows usize"))?;
         Ok(Self {
             shape,
@@ -247,6 +289,8 @@ impl DecoderPlan {
             output: desc.output,
             weights_length: desc.weights_length,
             rope_floats,
+            embedding_encoding,
+            output_encoding,
         })
     }
 

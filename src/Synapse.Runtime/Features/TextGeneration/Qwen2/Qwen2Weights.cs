@@ -24,12 +24,13 @@ internal sealed record Qwen2Weights(
 
 internal static class Qwen2WeightLoader
 {
-    public static Qwen2Weights Load(GgufFile file, int layerCount)
+    /// <summary>Loads the executed layers; under a layer drop (ADR-019) the dropped layers are never read.</summary>
+    public static Qwen2Weights Load(GgufFile file, DecoderDimensions dimensions)
     {
-        var layers = new Qwen2LayerWeights[layerCount];
-        for (var layer = 0; layer < layerCount; layer++)
+        var layers = new Qwen2LayerWeights[dimensions.LayerCount];
+        for (var layer = 0; layer < layers.Length; layer++)
         {
-            var prefix = $"blk.{layer}";
+            var prefix = $"blk.{dimensions.SourceLayer(layer)}";
             layers[layer] = new Qwen2LayerWeights(
                 file.ReadFloat32Tensor($"{prefix}.attn_norm.weight"),
                 file.GetRequiredTensor($"{prefix}.attn_q.weight"),

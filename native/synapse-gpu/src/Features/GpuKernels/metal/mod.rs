@@ -16,12 +16,15 @@ use objc2_metal::{
 
 use super::GpuDeviceInfo;
 use super::error::GpuError;
+use crate::gpu_kernels::decoder::METAL_HEAD_DIMS;
 
 const SOURCE: &str = concat!(
     include_str!("shaders/common.metal"),
     include_str!("shaders/elementwise.metal"),
     include_str!("shaders/matmul.metal"),
+    include_str!("shaders/matmul_kquant.metal"),
     include_str!("shaders/attention.metal"),
+    include_str!("shaders/attention_reduce.metal"),
 );
 
 pub type Device = Retained<ProtocolObject<dyn MTLDevice>>;
@@ -61,12 +64,13 @@ pub fn probe() -> Result<GpuDeviceInfo, GpuError> {
 
 /// Compiled pipelines for every Synapse kernel.
 pub struct Pipelines {
-    pub embed: Pipeline,
+    /// Embedding lookups for `Q8_0`, `Q4_K`, and `Q6_K` tables, indexed by `Encoding::index` (ADR-021).
+    pub embed: [Pipeline; 3],
     pub rms_norm: Pipeline,
-    /// Matrix-vector kernels for 1, 2, 4, and 8 tokens per threadgroup.
-    pub matvec: [Pipeline; 4],
-    /// Tiled FP32 simdgroup-matrix GEMM for prompt runs.
-    pub gemm: Pipeline,
+    /// Matrix-vector kernels for 1, 2, 4, and 8 tokens per threadgroup, per encoding.
+    pub matvec: [[Pipeline; 4]; 3],
+    /// Tiled FP32 simdgroup-matrix GEMM for prompt runs, per encoding.
+    pub gemm: [Pipeline; 3],
     /// FP32 and FP16 KV variants, indexed by `KvPrecision`.
     pub rope_kv: [Pipeline; 2],
     pub attention: [Pipeline; 2],
@@ -84,13 +88,19 @@ pub struct MetalContext {
 }
 
 impl MetalContext {
-    /// Opens the default device and compiles the kernels.
+    /// Opens the default device and compiles the kernels for `head_dim` (64 or 128).
     ///
     /// # Errors
     ///
-    /// Returns [`GpuError::Unavailable`] for a missing or pre-Apple7 device and [`GpuError::Device`] when
-    /// compilation fails.
-    pub fn new() -> Result<Self, GpuError> {
+    /// Returns [`GpuError::Unavailable`] for a missing or pre-Apple7 device or an unsupported head dimension,
+    /// and [`GpuError::Device`] when compilation fails.
+    pub fn new(head_dim: u32) -> Result<Self, GpuError> {
+        if !METAL_HEAD_DIMS.contains(&head_dim) {
+            return Err(GpuError::Unavailable(format!(
+                "the Metal kernels compile for head dimensions {METAL_HEAD_DIMS:?}, not {head_dim}"
+            )));
+        }
+
         let info = probe()?;
         let device = system_device()?;
         if info.apple_family < 7 || info.unified_memory == 0 {
@@ -103,7 +113,7 @@ impl MetalContext {
         let queue = device
             .newCommandQueue()
             .ok_or_else(|| GpuError::Device("the device returned no command queue".into()))?;
-        let pipelines = compile_pipelines(&device)?;
+        let pipelines = compile_pipelines(&device, head_dim)?;
         Ok(Self {
             device,
             queue,
@@ -113,13 +123,19 @@ impl MetalContext {
     }
 }
 
-/// Compiles the kernel source with fast math disabled and builds every pipeline.
-fn compile_pipelines(device: &ProtocolObject<dyn MTLDevice>) -> Result<Pipelines, GpuError> {
+/// Compiles the kernel source for one head dimension with fast math disabled and builds every pipeline.
+fn compile_pipelines(
+    device: &ProtocolObject<dyn MTLDevice>,
+    head_dim: u32,
+) -> Result<Pipelines, GpuError> {
     let options = MTLCompileOptions::new();
     options.setMathMode(MTLMathMode::Safe);
     options.setLanguageVersion(MTLLanguageVersion::Version3_1);
     let library = device
-        .newLibraryWithSource_options_error(&NSString::from_str(SOURCE), Some(&options))
+        .newLibraryWithSource_options_error(
+            &NSString::from_str(&format!("#define SYNAPSE_HEAD_DIM {head_dim}\n{SOURCE}")),
+            Some(&options),
+        )
         .map_err(|error| GpuError::Device(format!("Metal kernel compilation failed: {error}")))?;
     let pipeline = |name: &str| -> Result<Pipeline, GpuError> {
         let function = library
@@ -131,16 +147,27 @@ fn compile_pipelines(device: &ProtocolObject<dyn MTLDevice>) -> Result<Pipelines
             .newComputePipelineStateWithFunction_error(&function)
             .map_err(|error| GpuError::Device(format!("pipeline {name} failed: {error}")))
     };
+    let matvec = |prefix: &str| -> Result<[Pipeline; 4], GpuError> {
+        Ok([
+            pipeline(&format!("synapse_{prefix}_matvec_1"))?,
+            pipeline(&format!("synapse_{prefix}_matvec_2"))?,
+            pipeline(&format!("synapse_{prefix}_matvec_4"))?,
+            pipeline(&format!("synapse_{prefix}_matvec_8"))?,
+        ])
+    };
     Ok(Pipelines {
-        embed: pipeline("synapse_embed_q8_0")?,
-        rms_norm: pipeline("synapse_rms_norm")?,
-        matvec: [
-            pipeline("synapse_q8_matvec_1")?,
-            pipeline("synapse_q8_matvec_2")?,
-            pipeline("synapse_q8_matvec_4")?,
-            pipeline("synapse_q8_matvec_8")?,
+        embed: [
+            pipeline("synapse_embed_q8_0")?,
+            pipeline("synapse_embed_q4k")?,
+            pipeline("synapse_embed_q6k")?,
         ],
-        gemm: pipeline("synapse_q8_gemm")?,
+        rms_norm: pipeline("synapse_rms_norm")?,
+        matvec: [matvec("q8")?, matvec("q4k")?, matvec("q6k")?],
+        gemm: [
+            pipeline("synapse_q8_gemm")?,
+            pipeline("synapse_q4k_gemm")?,
+            pipeline("synapse_q6k_gemm")?,
+        ],
         rope_kv: [
             pipeline("synapse_rope_kv")?,
             pipeline("synapse_rope_kv_f16")?,

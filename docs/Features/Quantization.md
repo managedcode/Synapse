@@ -57,3 +57,30 @@ E2–E5.
 Not yet covered: the calibration/test split enforcement (AC-QNT-003-1) and
 ablation validation (AC-QNT-003-3) require real-model activations from region
 execution.
+
+## GGUF K-quant weights in execution (ADR-021)
+
+- **Requirement `REQ-QNT-005`:** Q4_K and Q6_K GGUF matrices, as in Q4_K_M files, execute on the reference and
+  Metal backends.
+  - The reference path decodes each row exactly as ggml does, so an F32 model holding the decoded values gives
+    bitwise the same logits.
+  - Metal dequantizes in its matrix-vector, GEMM, and embedding kernels. It tracks the reference within 0.2% of
+    the logits range with FP32 KV, and within 1% with FP16 KV.
+  - The managed and native CPU kernels reject K-quant matrices with an ADR-021 message, and CUDA rejects them as
+    unavailable.
+- **Profile names.** The runtime profile names the encodings, for example `metal-qwen2-q4_k+q6_kxf32`.
+
+| Criterion | Test |
+|---|---|
+| `AC-QNT-005-1` K-quant reference logits equal the dequantized F32 model bitwise | `TEST-QNT-005-1` `KQuantReferenceEqualsDequantizedFp32` |
+| `AC-QNT-005-2` managed and native CPU kernels reject K-quants explicitly | `TEST-QNT-005-2` `KQuantWeightsFailExplicitlyOnCpuKernels` |
+| `AC-QNT-005-3` Metal tracks the reference on a Q4_K_M-shaped model, and the profile names the encodings | `TEST-QNT-005-3` `MetalMatchesReferenceOnKQuantWeights` |
+| `AC-QNT-005-4` K-quant sizes and whole super-blocks are validated, and host row counts match the shader instances | `TEST-QNT-005-4` `plan_sizes_kquant_matrices_by_their_blocks`, `kquant_rows_must_hold_whole_super_blocks`, `kquant_matvec_rows_match_the_shader_instances` (Rust) |
+| `AC-QNT-005-5` every GGUF float type resolves to its decoder | `TEST-QNT-005-5` `GgufFloatTypesResolveToTheirDecoders` |
+
+**Evidence.** Run Y in `benchmarks/README.md`
+(`2026-09-29-m2-pro-qwen2.5-7b-1m-k-quant-diagnostic.json`). On Qwen2.5-7B-Instruct-1M Q4_K_M:
+- Synapse writes llama.cpp's text for the pinned prompt.
+- It peaks at 4,233–4,248 MiB, against 4,846–4,851 for llama.cpp and 7,210–7,252 for Synapse Q8_0.
+- Decode is 17.4–18.2 tokens/s against llama.cpp's 27.0–29.3.
+- Perplexity is 11.93 against 12.16 for Q8_0 on the same tokens.

@@ -11,7 +11,7 @@ mod projection;
 
 pub use activations::Activations;
 
-use super::decoder::{DecoderPlan, KvPrecision, NO_TENSOR};
+use super::decoder::{DecoderPlan, Encoding, KvPrecision, NO_TENSOR};
 use super::error::GpuError;
 use super::params::{NO_BIAS, SlotTable};
 use super::schedule::AttentionPlan;
@@ -21,13 +21,14 @@ use super::schedule::AttentionPlan;
 const SUBMISSION_PAIRS: u64 = 1 << 22;
 const _: () = assert!(NO_BIAS == NO_TENSOR);
 
-/// A kernel of the step. `Matvec(t)` processes `t` tokens (1, 2, 4, or 8) per threadgroup.
+/// A kernel of the step. `Matvec(e, t)` processes `t` tokens (1, 2, 4, or 8) per threadgroup of weights in
+/// encoding `e` (ADR-021).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kernel {
-    Embed,
+    Embed(Encoding),
     RmsNorm,
-    Matvec(u32),
-    Gemm,
+    Matvec(Encoding, u32),
+    Gemm(Encoding),
     RopeKv(KvPrecision),
     Attention(KvPrecision),
     AttentionDecode(KvPrecision),
@@ -77,6 +78,13 @@ pub trait StepBackend {
         threads: [usize; 3],
     ) -> Result<(), GpuError>;
 
+    /// Weight rows per matrix-vector threadgroup for `tokens_per_group` tokens of `encoding` weights; the grid is
+    /// sized from it.
+    fn matvec_rows(&self, encoding: Encoding, tokens_per_group: u32) -> u32 {
+        let _ = (encoding, tokens_per_group);
+        2
+    }
+
     /// Ends the current submission; later launches still run after it.
     ///
     /// # Errors
@@ -85,11 +93,41 @@ pub trait StepBackend {
     fn flush(&mut self) -> Result<(), GpuError>;
 }
 
+/// One mapped weight segment (ADR-019): file bytes `[first, end)` live in `buffer` from byte `buffer_offset`.
+pub struct WeightSegment<B> {
+    pub first: u64,
+    pub end: u64,
+    pub buffer: B,
+    pub buffer_offset: u64,
+}
+
+/// The segment buffer that holds file offset `offset`, and the byte offset inside it.
+///
+/// # Errors
+///
+/// Returns [`GpuError::InvalidArgument`] when no segment covers the offset.
+pub fn locate<B>(segments: &[WeightSegment<B>], offset: u64) -> Result<(&B, u64), GpuError> {
+    segments
+        .iter()
+        .find(|segment| segment.first <= offset && offset < segment.end)
+        .map(|segment| {
+            (
+                &segment.buffer,
+                segment.buffer_offset + (offset - segment.first),
+            )
+        })
+        .ok_or_else(|| {
+            GpuError::invalid(format!(
+                "weight offset {offset} lies outside every mapped segment"
+            ))
+        })
+}
+
 /// Everything one step reads besides the token list.
 pub struct StepInputs<'a, B> {
     pub plan: &'a DecoderPlan,
-    pub weights: &'a B,
-    pub weights_offset: u64,
+    /// The mapped weights: one segment, or several when layers are dropped (ADR-019).
+    pub weights: &'a [WeightSegment<B>],
     pub cosines: &'a B,
     pub sines: &'a B,
     pub activations: &'a Activations<B>,

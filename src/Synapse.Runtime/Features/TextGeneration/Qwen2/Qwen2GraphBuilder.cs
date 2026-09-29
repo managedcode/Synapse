@@ -17,6 +17,7 @@ internal static class Qwen2GraphBuilder
     public static ModelGraph Build(
         GgufFile file,
         int layerCount,
+        ModelLoading.LayerDropProfile? layerDrop,
         int hiddenSize,
         int feedForwardSize,
         int keyValueWidth,
@@ -58,7 +59,8 @@ internal static class Qwen2GraphBuilder
                 keyValueHeads,
                 headDimension,
                 rope,
-                normalizationEpsilon);
+                normalizationEpsilon,
+                layerDrop is not null && layerDrop.Layers.Contains(layer) ? layerDrop : null);
         }
 
         var logits = AddOutputRegion(context, file, hidden, normalizationEpsilon);

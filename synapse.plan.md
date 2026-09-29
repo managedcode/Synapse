@@ -233,3 +233,52 @@ and statistical release gate remain unverified until new runs complete.
 
     Open gaps: GPU prompt GEMM (1.55x llama.cpp at 512 tokens); CPU prompt attention (first token 1.9x
     llama.cpp at 8k, `Qwen2CpuAttention`); KV page Metal kernels; CUDA on hardware.
+
+## 2026-09-29 pause checkpoint
+
+The owner paused here to review the results. Nothing below is committed; the
+owner commits.
+
+- Done in this span (`gpu-kernels.plan.md` HEAD.1, DROP.1, SPEC.1, Q4K.1):
+  - Qwen2.5-7B-Instruct-1M runs on Metal (head size 128) from Q8_0 and
+    Q4_K_M files and writes llama.cpp's text for the pinned prompt
+    (`TASK-GPU-006`);
+  - qualified layer drop whose weights and KV are never made resident
+    (ADR-019, `TASK-LDP-001..004`);
+  - exact greedy speculative decoding with a 0.5B draft (ADR-020,
+    `TASK-SPC-001..003`);
+  - Q4_K/Q6_K weights on the reference and Metal paths; CUDA rejects them
+    explicitly (ADR-021, `TASK-QNT-005`).
+- Diagnostic evidence (benchmark runs W, X, Y; one fresh process per row, not
+  a paired release verdict):
+  - 7B peak RSS: Q8_0 7,252 MiB against llama.cpp 8,109; Q4_K_M 4,233 against
+    4,846;
+  - decode: Q8_0 17.9 against 17.7 tokens/s; Q4_K_M 0.64x llama.cpp;
+  - first token on 3,528 tokens: 1.6x llama.cpp;
+  - layer drop: 2 of 28 layers for free (-475 MiB, perplexity -1.1%); 4 and
+    8 layers fail the quality gate;
+  - speculation: 17.4 to 23.5 tokens/s on chat text with Q8_0 and the same
+    output; slower than dense with Q4_K_M.
+- Local gates on the final tree: `cargo fmt --check`, clippy, Rust 32/32,
+  `dotnet format --verify-no-changes`, Release build, and .NET 284/284. No
+  hosted Actions run of this change set exists. Some tests were written with or
+  after their code (prefetch, CLI, sweep failed runs); the plans record which.
+- README, `benchmarks/README.md`, `docs/images/large-model.svg`, and the landing
+  show these numbers.
+- Local model files kept for tests and benchmarks: `artifacts/models` (13 GB,
+  7B Q8_0 7.5 GB and Q4_K_M 4.4 GB) and the Foundry test anchor
+  `qwen2.5-0.5b-instruct-generic-cpu-4` (847 MB). The other Foundry models were
+  deleted; `TASK-BMK-002` downloads them again with permission.
+
+Open after the pause, in order:
+
+1. `Q4K.2`: a `mul_mv_q4_K`-style decode kernel and a pipelined K-quant GEMM
+   (decode 0.64x, prompt 1.6x slower than llama.cpp).
+2. Prompt GEMM for the first token (7B 1.6x, 0.5B 1.5x at 4k).
+3. A 5–8 token verify path so speculation also pays off with Q4_K_M.
+4. KV page activation on Metal (ADR-016), then a persistent ZoneTree prefix
+   cache.
+5. Router-driven region skipping and MoE expert paging (needs an MoE model
+   download, which requires the owner's permission).
+6. Region-IR execution (`flybrain.plan.md` F0/F1), the Orleans cluster, CUDA on
+   NVIDIA hardware (remote only), and the 30-pair release gate.

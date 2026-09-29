@@ -90,9 +90,10 @@
 
     <div class="step" data-state="cold">
       <div class="wrap"><div class="step-card">
-        <p class="kicker"><span class="n">03</span>Memory <em class="tag tag-next">Next</em></p>
+        <p class="kicker"><span class="n">03</span>Memory <em class="tag tag-built">Built · layer drop</em></p>
         <h2>Cold regions stay on disk.</h2>
-        <p>Weights a token does not touch load on demand. Bigger models fit on smaller machines.</p>
+        <p>A layer a profile drops never loads: its weights stay on disk and it gets no KV cache. Its quality cost is measured before it is dropped.</p>
+        <p class="step-big"><b>240 MiB</b><span>per dropped layer, Qwen2.5-7B</span></p>
       </div></div>
     </div>
 
@@ -221,6 +222,44 @@
       </article>
     </div>
     <p class="fine reveal">One run per row, a fresh process each; diagnostics, not a paired verdict. <a href="https://github.com/managedcode/Synapse/blob/main/benchmarks/README.md">Runs U and V ↗</a></p>
+    <header class="sec-head reveal ctx-head"><p class="kicker">7B model · Apple GPU</p><h2>A 7B model, not loaded whole. <span class="soft">Same text as llama.cpp.</span></h2></header>
+    <div class="bench big7">
+      <article class="panel reveal"><div class="panel-top"><h3>Peak memory</h3></div>
+        <p class="panel-big"><span>13%</span><small>less than llama.cpp, Q4_K_M</small></p>
+        <ul class="bars">
+          <li class="me"><span>Synapse Q4</span><i><b style="--w:52.2%"></b></i><em>4,233 MiB</em></li>
+          <li class="c1"><span>llama.cpp Q4</span><i><b style="--w:59.8%"></b></i><em>4,846 MiB</em></li>
+          <li class="me"><span>Synapse Q8</span><i><b style="--w:89.4%"></b></i><em>7,252 MiB</em></li>
+          <li class="c1"><span>llama.cpp Q8</span><i><b style="--w:100%"></b></i><em>8,109 MiB</em></li>
+        </ul>
+        <p class="unit">whole process, mapped weights included · lower is better</p></article>
+      <article class="panel reveal"><div class="panel-top"><h3>Writing speed</h3></div>
+        <p class="panel-big"><span>1.01×</span><small>llama.cpp at Q8_0</small></p>
+        <ul class="bars">
+          <li class="me"><span>Synapse Q8</span><i><b style="--w:61.1%"></b></i><em>17.9</em></li>
+          <li class="c1"><span>llama.cpp Q8</span><i><b style="--w:60.4%"></b></i><em>17.7</em></li>
+          <li class="me"><span>Synapse Q4</span><i><b style="--w:62.1%"></b></i><em>18.2</em></li>
+          <li class="c1"><span>llama.cpp Q4</span><i><b style="--w:100%"></b></i><em>29.3</em></li>
+        </ul>
+        <p class="unit">tokens per second, one run · Q4_K_M is 0.64× across runs</p></article>
+      <article class="panel reveal"><div class="panel-top"><h3>Small draft, big check</h3></div>
+        <p class="panel-big"><span>1.35×</span><small>faster, same output</small></p>
+        <ul class="bars">
+          <li class="me"><span>+ 0.5B draft</span><i><b style="--w:100%"></b></i><em>23.5</em></li>
+          <li><span>7B alone</span><i><b style="--w:74%"></b></i><em>17.4</em></li>
+        </ul>
+        <p class="unit">tokens per second, Q8_0, chat prompt · the 0.5B drafts 3 tokens, the 7B checks them in one pass, 54% kept</p></article>
+    </div>
+    <article class="panel foundry drop reveal"><div class="panel-top"><h3>Drop layers, never load them</h3></div>
+      <p class="panel-big"><span>−475 MiB</span><small>2 of 28 layers dropped, perplexity −1.1%</small></p>
+      <ul class="bars">
+        <li class="me"><span>All 28 layers</span><i><b style="--w:100%"></b></i><em>7,255 MiB · 12.16</em></li>
+        <li class="me"><span>2 dropped</span><i><b style="--w:93.5%"></b></i><em>6,780 MiB · −1.1%</em></li>
+        <li class="me off"><span>4 dropped</span><i><b style="--w:87.2%"></b></i><em>6,326 MiB · +39%</em></li>
+        <li class="me off"><span>8 dropped</span><i><b style="--w:74.2%"></b></i><em>5,381 MiB · +137%</em></li>
+      </ul>
+      <p class="unit">peak memory · perplexity on the test text · a dropped layer's weights are never mapped for the GPU and its KV is never allocated · only the 2-layer drop passes the quality gate</p></article>
+    <p class="fine reveal">MacBook Pro, Apple M2 Pro 19-core GPU. Qwen2.5-7B-Instruct-1M, the same Q8_0 and Q4_K_M GGUF files for both engines, 3,528-token prompt, 128 new tokens, FP16 KV, one fresh process per row. For the pinned prompt Synapse writes llama.cpp's text with both files; Q4_K_M perplexity is 11.93 against 12.16 for Q8_0. Diagnostics, not a paired release verdict. <a href="https://github.com/managedcode/Synapse/blob/main/benchmarks/README.md">Runs W, X and Y ↗</a></p>
 
     <article class="panel foundry reveal">
       <div class="panel-top"><h3>Also measured · Microsoft Foundry Local · 6 models</h3></div>
@@ -236,15 +275,15 @@
       <p class="unit">tokens per second · 128-token answer · a separate test: Microsoft's own ONNX weights on about 6 cores, not a head-to-head with the engines above · on GitHub each runner and model is its own job (15 planned, not run yet)</p>
     </article>
 
-
     <div class="notyet reveal">
       <h3>Not there yet. We say so.</h3>
       <ul>
-        <li><b>First token on short prompts</b><span>On the Apple GPU the first token takes 1.5× llama.cpp's time at 4k, 1.04× at 32k (27.6 s vs 26.6 s). The prompt matrix multiply is the gap.</span></li>
-        <li><b>Past 32k</b><span>The 0.5B model is rated for 32k. Longer windows need head size 128 kernels and a 1M-context model, which are next.</span></li>
+        <li><b>First token</b><span>On the Apple GPU the first token takes 1.5× llama.cpp's time for the 0.5B at 4k, 1.04× at 32k, and 1.6× for the 7B on a 3.5k prompt (16.9 s vs 10.8 s). The prompt matrix multiply is the gap.</span></li>
+        <li><b>Q4 writing speed</b><span>The 7B in Q4_K_M already uses less memory than llama.cpp, but writes at 0.64× its speed (17.4–18.2 vs 27.0–29.3 tokens/s). That kernel is next.</span></li>
+        <li><b>Past 32k</b><span>The 7B-1M model and head size 128 kernels run now. Windows past 32k have not been measured yet.</span></li>
         <li><b>Smart context on CPU only</b><span>Reading only the relevant KV pages costs +3.4% perplexity while reading 30% of an 8k context. The GPU kernels are next.</span></li>
-        <li><b>CUDA untested</b><span>Metal runs. The CUDA backend is written but has not run on an NVIDIA GPU yet.</span></li>
-        <li><b>One family</b><span>Only Qwen2 runs today. More model families are next.</span></li>
+        <li><b>CUDA untested</b><span>Metal runs. The CUDA backend is written but has not run on an NVIDIA GPU yet; it rejects Q4_K_M files for now.</span></li>
+        <li><b>One family</b><span>Only Qwen2 runs today. More model families and MoE expert paging are next.</span></li>
       </ul>
     </div>
   </div>
@@ -257,7 +296,7 @@
       <article class="feat reveal"><span class="ico">C#</span><h3>Pure C#, no Python</h3><p>.NET 10 owns the portable path. Rust takes a kernel only after profiling proves it is worth it.</p></article>
       <article class="feat reveal"><span class="ico">⌂</span><h3>Local first</h3><p>One process, no server, no network. The cluster is an option, never a requirement.</p></article>
       <article class="feat reveal"><span class="ico">=</span><h3>Same answer as llama.cpp</h3><p>Qwen2.5 runs fully in C#. In the benchmark it writes exactly the same tokens as llama.cpp.</p></article>
-      <article class="feat reveal"><span class="ico">≈</span><h3>Precision by importance <em class="tag tag-next">Next</em></h3><p>A fast low-precision “reflex” drafts tokens and the full model checks them, so the answer stays exact.</p></article>
+      <article class="feat reveal"><span class="ico">≈</span><h3>Small drafts, exact answer</h3><p>A 0.5B model drafts tokens and the 7B checks them in one pass. The answer stays exactly the 7B's, 1.35× faster on chat text.</p></article>
       <article class="feat reveal"><span class="ico">!</span><h3>Fails loudly</h3><p>Model math, precision and cache formats are explicit. An unsupported fast path fails instead of guessing.</p></article>
       <article class="feat reveal"><span class="ico">✓</span><h3>Verified and cross-platform</h3><p>Model downloads are verified. Tests and benchmarks run on macOS, Linux and Windows.</p></article>
     </div>
@@ -297,10 +336,10 @@
       <p class="unit">CPU writing speed as a share of llama.cpp · the line is llama.cpp</p>
     </div>
     <div class="columns">
-      <article class="col reveal"><h3><i class="dot ok"></i>Done</h3><ul><li>Qwen2.5 runs fully in C#, same answer as llama.cpp</li><li>Apple GPU (Metal), up to 32k context</li><li>Tokenizer with the same IDs as llama.cpp</li><li>Long-context quality checks</li><li>Model graph and verifier</li><li>Benchmarks on three operating systems</li></ul></article>
-      <article class="col reveal"><h3><i class="dot now"></i>Now</h3><ul><li>Faster first token on long prompts</li><li>Smart context on the GPU</li><li>Run the model from its graph</li></ul></article>
+      <article class="col reveal"><h3><i class="dot ok"></i>Done</h3><ul><li>Qwen2.5 runs fully in C#, same answer as llama.cpp</li><li>Apple GPU (Metal), up to 32k context</li><li>Tokenizer with the same IDs as llama.cpp</li><li>Long-context quality checks</li><li>Model graph and verifier</li><li>Benchmarks on three operating systems</li><li>Qwen2.5-7B on the Apple GPU, Q8_0 and Q4_K_M</li><li>Dropped layers never load</li><li>A small model drafts, the big one checks: same output, faster</li></ul></article>
+      <article class="col reveal"><h3><i class="dot now"></i>Now</h3><ul><li>Faster Q4 decode</li><li>Faster first token on long prompts</li><li>Smart context on the GPU</li><li>Run the model from its graph</li></ul></article>
       <article class="col reveal"><h3><i class="dot built"></i>Built, not wired in</h3><ul><li>2 to 8 bit and ternary compression</li><li>One model across several devices</li></ul></article>
-      <article class="col reveal"><h3><i class="dot"></i>Next</h3><ul><li>Skipping regions, loading on demand</li><li>Cold KV pages on disk</li><li>CUDA on NVIDIA</li><li>More models</li><li>Orleans cluster</li></ul></article>
+      <article class="col reveal"><h3><i class="dot"></i>Next</h3><ul><li>Expert paging for MoE models</li><li>Cold KV pages on disk</li><li>CUDA on NVIDIA</li><li>More models</li><li>Orleans cluster</li></ul></article>
     </div>
   </div>
 </section>

@@ -20,8 +20,6 @@ public static class SourceEncodings
         "nvfp4", "q1_0",
     ];
 
-    private static readonly Dictionary<uint, ISourceTensorDecoder> GgufDecoders = CreateGgufDecoders();
-
     /// <summary>IEEE 754 single precision.</summary>
     public static ISourceTensorDecoder Fp32 { get; } = Scalar("f32", 4, bytes => BinaryPrimitives.ReadSingleLittleEndian(bytes));
 
@@ -41,6 +39,9 @@ public static class SourceEncodings
     /// <summary>OCP FP8 E5M2: the upper byte of an IEEE half-precision value.</summary>
     public static ISourceTensorDecoder Fp8E5M2 { get; } =
         Scalar("f8_e5m2", 1, bytes => (float)BitConverter.UInt16BitsToHalf((ushort)(bytes[0] << 8)));
+
+    // Declared after the scalar decoders: static initializers run in text order, and the table reads them.
+    private static readonly Dictionary<uint, ISourceTensorDecoder> GgufDecoders = CreateGgufDecoders();
 
     /// <summary>ggml's name for a GGUF type identifier.</summary>
     public static string GetGgufTypeName(uint type) =>

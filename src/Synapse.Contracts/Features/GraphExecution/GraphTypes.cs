@@ -15,8 +15,11 @@ public enum StorageDataType
     /// <summary>Versioned block Q8 storage.</summary>
     BlockQ8,
 
-    /// <summary>Versioned block Q4 storage.</summary>
+    /// <summary>Versioned block Q4 storage (GGML Q4_K, ADR-021).</summary>
     BlockQ4,
+
+    /// <summary>Versioned block Q6 storage (GGML Q6_K, ADR-021).</summary>
+    BlockQ6,
 
     /// <summary>Signed 32-bit integer storage.</summary>
     I32,

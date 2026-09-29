@@ -307,3 +307,32 @@ make large and dynamic context practical, and how to optimize the Mac first.
     it until a measured multi-machine, multi-user workload needs it. First
     experiment: a two-node pipeline of a 7B model over Thunderbolt 4 and
     10 GbE, measuring per-hop latency and tok/s against one node.
+
+## 2026-09-29 a model that is not loaded whole
+
+Owner direction: the model should not load whole; parts can be dropped. Orleans
+stays (owner decision). The owner commits.
+
+- **Three ways to run less of a model, measured on Qwen2.5-7B-Instruct-1M:**
+  - *Layer drop* (ADR-019): a shallower model whose dropped weights and KV
+    are never loaded. Honest result: an unhealed dense checkpoint has few
+    cheap layers. Two of 28 cost nothing in perplexity but flip 20% of
+    top-1 predictions; four cost +39%. Memory falls by about 240 MiB per
+    layer.
+  - *Speculative decoding* (ADR-020): the 0.5B drafts and the 7B verifies.
+    The output is exactly the 7B's, with +23–35% decode on chat text at 3
+    draft tokens. It pays only where the draft agrees often.
+  - *Quantization* (Q4_K_M in llama.cpp): 4,742 MiB against 8,096 and 29.2
+    against 18.6 tokens/s at a small quality cost. Per quality point it
+    saves the most memory, so Q4_K/Q6_K kernels are the next step.
+- **Rejected for now:**
+  - Self-speculation with a layer-dropped 7B draft. Dropping 8 of 28 layers
+    keeps 71% of the cost and agrees on only half the tokens.
+  - Streaming a dense model's layers from SSD under a memory budget (F2
+    capacity mode). Every token touches every layer, so this reads about 8
+    GB per token.
+- **Later, where "not loaded" is exact:** MoE expert paging (F5, OLMoE),
+  where unselected experts are outside the function.
+- **Update the same day (ADR-021):** Q4_K/Q6_K now run on Metal. The 7B Q4_K_M peaks at 4.2 GB in
+  Synapse (llama.cpp 4.8 GB) with no measured perplexity loss against Q8_0. Decode is 0.64× llama.cpp's, which is
+  the next kernel target.

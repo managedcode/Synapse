@@ -179,6 +179,11 @@ tests above pass. Not claimed: speedup, or any conditional real model.
   Tests: `InFlightChunkNotEvicted`, `InterruptedLoadRetryable`,
   `PrefetchStaysBounded`, `CapacityModePreservesTokens`,
   `BudgetBelowLargestRegionRejected`.
+Related evidence (2026-09-29, ADR-019): not a budgeted residency manager.
+- A qualified layer drop keeps dropped layers' pages unloaded: Metal wraps only the plan's weight segments,
+  and CPU prefetch skips them.
+- On Qwen2.5-7B, peak RSS falls by about 240 MiB per dropped layer.
+- F2.1–F2.4 stay open.
 
 Exit: the budget is enforced, and bytes loaded per token are reported. Not
 claimed: fast paging, or "large model in small RAM" as a speed result.
@@ -216,6 +221,15 @@ external draft from the same tokenizer family.
   identity is verified by tokenizer hash, not assumed. The draft and target are
   two region graphs in one plan, which is also the first multi-model activation
   wave. Test: `ExternalDraftGreedyEquivalent`.
+  Partial evidence (2026-09-29, ADR-020):
+  - `SpeculativeDecoding` runs Qwen2.5-0.5B drafts for Qwen2.5-7B-Instruct-1M,
+    with token-ID identity checked by a vocabulary digest.
+  - Output equals target greedy: `SpeculativeOutputEqualsTargetGreedy` and
+    `SpeculativeMatchesTargetOnMetal`.
+  - Chat decode is +23–35% at 3 draft tokens (`docs/Features/Speculation.md`).
+  - Rollback is implicit in the position-indexed slots. The explicit
+    `BeginBranch`/`CommitPrefix` API (F4.1) and the benchmark-runner G12 claim
+    are not done, so F4.1 and F4.2 stay unchecked.
 - [ ] F4.3 Self-speculation (SPC-004) as a local research run on
   `facebook/layerskip-llama3.2-1B` (`LlamaForCausalLM`; the owner accepts the
   gate and license). A `draft(E)` entry point runs regions L0..L(E-1) plus the
@@ -324,6 +338,10 @@ noncommercial research evidence.
 
 - [ ] F7.1 Q4 `syn.q4.symmetric.g64.v1` encoding and kernel (reference path
   first).
+Related evidence (2026-09-29, ADR-021):
+- GGUF Q4_K and Q6_K (mixed per tensor, as in Q4_K_M) execute on the reference and Metal backends.
+- The 7B Q4_K_M peaks at 4.2 GB against 7.2 GB for Q8_0, at 11.93 against 12.16 perplexity.
+- The repo's own `syn.q4` codec is still not wired into execution, so F7.1 stays open.
 - [ ] F7.2 The Execution IR chooses the encoding per region from a
   session-scoped `PrecisionProfile` (`ProfileDecision`). The package stores the
   needed encodings, and the region pattern includes the encoding.

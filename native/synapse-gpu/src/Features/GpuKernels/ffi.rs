@@ -9,7 +9,7 @@ use super::decoder::{BatchToken, DecoderDesc, DecoderLayerOffsets, DecoderPlan};
 use super::error::{GpuError, STATUS_OK, STATUS_PANIC};
 
 /// C ABI version checked by the managed loader before any other call.
-pub const ABI_VERSION: u32 = 2;
+pub const ABI_VERSION: u32 = 3;
 /// Apple Metal.
 pub const BACKEND_METAL: u32 = 1;
 /// NVIDIA CUDA.

@@ -1,6 +1,6 @@
 use super::{
-    BatchToken, DecoderDesc, DecoderLayerOffsets, DecoderPlan, ENCODING_Q8_0, KV_F32, NO_TENSOR,
-    Q8_0_BLOCK_BYTES,
+    ALL_Q8_0, BatchToken, DecoderDesc, DecoderLayerOffsets, DecoderPlan, ENCODING_Q8_0, KV_F32,
+    NO_TENSOR, Q8_0_BLOCK_BYTES,
 };
 use crate::gpu_kernels::error::GpuError;
 
@@ -39,6 +39,7 @@ fn layout() -> (DecoderLayerOffsets, u64, u64, u64, u64) {
         gate: take(q8_bytes(FFN, HIDDEN)),
         up: take(q8_bytes(FFN, HIDDEN)),
         down: take(q8_bytes(HIDDEN, FFN)),
+        encodings: ALL_Q8_0,
     };
     (layer, embedding, output, norm, cursor)
 }
@@ -65,12 +66,12 @@ fn desc(length: u64, embedding: u64, output: u64, norm: u64) -> DecoderDesc {
         step_tokens: 4,
         logits_rows: 2,
         rms_epsilon: 1e-6,
-        matrix_encoding: ENCODING_Q8_0,
+        embedding_encoding: ENCODING_Q8_0,
         rope_layout: 0,
         activation: 0,
         kv_precision: KV_F32,
         kv_growth_positions: 64,
-        pad: 0,
+        output_encoding: ENCODING_Q8_0,
     }
 }
 
@@ -178,7 +179,7 @@ fn plan_reports_unimplemented_variants_as_unavailable() {
     let (layer, embedding, output, norm, length) = layout();
     let base = desc(length, embedding, output, norm);
     let q4 = DecoderDesc {
-        matrix_encoding: 2,
+        embedding_encoding: 2,
         ..base
     };
     let interleaved = DecoderDesc {
@@ -258,4 +259,140 @@ fn kv_growth_unit_must_be_a_positive_multiple_of_64() {
             Err(GpuError::InvalidArgument(_))
         ));
     }
+}
+
+/// Two layers with a 1 MiB hole between them, where a dropped layer's tensors would sit (ADR-019).
+fn two_layers_with_gap(gap: u64) -> (DecoderPlan, u64) {
+    let (layer, embedding, output, norm, length) = layout();
+    let second_start = length + gap;
+    let shift = |offset: u64| {
+        if offset == NO_TENSOR {
+            NO_TENSOR
+        } else {
+            offset - layer.attention_norm + second_start
+        }
+    };
+    let second = DecoderLayerOffsets {
+        attention_norm: shift(layer.attention_norm),
+        query: shift(layer.query),
+        key: shift(layer.key),
+        value: shift(layer.value),
+        query_bias: shift(layer.query_bias),
+        key_bias: shift(layer.key_bias),
+        value_bias: shift(layer.value_bias),
+        query_norm: NO_TENSOR,
+        key_norm: NO_TENSOR,
+        attention_output: shift(layer.attention_output),
+        feed_forward_norm: shift(layer.feed_forward_norm),
+        gate: shift(layer.gate),
+        up: shift(layer.up),
+        down: shift(layer.down),
+        encodings: ALL_Q8_0,
+    };
+    let total = second_start + (length - layer.attention_norm);
+    let mut description = desc(total, embedding, output, norm);
+    description.layer_count = 2;
+    let plan = DecoderPlan::new(&description, &[layer, second]).expect("valid two-layer layout");
+    (plan, length)
+}
+
+#[test]
+fn weight_segments_leave_dropped_ranges_unmapped() {
+    let page = 16_384;
+    let (plan, first_end) = two_layers_with_gap(1 << 20);
+
+    let segments = plan.weight_segments(page);
+
+    assert_eq!(segments.len(), 2);
+    assert!(
+        segments
+            .iter()
+            .all(|&(start, end)| start % page == 0 && end % page == 0 && start < end)
+    );
+    assert!(segments[0].1 <= first_end.next_multiple_of(page));
+    assert!(segments[1].0 >= first_end + (1 << 20) - page);
+    assert_eq!(segments[1].1, plan.weights_length.next_multiple_of(page));
+}
+
+#[test]
+fn weight_segments_merge_units_that_share_pages() {
+    let (plan, _) = two_layers_with_gap(0);
+
+    assert_eq!(
+        plan.weight_segments(16_384),
+        [(0, plan.weights_length.next_multiple_of(16_384))]
+    );
+}
+
+/// A `Q4_K_M`-like layer (ADR-021): `Q4_K` except V and down in `Q6_K`, at hidden `hidden` and head size 128.
+fn kquant_plan(length_delta: i64, hidden: u64) -> Result<DecoderPlan, GpuError> {
+    use super::{ENCODING_Q4_K, ENCODING_Q6_K, Encoding};
+    let (kv, ffn) = (128_u64, 512_u64);
+    let (q4, q6) = (Encoding::Q4K, Encoding::Q6K);
+    let mut cursor = 0_u64;
+    let mut take = |bytes: u64| {
+        let offset = cursor;
+        cursor += bytes.div_ceil(32) * 32;
+        offset
+    };
+    let embedding = take(q4.matrix_bytes(VOCAB, hidden));
+    let output = take(q6.matrix_bytes(VOCAB, hidden));
+    let norm = take(hidden * 4);
+    let layer = DecoderLayerOffsets {
+        attention_norm: take(hidden * 4),
+        query: take(q4.matrix_bytes(hidden, hidden)),
+        key: take(q4.matrix_bytes(kv, hidden)),
+        value: take(q6.matrix_bytes(kv, hidden)),
+        query_bias: take(hidden * 4),
+        key_bias: take(kv * 4),
+        value_bias: take(kv * 4),
+        query_norm: NO_TENSOR,
+        key_norm: NO_TENSOR,
+        attention_output: take(q4.matrix_bytes(hidden, hidden)),
+        feed_forward_norm: take(hidden * 4),
+        gate: take(q4.matrix_bytes(ffn, hidden)),
+        up: take(q4.matrix_bytes(ffn, hidden)),
+        down: take(q6.matrix_bytes(hidden, ffn)),
+        // Q, K, V, O, gate, up, down from the lowest four bits: C C E C C C E.
+        encodings: 0x0ECC_CECC,
+    };
+    let mut description = desc(
+        cursor.saturating_add_signed(length_delta),
+        embedding,
+        output,
+        norm,
+    );
+    description.hidden = u32::try_from(hidden).unwrap_or(u32::MAX);
+    description.feed_forward = 512;
+    description.heads = 2;
+    description.head_dim = 128;
+    description.embedding_encoding = ENCODING_Q4_K;
+    description.output_encoding = ENCODING_Q6_K;
+    DecoderPlan::new(&description, &[layer])
+}
+
+#[test]
+fn plan_sizes_kquant_matrices_by_their_blocks() {
+    use super::{Encoding, Matrix};
+    let plan = kquant_plan(0, 256).expect("an exact Q4_K_M-like layout is valid");
+
+    assert_eq!(plan.embedding_encoding, Encoding::Q4K);
+    assert_eq!(plan.output_encoding, Encoding::Q6K);
+    assert_eq!(
+        plan.layers[0].encoding(Matrix::Value).ok(),
+        Some(Encoding::Q6K)
+    );
+    assert_eq!(
+        plan.layers[0].encoding(Matrix::Gate).ok(),
+        Some(Encoding::Q4K)
+    );
+    assert!(matches!(
+        kquant_plan(-1, 256),
+        Err(GpuError::InvalidArgument(_))
+    ));
+}
+
+#[test]
+fn kquant_rows_must_hold_whole_super_blocks() {
+    assert!(matches!(kquant_plan(0, 128), Err(GpuError::Unavailable(_))));
 }

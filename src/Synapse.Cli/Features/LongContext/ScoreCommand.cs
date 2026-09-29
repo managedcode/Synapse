@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ManagedCode.Synapse.Cli.Features.LayerDrop;
 using ManagedCode.Synapse.Cli.Features.TextGeneration;
 using ManagedCode.Synapse.Runtime.Features.ModelLoading;
 using ManagedCode.Synapse.Runtime.Features.TextGeneration;
@@ -37,6 +38,11 @@ internal static class ScoreCommand
             }
 
             var loadTimer = Stopwatch.StartNew();
+            if (options.LayerDrop is { } drop)
+            {
+                Console.Error.WriteLine(LayerDropArguments.Describe(drop));
+            }
+
             using var model = ModelLoader.Load(options.ModelPath, new ModelLoadOptions
             {
                 ContextSize = options.ContextSize,
@@ -45,6 +51,7 @@ internal static class ScoreCommand
                 RopeScaling = options.RopeScaling,
                 KvCachePrecision = options.KvCachePrecision,
                 KvPageActivation = options.KvPages,
+                LayerDrop = options.LayerDrop,
                 MaximumConcurrentSessions = 1,
                 ScoringRowsPerStep = options.ScoringRows,
             });

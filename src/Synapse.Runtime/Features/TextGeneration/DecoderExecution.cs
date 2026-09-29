@@ -18,9 +18,14 @@ internal sealed record DecoderDimensions(
     float RmsNormEpsilon,
     RopeScaling? RopeScaling = null,
     ModelLoading.KvPageActivation? KvPages = null,
-    int KvGrowthPositions = 1024)
+    int KvGrowthPositions = 1024,
+    ModelLoading.LayerDropProfile? LayerDrop = null,
+    IReadOnlyList<int>? SourceLayers = null)
 {
     public int HeadDimension => HiddenSize / AttentionHeads;
+
+    /// <summary>The source (GGUF) index of executed layer <paramref name="layer"/>; layers differ only under a drop (ADR-019).</summary>
+    public int SourceLayer(int layer) => SourceLayers is null ? layer : SourceLayers[layer];
 
     public int KvWidth => KeyValueHeads * HeadDimension;
 }

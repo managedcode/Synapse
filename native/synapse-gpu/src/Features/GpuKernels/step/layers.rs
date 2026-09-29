@@ -2,8 +2,8 @@
 
 use super::attention::attention;
 use super::projection::{Projection, project};
-use super::{Binding, Kernel, StepBackend, StepInputs};
-use crate::gpu_kernels::decoder::{DecoderLayerOffsets, HEAD_DIM, Q8_0_BLOCK_VALUES};
+use super::{Binding, Kernel, StepBackend, StepInputs, locate};
+use crate::gpu_kernels::decoder::{DecoderLayerOffsets, Encoding, Matrix};
 use crate::gpu_kernels::error::GpuError;
 use crate::gpu_kernels::params::{
     EmbedArgs, MatmulSegment, NO_BIAS, NormArgs, RopeArgs, SwigluArgs,
@@ -11,7 +11,6 @@ use crate::gpu_kernels::params::{
 
 const NORM_THREADS: usize = 256;
 const ELEMENT_THREADS: usize = 256;
-const BLOCK_BYTES: u32 = 34;
 
 /// One step in progress; `span` is (tokens, first prompt-run token).
 pub(super) struct Step<'s, 'a, S: StepBackend> {
@@ -20,26 +19,34 @@ pub(super) struct Step<'s, 'a, S: StepBackend> {
     pub span: (u32, u32),
 }
 
-impl<S: StepBackend> Step<'_, '_, S> {
-    const fn weight(&self, offset: u64) -> u64 {
-        self.inputs.weights_offset + offset
+impl<'a, S: StepBackend> Step<'_, 'a, S> {
+    /// The segment buffer holding a weight tensor and its offset inside that buffer (ADR-019).
+    fn weight(&self, offset: u64) -> Result<(&'a S::Buffer, u64), GpuError> {
+        locate(self.inputs.weights, offset)
     }
 
     pub(super) fn embed(&mut self) -> Result<(), GpuError> {
         let shape = self.inputs.plan.shape;
         let a = self.inputs.activations;
+        let (table_buffer, table) = self.weight(self.inputs.plan.token_embedding)?;
         let args = EmbedArgs {
-            table: self.weight(self.inputs.plan.token_embedding),
+            table,
             columns: shape.hidden,
-            row_bytes: (shape.hidden / Q8_0_BLOCK_VALUES) * BLOCK_BYTES,
+            row_bytes: u32::try_from(
+                self.inputs
+                    .plan
+                    .embedding_encoding
+                    .matrix_bytes(1, u64::from(shape.hidden)),
+            )
+            .unwrap_or(u32::MAX),
             tokens: self.span.0,
             out_stride: shape.hidden,
         };
         self.backend.launch(
-            Kernel::Embed,
+            Kernel::Embed(self.inputs.plan.embedding_encoding),
             &args,
             &[
-                Binding::whole(1, self.inputs.weights),
+                Binding::whole(1, table_buffer),
                 Binding::whole(2, &a.tokens),
                 Binding::whole(3, &a.hidden),
             ],
@@ -62,9 +69,21 @@ impl<S: StepBackend> Step<'_, '_, S> {
         let kv = shape.kv_width();
         self.norm(offsets.attention_norm)?;
         let qkv = [
-            self.segment(offsets.query, offsets.query_bias, shape.hidden, 0),
-            self.segment(offsets.key, offsets.key_bias, kv, shape.hidden),
-            self.segment(offsets.value, offsets.value_bias, kv, shape.hidden + kv),
+            (
+                offsets.query,
+                self.segment(offsets.query, offsets.query_bias, shape.hidden, 0)?,
+                offsets.encoding(Matrix::Query)?,
+            ),
+            (
+                offsets.key,
+                self.segment(offsets.key, offsets.key_bias, kv, shape.hidden)?,
+                offsets.encoding(Matrix::Key)?,
+            ),
+            (
+                offsets.value,
+                self.segment(offsets.value, offsets.value_bias, kv, shape.hidden + kv)?,
+                offsets.encoding(Matrix::Value)?,
+            ),
         ];
         self.project(
             &qkv,
@@ -75,7 +94,11 @@ impl<S: StepBackend> Step<'_, '_, S> {
         )?;
         self.rope(layer)?;
         attention(self.backend, self.inputs, layer)?;
-        let output = [self.segment(offsets.attention_output, NO_BIAS, shape.hidden, 0)];
+        let output = [(
+            offsets.attention_output,
+            self.segment(offsets.attention_output, NO_BIAS, shape.hidden, 0)?,
+            offsets.encoding(Matrix::Output)?,
+        )];
         self.project(
             &output,
             shape.hidden,
@@ -94,7 +117,7 @@ impl<S: StepBackend> Step<'_, '_, S> {
             tokens: count,
             heads: shape.heads,
             kv_heads: shape.kv_heads,
-            half_dim: HEAD_DIM / 2,
+            half_dim: shape.head_dim / 2,
             qkv_stride: shape.qkv_width(),
             key_column: shape.hidden,
             value_column: shape.hidden + kv,
@@ -120,7 +143,7 @@ impl<S: StepBackend> Step<'_, '_, S> {
                 (shape.heads + 2 * shape.kv_heads) as usize,
                 count as usize,
             ],
-            [(HEAD_DIM / 2) as usize, 1, 1],
+            [(shape.head_dim / 2) as usize, 1, 1],
         )
     }
 
@@ -134,8 +157,16 @@ impl<S: StepBackend> Step<'_, '_, S> {
         let count = self.span.0;
         self.norm(offsets.feed_forward_norm)?;
         let gate_up = [
-            self.segment(offsets.gate, NO_BIAS, ffn, 0),
-            self.segment(offsets.up, NO_BIAS, ffn, ffn),
+            (
+                offsets.gate,
+                self.segment(offsets.gate, NO_BIAS, ffn, 0)?,
+                offsets.encoding(Matrix::Gate)?,
+            ),
+            (
+                offsets.up,
+                self.segment(offsets.up, NO_BIAS, ffn, ffn)?,
+                offsets.encoding(Matrix::Up)?,
+            ),
         ];
         self.project(
             &gate_up,
@@ -160,7 +191,11 @@ impl<S: StepBackend> Step<'_, '_, S> {
             [(ffn as usize).div_ceil(ELEMENT_THREADS), count as usize, 1],
             [ELEMENT_THREADS, 1, 1],
         )?;
-        let down = [self.segment(offsets.down, NO_BIAS, shape.hidden, 0)];
+        let down = [(
+            offsets.down,
+            self.segment(offsets.down, NO_BIAS, shape.hidden, 0)?,
+            offsets.encoding(Matrix::Down)?,
+        )];
         self.project(
             &down,
             ffn,
@@ -174,16 +209,18 @@ impl<S: StepBackend> Step<'_, '_, S> {
         let shape = self.inputs.plan.shape;
         let a = self.inputs.activations;
         self.normalize(self.inputs.plan.output_norm, rows, true, &a.logits_input)?;
-        let output = [self.segment(self.inputs.plan.output, NO_BIAS, shape.vocabulary, 0)];
+        let output = [self.segment(self.inputs.plan.output, NO_BIAS, shape.vocabulary, 0)?];
+        let (weights, _) = self.weight(self.inputs.plan.output)?;
         project(
             self.backend,
-            self.inputs.weights,
+            weights,
             &Projection {
                 segments: &output,
                 columns: shape.hidden,
                 span: (rows, rows),
                 strides: [shape.hidden, shape.vocabulary],
                 accumulate: false,
+                encoding: self.inputs.plan.output_encoding,
             },
             [&a.logits_input, &a.logits],
         )
@@ -204,8 +241,9 @@ impl<S: StepBackend> Step<'_, '_, S> {
     ) -> Result<(), GpuError> {
         let shape = self.inputs.plan.shape;
         let a = self.inputs.activations;
+        let (weights, weight) = self.weight(weight)?;
         let norm = NormArgs {
-            weight: self.weight(weight),
+            weight,
             columns: shape.hidden,
             rows,
             in_stride: shape.hidden,
@@ -219,7 +257,7 @@ impl<S: StepBackend> Step<'_, '_, S> {
             Kernel::RmsNorm,
             &norm,
             &[
-                Binding::whole(1, self.inputs.weights),
+                Binding::whole(1, weights),
                 Binding::whole(2, &a.hidden),
                 Binding::whole(3, output),
                 Binding::whole(4, &a.gather),
@@ -229,34 +267,58 @@ impl<S: StepBackend> Step<'_, '_, S> {
         )
     }
 
+    /// Projects through `parts` of (weight offset, segment, encoding). Consecutive parts with one encoding share a
+    /// dispatch, so Q, K, and V split when V's encoding differs (ADR-021); a layer's weights share one segment
+    /// buffer (ADR-019).
     fn project(
         &mut self,
-        segments: &[MatmulSegment],
+        parts: &[(u64, MatmulSegment, Encoding)],
         columns: u32,
         buffers: [&S::Buffer; 2],
         strides: [u32; 2],
         accumulate: bool,
     ) -> Result<(), GpuError> {
-        let projection = Projection {
-            segments,
-            columns,
-            span: self.span,
-            strides,
-            accumulate,
-        };
-        project(self.backend, self.inputs.weights, &projection, buffers)
+        let mut start = 0;
+        while start < parts.len() {
+            let encoding = parts[start].2;
+            let end = parts[start..]
+                .iter()
+                .position(|part| part.2 != encoding)
+                .map_or(parts.len(), |length| start + length);
+            let segments: Vec<MatmulSegment> =
+                parts[start..end].iter().map(|part| part.1).collect();
+            let projection = Projection {
+                segments: &segments,
+                columns,
+                span: self.span,
+                strides,
+                accumulate,
+                encoding,
+            };
+            let (weights, _) = self.weight(parts[start].0)?;
+            project(self.backend, weights, &projection, buffers)?;
+            start = end;
+        }
+
+        Ok(())
     }
 
-    const fn segment(&self, weight: u64, bias: u64, rows: u32, out_column: u32) -> MatmulSegment {
-        MatmulSegment {
-            weight: self.weight(weight),
+    fn segment(
+        &self,
+        weight: u64,
+        bias: u64,
+        rows: u32,
+        out_column: u32,
+    ) -> Result<MatmulSegment, GpuError> {
+        Ok(MatmulSegment {
+            weight: self.weight(weight)?.1,
             bias: if bias == NO_BIAS {
                 NO_BIAS
             } else {
-                self.weight(bias)
+                self.weight(bias)?.1
             },
             rows,
             out_column,
-        }
+        })
     }
 }

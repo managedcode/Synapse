@@ -22,11 +22,27 @@ internal sealed record SubjectAnswer(
     int ExitCode,
     string? Error);
 
-/// <summary>Runs <c>synapse generate --tokens-file</c> with the harness token IDs and decodes the output IDs.</summary>
-internal sealed class SynapseQualitySubject(QualityRunOptions options, string backend, string kv, ITextTokenizer tokenizer)
-    : IQualitySubject
+/// <summary>
+/// Runs <c>synapse generate --tokens-file</c> with the harness token IDs and decodes the output IDs. A variant adds a
+/// layer drop (ADR-019): <c>drop-layers=3.5.7</c> (experimental) or <c>drop-profile=&lt;evidence.json&gt;</c> (qualified).
+/// </summary>
+internal sealed class SynapseQualitySubject(
+    QualityRunOptions options,
+    string backend,
+    string kv,
+    ITextTokenizer tokenizer,
+    string? variant = null) : IQualitySubject
 {
-    public string Name => $"synapse-{backend}-kv{kv}";
+    private readonly string[] _variantArguments = variant?.Split('=', 2) switch
+    {
+        null => [],
+        ["drop-layers", var layers] => ["--drop-layers", layers.Replace('.', ',')],
+        ["drop-profile", var path] => ["--drop-profile", path],
+        _ => throw new ArgumentException($"Unknown Synapse quality variant '{variant}'."),
+    };
+
+    public string Name => $"synapse-{backend}-kv{kv}" + (variant is null ? string.Empty : "-" + variant.Split('=')[0] +
+        (variant.StartsWith("drop-layers=", StringComparison.Ordinal) ? variant["drop-layers=".Length..] : string.Empty));
 
     public async Task<SubjectAnswer> AnswerAsync(QualityCase quality, CancellationToken cancellationToken)
     {
@@ -45,6 +61,7 @@ internal sealed class SynapseQualitySubject(QualityRunOptions options, string ba
                 arguments.AddRange(["--rope-scaling", scaling]);
             }
 
+            arguments.AddRange(_variantArguments);
             var run = await QualityProcess.RunAsync(options.SynapseExecutable, arguments, cancellationToken).ConfigureAwait(false);
             if (run.ExitCode != 0)
             {

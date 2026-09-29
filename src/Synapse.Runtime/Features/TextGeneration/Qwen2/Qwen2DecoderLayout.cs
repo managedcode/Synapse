@@ -14,7 +14,7 @@ internal static class Qwen2DecoderLayout
         var layers = new DenseDecoderLayer[dimensions.LayerCount];
         for (var layer = 0; layer < layers.Length; layer++)
         {
-            var prefix = $"blk.{layer}";
+            var prefix = $"blk.{dimensions.SourceLayer(layer)}";
             layers[layer] = new DenseDecoderLayer(
                 Weight(file, $"{prefix}.attn_norm.weight"),
                 Weight(file, $"{prefix}.attn_q.weight"),

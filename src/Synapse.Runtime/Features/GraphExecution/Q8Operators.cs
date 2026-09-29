@@ -16,6 +16,12 @@ internal static unsafe class Q8Operators
         int row,
         Span<float> destination)
     {
+        if (tensor.Type != Q8Type)
+        {
+            DecodedRowOperators.ReadRow(file, tensor, row, destination);
+            return;
+        }
+
         var columns = GetMatrixColumns(tensor);
         var rows = GetMatrixRows(tensor);
         if ((uint)row >= (uint)rows || destination.Length != columns)
@@ -44,6 +50,12 @@ internal static unsafe class Q8Operators
         float[] output,
         ParallelOptions parallelOptions)
     {
+        if (tensor.Type != Q8Type)
+        {
+            DecodedRowOperators.Multiply(file, tensor, input, output, parallelOptions);
+            return;
+        }
+
         var columns = GetMatrixColumns(tensor);
         var rows = GetMatrixRows(tensor);
         if (input.Length != columns || output.Length != rows)

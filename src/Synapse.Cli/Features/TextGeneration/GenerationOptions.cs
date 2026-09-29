@@ -1,4 +1,6 @@
 using System.Globalization;
+using ManagedCode.Synapse.Cli.Features.LayerDrop;
+using ManagedCode.Synapse.Cli.Features.Speculation;
 using ManagedCode.Synapse.Contracts.Features.GraphExecution;
 using ManagedCode.Synapse.Runtime.Features.ModelLoading;
 
@@ -15,14 +17,16 @@ internal sealed record GenerationOptions(
     int ConcurrentRequests,
     RopeScaling? RopeScaling,
     KvCachePrecision KvCachePrecision = KvCachePrecision.Fp32,
-    KvPageActivation? KvPages = null)
+    KvPageActivation? KvPages = null,
+    LayerDropProfile? LayerDrop = null,
+    SpeculationArguments? Speculation = null)
 {
     public static string Usage =>
         "Usage: synapse generate --model <model.gguf> (--tokens <id,id,...> | --tokens-file <path>) " +
         "[--max-tokens <count>] [--context-size <count>] [--threads <count>] " +
         $"[--backend <{KernelBackendNames.Usage}>] [--concurrent-requests <count>] " +
         "[--rope-scaling yarn:<factor>:<trained-context>] [--kv-precision f32|f16] " +
-        "[--kv-pages <budget>:<window>[:p16|p32|p64][:random[:seed]]]";
+        "[--kv-pages <budget>:<window>[:p16|p32|p64][:random[:seed]]] " + LayerDropArguments.Usage + " " + SpeculationArguments.Usage;
 
     public static GenerationOptions? Parse(IReadOnlyList<string> arguments)
     {
@@ -76,12 +80,17 @@ internal sealed record GenerationOptions(
             return null;
         }
 
+        if (!LayerDropArguments.TryParse(values, out var drop) || !SpeculationArguments.TryParse(values, out var speculation))
+        {
+            return null;
+        }
+
         var concurrentRequests = ParsePositive(values.GetValueOrDefault("--concurrent-requests"), 1);
         return tokens is { Length: > 0 } && maximumTokens > 0 && contextSize > 0 && threads > 0 &&
             concurrentRequests is > 0 and <= 64
             ? new GenerationOptions(
                 modelPath, tokens, maximumTokens, contextSize, threads, backend, concurrentRequests, scaling,
-                kvPrecision.Value, pages)
+                kvPrecision.Value, pages, drop, speculation)
             : null;
     }
 

@@ -242,6 +242,48 @@
       ]
     },
     {
+      "id": "qwen2.5-7b-instruct-1m-q4_k_m",
+      "displayName": "Qwen2.5 7B Instruct 1M Q4_K_M",
+      "architecture": "qwen2",
+      "kind": "text-generation",
+      "format": "gguf",
+      "precision": "Q4_K_M",
+      "parameterCount": 7615616512,
+      "license": "Apache-2.0",
+      "sourceUrl": "https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-1M-GGUF",
+      "revision": "381ac2097f05bff2f77e7e3864239c11e521c3d3",
+      "sets": ["long-context"],
+      "files": [
+        {
+          "path": "Qwen2.5-7B-Instruct-1M-Q4_K_M.gguf",
+          "url": "https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-1M-GGUF/resolve/381ac2097f05bff2f77e7e3864239c11e521c3d3/Qwen2.5-7B-Instruct-1M-Q4_K_M.gguf",
+          "sizeBytes": 4683074144,
+          "sha256": "0b6593fb7ab1e58e4c9a7a142076d1ca0bcad69d2681cc651fea581d6fc5a86d"
+        }
+      ]
+    },
+    {
+      "id": "qwen2.5-7b-instruct-1m-q8_0",
+      "displayName": "Qwen2.5 7B Instruct 1M Q8_0",
+      "architecture": "qwen2",
+      "kind": "text-generation",
+      "format": "gguf",
+      "precision": "Q8_0",
+      "parameterCount": 7615616512,
+      "license": "Apache-2.0",
+      "sourceUrl": "https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-1M-GGUF",
+      "revision": "381ac2097f05bff2f77e7e3864239c11e521c3d3",
+      "sets": ["long-context"],
+      "files": [
+        {
+          "path": "Qwen2.5-7B-Instruct-1M-Q8_0.gguf",
+          "url": "https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-1M-GGUF/resolve/381ac2097f05bff2f77e7e3864239c11e521c3d3/Qwen2.5-7B-Instruct-1M-Q8_0.gguf",
+          "sizeBytes": 8098525792,
+          "sha256": "d81ca8ca04442ed5ff7d036fa546183170b8269281380bed977431a5449c84b2"
+        }
+      ]
+    },
+    {
       "id": "ministral-3-3b-instruct-q4_k_m",
       "displayName": "Ministral 3 3B Instruct Q4_K_M",
       "architecture": "mistral3",

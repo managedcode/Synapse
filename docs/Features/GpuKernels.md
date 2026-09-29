@@ -16,6 +16,11 @@ Decision: ADR-012. Plan: `gpu-kernels.plan.md`. Long-context behavior: `LongCont
 - `REQ-GPU-005`: An explicit FP16 KV profile (`--kv-precision f16`, runtime profile suffix `-kvf16`)
   stores keys and values in half precision and accumulates in FP32. It reproduces the pinned
   continuation and tracks the reference within 1% of the logits range. CPU backends reject it.
+- `REQ-GPU-006`: Metal compiles its kernels per model for head dimension 64 or 128 (Qwen2.5-7B and larger).
+  - Attention stages query and output rows 64 columns per pass, so threadgroup memory stays at 16 KiB.
+  - CUDA implements 64 only and rejects 128 explicitly.
+  - Matrix-vector threadgroups hold more rows as more tokens share them (2, 4, and 8 rows for 1, 2, and 4
+    tokens), and runs of five or more tokens use the GEMM.
 
 ## Acceptance criteria and tests
 
@@ -29,6 +34,8 @@ Decision: ADR-012. Plan: `gpu-kernels.plan.md`. Long-context behavior: `LongCont
 | `AC-GPU-002-3` incremental decode tracks full prefill; concurrent requests equal independent runs | `TEST-GPU-002-3` `MetalIncrementalDecodeTracksFullPrefill`, `MetalConcurrentRequestsMatchIndependent` |
 | `AC-GPU-003-1` a prompt longer than one GPU chunk tracks the managed CPU backend, and split decode attention tracks prompt-run attention | `TEST-GPU-003-1` `MetalLongPromptAcrossChunksTracksManagedCpu`, `MetalSplitDecodeTracksPromptRunAttention` |
 | `AC-GPU-004-1` without the NVIDIA driver the CUDA probe and load fail as unavailable; with a driver the probe names the device (parity on NVIDIA hardware is still `not_run_missing_hardware`) | `TEST-GPU-004-1` `probe_reports_a_device_or_unavailable` (Rust), `CudaBackendFailsExplicitlyWithoutDriver` |
+| `AC-GPU-006-1` at head dimensions 64 and 128 (FP32 and FP16 KV), Metal prompt and incremental logits track the FP32 reference on a generated model with seven query heads per KV head | `TEST-GPU-006-1` `MetalMatchesReferenceAtEveryHeadDimension` |
+| `AC-GPU-006-2` the host row counts match the shader's matrix-vector instances | `TEST-GPU-006-2` `matvec_rows_match_the_shader_instances` (Rust) |
 | `AC-GPU-005-1` FP16 KV reproduces the pinned continuation, tracks the reference within 1%, and keeps split decode within 0.2% of prompt-run attention; the CLI reports `-kvf16`; CPU backends reject FP16 KV | `TEST-GPU-005-1` `MetalFp16KvMatchesPinnedContinuationAndTracksReference`, `MetalFp16KvSplitDecodeTracksPromptRun`, `CliMetalFp16KvReportsProfile`, `Fp16KvOnCpuFailsExplicitly` |
 
 ## Implemented behavior

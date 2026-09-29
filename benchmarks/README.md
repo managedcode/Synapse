@@ -32,6 +32,9 @@ measures Microsoft Foundry Local alone on six models from four families.
 | **T. Context sweep, 4k to 32k, tokens + memory + speed (main README)** | Metal FP32/FP16 KV with prompt attention reading K/V directly; native CPU | GPU / CPU 8 | 1 warm-up + 2 measured, rotated | [JSON](results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-context-sweep-diagnostic.json), [prompt IDs](scenarios/context-sweep/) |
 | U. Dynamic KV memory, 131k window (ADR-017) | Metal FP16/FP32 KV, growing slots with reservation | GPU | 1 measured per row | [JSON](results/2026-09-29-m2-pro-qwen2.5-0.5b-q8_0-dynamic-kv-memory-diagnostic.json) |
 | V. Second question about a 30k-token document (ADR-018) | Metal FP16 KV, prompt prefix reuse | GPU | 1 measured per row | [JSON](results/2026-09-29-m2-pro-qwen2.5-0.5b-q8_0-prefix-reuse-diagnostic.json) |
+| W. Qwen2.5-7B-1M: layer drop quality and memory (ADR-019) | Metal FP16 KV, head size 128, weight segments | GPU | 1 run per drop set; memory 1–4 runs | [qualification 7B](results/2026-09-29-m2-pro-qwen2.5-7b-1m-q8_0-layer-drop-qualification.json), [qualification 0.5B](results/2026-09-29-m2-pro-qwen2.5-0.5b-q8_0-layer-drop-qualification.json), [memory](results/2026-09-29-m2-pro-qwen2.5-7b-1m-q8_0-layer-drop-memory-diagnostic.json) |
+| Y. Qwen2.5-7B-1M Q4_K_M against Q8_0 and llama.cpp (ADR-021) | Metal FP16 KV, K-quant kernels | GPU | 2 alternating rounds | [JSON](results/2026-09-29-m2-pro-qwen2.5-7b-1m-k-quant-diagnostic.json) |
+| X. Qwen2.5-7B-1M with a 0.5B draft (ADR-020) | Metal FP16 KV, exact greedy speculation | GPU | 2 alternating rounds | [JSON](results/2026-09-29-m2-pro-qwen2.5-7b-1m-speculative-decoding-diagnostic.json) |
 
 Local machine: MacBook Pro, Apple M2 Pro (8 performance + 4 efficiency cores,
 19-core GPU), 32 GB, macOS 27.0 arm64. Every CPU sample starts a new process.
@@ -310,6 +313,74 @@ haystack. One model asks two questions, 32 new tokens each.
 - Reuse is in-process and opt-in (`ModelLoadOptions.ReusePromptPrefix`). A
   persistent prefix cache across processes is the next step.
 - One run per row: a diagnostic, not a paired verdict.
+
+## W. Qwen2.5-7B-Instruct-1M: dropping layers (ADR-019)
+
+**Quality.** Perplexity over 1,024 scored positions of the pinned haystack (`experiments layer-drop`); dense
+12.163. Top-1 is the share of positions whose arg-max equals the dense model's.
+
+| Dropped layers | Perplexity change | Top-1 as dense |
+|---|---:|---:|
+| 12 | −3.6% | 86.5% |
+| 11 | −2.5% | 85.7% |
+| 8 | +0.8% | 84.6% |
+| 0 (the first) | +2,467,089% | 0.3% |
+| 27 (the last) | +251% | 67.5% |
+| 11, 12 (qualified) | −1.1% | 79.8% |
+| 8, 11, 12, 14 | +39.2% | 66.4% |
+| 8 middle layers | +137.5% | 50.9% |
+
+- A single dropped layer that lowers perplexity still changes about 14% of the predictions.
+- The 0.5B has no cheap layer: the best single drop costs +7.6%.
+
+**Memory and speed.** 3,528-token prompt, 128 tokens, one fresh process per row.
+
+| Variant | Peak RSS | First token | Decode tok/s |
+|---|---:|---:|---:|
+| Synapse dense | 7,255 MiB | 17.6 s | 13.3–17.0 |
+| Synapse, 2 layers dropped (qualified) | 6,780 MiB | 17.5 s | 13.9–15.0 |
+| Synapse, 4 layers dropped | 6,326 MiB | 16.0 s | 14.7 |
+| Synapse, 8 layers dropped | 5,381 MiB | 13.3 s | 17.9 |
+| llama.cpp Q8_0 | 8,096 MiB | 11.5 s | 18.6 |
+| llama.cpp Q4_K_M | 4,742 MiB | 12.2 s | 29.2 |
+
+- Metal wraps only the weight segments the kept layers use; before that, a 2-layer drop still peaked at
+  7,271 MiB.
+- Decode varied by ±12% across identical runs on a warm machine, so only the memory column compares run
+  by run.
+
+## X. Qwen2.5-7B-Instruct-1M with a Qwen2.5-0.5B draft (ADR-020)
+
+A 37-token chat prompt and 256 tokens; rounds alternate dense and speculative runs.
+
+| Draft tokens | Decode tok/s, round 1 / 2 | Acceptance | Tokens per 7B pass |
+|---:|---:|---:|---:|
+| — (dense) | 17.4 / 18.3 | — | 1 |
+| 3 | 23.5 / 22.5 | 54% | 2.63 |
+| 5 | 14.0 / 13.5 | 40% | 3.00 |
+| 7 | 14.2 / 13.9 | 32% | 3.27 |
+
+- The output is the 7B's own greedy output. The token identity of the two models is checked before
+  running.
+- A 4-token check costs about 1.7 single-token passes; 6–8 tokens cost about 3, so 3 draft tokens is the
+  default.
+- On the repository-summary prompt acceptance was 27–46% and speculation was slower than dense.
+
+## Y. Qwen2.5-7B-Instruct-1M Q4_K_M (ADR-021)
+
+The same file runs in both engines. 3,528-token prompt, 128 tokens, two alternating rounds.
+
+| Engine and weights | Peak RSS | First token | Decode tok/s |
+|---|---:|---:|---:|
+| Synapse Q4_K_M | 4,233–4,248 MiB | 19.9–20.1 s | 17.4–18.2 |
+| llama.cpp Q4_K_M | 4,846–4,851 MiB | 12.1–12.2 s | 27.0–29.3 |
+| Synapse Q8_0 | 7,210–7,252 MiB | 16.9–17.3 s | 15.8–17.9 |
+| llama.cpp Q8_0 | 7,866–8,109 MiB | 10.8–11.2 s | 17.3–17.7 |
+
+- For the pinned prompt, Synapse Q4_K_M writes the same text as llama.cpp.
+- Perplexity on the same 2,048 tokens is 11.93 for Q4_K_M against 12.16 for Q8_0.
+- With the 0.5B draft, Q4_K_M decode drops to 14.4–14.8 tokens/s: acceptance is 40%, and a 4-token check
+  still costs too much.
 
 ## P–S. Quality on long prompts (ADR-014, ADR-015, ADR-016)
 

@@ -25,7 +25,7 @@ internal static class GraphShapeVerifier
             StorageDataType.Bool => numeric.Compute == ComputeDataType.Bool,
             StorageDataType.I32 => numeric.Compute == ComputeDataType.I32,
             StorageDataType.Fp32 or StorageDataType.Fp16 or StorageDataType.Bf16 or
-                StorageDataType.BlockQ8 or StorageDataType.BlockQ4 =>
+                StorageDataType.BlockQ8 or StorageDataType.BlockQ4 or StorageDataType.BlockQ6 =>
                 numeric.Compute is ComputeDataType.Fp32 or ComputeDataType.Fp16 or ComputeDataType.Bf16,
             _ => false,
         };

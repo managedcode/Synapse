@@ -104,6 +104,7 @@ internal static class QualityCommand
             subjects.Add(spec.Split(':') switch
             {
                 ["synapse", var backend, var kv] => new SynapseQualitySubject(options, backend, kv, tokenizer),
+                ["synapse", var backend, var kv, var variant] => new SynapseQualitySubject(options, backend, kv, tokenizer, variant),
                 ["llamacpp", var device and ("metal" or "cpu")] => new LlamaQualitySubject(options, device),
                 ["mlx"] => await MlxQualitySubject.StartAsync(options).ConfigureAwait(false),
                 _ => throw new ArgumentException($"Unknown quality subject '{spec}'."),

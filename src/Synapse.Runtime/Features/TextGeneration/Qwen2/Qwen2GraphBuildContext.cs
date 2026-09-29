@@ -106,6 +106,24 @@ internal sealed class Qwen2GraphBuildContext
         IEnumerable<TensorId> weights,
         IEnumerable<StateSlotId>? stateReads,
         IEnumerable<StateSlotId>? stateWrites,
+        params string[] annotations) => AddRegion(
+            new RegionActivation(new AlwaysActive(), new StructuralProvenance(), new NotSkippable()),
+            nodes,
+            inputs,
+            outputs,
+            weights,
+            stateReads,
+            stateWrites,
+            annotations);
+
+    public void AddRegion(
+        RegionActivation activation,
+        IEnumerable<NodeId> nodes,
+        IEnumerable<ValueId> inputs,
+        IEnumerable<ValueId> outputs,
+        IEnumerable<TensorId> weights,
+        IEnumerable<StateSlotId>? stateReads,
+        IEnumerable<StateSlotId>? stateWrites,
         params string[] annotations) => Regions.Add(new RegionDescriptor(
             new RegionId(_nextRegion++),
             nodes,
@@ -114,10 +132,7 @@ internal sealed class Qwen2GraphBuildContext
             weights,
             stateReads,
             stateWrites,
-            new RegionActivation(
-                new AlwaysActive(),
-                new StructuralProvenance(),
-                new NotSkippable()),
+            activation,
             annotations));
 
     public NodeId AddOutput(ValueId value) =>
@@ -169,6 +184,8 @@ internal sealed class Qwen2GraphBuildContext
     {
         0 => Float,
         8 => new NumericType(StorageDataType.BlockQ8, ComputeDataType.Fp32, AccumulatorDataType.Fp32),
+        12 => new NumericType(StorageDataType.BlockQ4, ComputeDataType.Fp32, AccumulatorDataType.Fp32),
+        14 => new NumericType(StorageDataType.BlockQ6, ComputeDataType.Fp32, AccumulatorDataType.Fp32),
         _ => throw new NotSupportedException($"Tensor '{tensor.Name}' uses unsupported GGUF type {tensor.Type}."),
     };
 
@@ -176,6 +193,8 @@ internal sealed class Qwen2GraphBuildContext
     {
         0 => WeightEncoding.Fp32,
         8 => WeightEncoding.GgmlQ8Zero,
+        12 => WeightEncoding.GgmlQ4K,
+        14 => WeightEncoding.GgmlQ6K,
         _ => throw new NotSupportedException($"Tensor '{tensor.Name}' uses unsupported GGUF type {tensor.Type}."),
     };
 

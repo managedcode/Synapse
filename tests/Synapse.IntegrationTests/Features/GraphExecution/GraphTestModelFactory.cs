@@ -138,6 +138,7 @@ internal static class GraphTestModelFactory
             StorageDataType.Fp16 => throw new NotImplementedException(),
             StorageDataType.Bf16 => throw new NotImplementedException(),
             StorageDataType.BlockQ4 => throw new NotImplementedException(),
+            StorageDataType.BlockQ6 => throw new NotImplementedException(),
             StorageDataType.I32 => throw new NotImplementedException(),
             StorageDataType.Bool => throw new NotImplementedException(),
             _ => throw new InvalidOperationException("Test graph weight uses an unsupported encoding."),

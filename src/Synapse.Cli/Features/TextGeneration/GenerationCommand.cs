@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ManagedCode.Synapse.Cli.Features.LayerDrop;
+using ManagedCode.Synapse.Cli.Features.Speculation;
 using ManagedCode.Synapse.Runtime.Features.ModelLoading;
 using ManagedCode.Synapse.Runtime.Features.TextGeneration;
 using ManagedCode.Synapse.Runtime.Features.Tokenization;
@@ -33,6 +35,11 @@ internal static class GenerationCommand
             var subjectCpuStart = process.TotalProcessorTime;
             var managedAllocatedBefore = GC.GetTotalAllocatedBytes();
             var loadTimer = Stopwatch.StartNew();
+            if (options.LayerDrop is { } drop)
+            {
+                Console.Error.WriteLine(LayerDropArguments.Describe(drop));
+            }
+
             using var model = ModelLoader.Load(
                 options.ModelPath,
                 new ModelLoadOptions
@@ -43,12 +50,15 @@ internal static class GenerationCommand
                     RopeScaling = options.RopeScaling,
                     KvCachePrecision = options.KvCachePrecision,
                     KvPageActivation = options.KvPages,
+                    LayerDrop = options.LayerDrop,
                 });
             loadTimer.Stop();
             process.Refresh();
             var workingSetAfterLoad = process.WorkingSet64;
             var managedHeapAfterLoad = GC.GetTotalMemory(forceFullCollection: false);
-            var result = model.Generate(options.Tokens, options.MaximumTokens, new StandardErrorProgress());
+            var (result, speculation) = options.Speculation is { } speculative
+                ? speculative.Run(model, options)
+                : (model.Generate(options.Tokens, options.MaximumTokens, new StandardErrorProgress()), null);
             subjectTimer.Stop();
             process.Refresh();
             var measurement = new SubjectMeasurement(
@@ -60,7 +70,7 @@ internal static class GenerationCommand
                 managedHeapAfterLoad,
                 GC.GetTotalMemory(forceFullCollection: false),
                 GC.GetTotalAllocatedBytes() - managedAllocatedBefore);
-            var output = CreateOutput(options, model, result, measurement);
+            var output = CreateOutput(options, model, result, measurement) with { Speculation = speculation };
             Console.WriteLine(JsonSerializer.Serialize(output, GenerationJsonContext.Default.GenerationOutput));
             return 0;
         }
@@ -155,7 +165,11 @@ internal sealed record GenerationOutput(
     long MaximumObservedWorkingSetBytes,
     long ManagedLiveHeapAfterLoadBytes,
     long ManagedLiveHeapAfterGenerationBytes,
-    long ManagedAllocatedDuringSubjectBytes);
+    long ManagedAllocatedDuringSubjectBytes)
+{
+    /// <summary>Draft and acceptance counts of a speculative run (ADR-020), or null.</summary>
+    public SpeculationOutput? Speculation { get; init; }
+}
 
 [JsonSerializable(typeof(GenerationOutput))]
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]

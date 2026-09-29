@@ -127,6 +127,40 @@ Design references were studied from source (license noted, nothing copied):
     a SwiftLM server that never gets ready is killed; each readiness probe has its own 2 s timeout; sweep
     summaries count failed runs (`FailedRunsStayVisibleInTheSummary`, written with the fix, not red first).
   - Verification: .NET 261 of 261, Rust 26 of 26, clippy clean.
+- [x] HEAD.1 `TASK-GPU-006`: Metal compiles its kernels per model for head dimension 64 or 128.
+  - Attention stages query and output 64 columns per pass, so threadgroup memory stays at 16 KiB.
+  - CUDA rejects 128 explicitly.
+  - `MetalMatchesReferenceAtEveryHeadDimension` was red for 128 first (unsupported), then green, on a generated
+    tiny GGUF (`TinyQwen2Gguf`) with the 7B's seven query heads per KV head.
+  - Qwen2.5-7B-Instruct-1M Q8_0 (models catalog set `long-context`, both Q4_K_M and Q8_0 fetched and verified)
+    writes llama.cpp's exact text for the pinned prompt at 17.4–17.5 tokens/s, level with llama.cpp's 17.47.
+- [x] DROP.1 `TASK-LDP-001..004` (ADR-019): qualified layer drop.
+  - Red first: the six `LayerDropTests` and the Rust segment tests (a compile failure).
+  - The prefetch and CLI tests were written with their code, not red first.
+  - Every backend runs the kept layers as a shallower model, bitwise equal to one.
+  - Metal wraps only the page-aligned segments the plan reads, so on the 7B peak RSS falls from 7,255 MiB to
+    6,780 MiB (2 layers), 6,326 MiB (4), and 5,381 MiB (8).
+  - `experiments layer-drop` qualifies drop sets: on the 7B, {11,12} is −1.1% perplexity with 79.8% top-1
+    agreement; the 0.5B has no cheap layer.
+- [x] SPEC.1 `TASK-SPC-001..003` (ADR-020, FlyBrain F4.1–F4.2): exact greedy speculative decoding.
+  - Tests were written first; red was a compile failure.
+  - Output equals target greedy bitwise on CPU and on the Metal test models.
+  - The 0.5B verifies as a token-ID prefix of the 7B.
+  - On chat text, 3 draft tokens raise 7B decode from 17.4–18.3 to 22.5–23.5 tokens/s at 54% acceptance.
+  - Matrix-vector threadgroups now hold 4 and 8 rows for 2 and 4 tokens, and runs of five or more tokens use
+    the GEMM. The 8-token instance stays at 2 rows because 4 and 8 rows spilled.
+  - Open: a small-batch kernel whose 5–8-token cost stays near one pass.
+- [x] Q4K.1 `TASK-QNT-005` (ADR-021): Q4_K and Q6_K weights on the reference and Metal backends, so
+  Qwen2.5-7B Q4_K_M runs.
+  - Red first: the five `KQuantWeightTests`, and the float-decoder registry test, which exposed a static
+    initialization bug.
+  - The reference path equals the dequantized F32 model bitwise. Metal tracks it, and the CPU kernels and CUDA
+    reject K-quants explicitly.
+  - ABI v3 carries per-matrix encodings.
+  - On the 7B, Synapse Q4_K_M peaks at 4.2 GB (llama.cpp 4.8 GB, Synapse Q8_0 7.2 GB) and writes llama.cpp's
+    text. Decode is 0.64× llama.cpp's and prefill 1.6× slower.
+- [ ] Q4K.2 K-quant speed: a pipelined K-quant GEMM, and a matrix-vector layout closer to llama.cpp's
+  `mul_mv_q4_K` (several rows per thread, fewer loads per value).
 - [ ] LONG.1 roadmap from the 2026-09-29 research (`synapse.brainstorm.md`), in order of gain per effort:
   1. A persistent prefix cache: ZoneTree metadata keyed by model, tokenizer, RoPE, KV type, and prefix hash;
      mmap payloads.

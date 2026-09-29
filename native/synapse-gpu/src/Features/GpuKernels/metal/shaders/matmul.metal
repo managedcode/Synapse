@@ -3,22 +3,25 @@
 // explicit fma in a fixed order, so one token's result does not depend on how many tokens share the dispatch
 // or which template instance ran it.
 
-constant constexpr short MV_ROWS = 2;
+// Rows per threadgroup grow with the tokens per group (host: `metal_matvec_rows`), so each activation load serves
+// more rows; one row's accumulation order depends only on the lane and simdgroup mapping, never on R or T.
 constant constexpr short MV_SIMDGROUPS = 4;
 constant constexpr short MV_LANES_PER_BLOCK = 4;
 
+template <short R>
 struct matvec_rows {
-    device const block_q8_0 * row[MV_ROWS];
-    uint out_column[MV_ROWS];
-    uint local_row[MV_ROWS];
-    ulong bias[MV_ROWS];
-    bool valid[MV_ROWS];
+    device const block_q8_0 * row[R];
+    uint out_column[R];
+    uint local_row[R];
+    ulong bias[R];
+    bool valid[R];
 };
 
-static inline matvec_rows matvec_locate(constant matmul_args & a, device const char * weights, uint first_row) {
+template <short R>
+static inline matvec_rows<R> matvec_locate(constant matmul_args & a, device const char * weights, uint first_row) {
     const ulong row_bytes = (ulong)(a.columns / 32) * sizeof(block_q8_0);
-    matvec_rows rows;
-    for (short r = 0; r < MV_ROWS; ++r) {
+    matvec_rows<R> rows;
+    for (short r = 0; r < R; ++r) {
         const uint row = first_row + r;
         rows.valid[r] = row < a.total_rows;
         uint local = rows.valid[r] ? row : 0;
@@ -50,12 +53,13 @@ static inline float dot8(device const int8_t * q, float4 x0, float4 x1) {
 }
 
 // Reduces the lane sums across the simdgroups in a fixed order and writes each row with bias and residual.
-template <short T>
+// `Rows` is any row description with valid, bias, local_row, and out_column arrays (Q8_0 or K-quant rows).
+template <short T, short R, typename Rows>
 static inline void matvec_finish(
-        constant matmul_args & a, device const char * weights, device float * output, thread const matvec_rows & rows,
-        thread const float (&sums)[MV_ROWS][T], threadgroup float (&partial)[MV_SIMDGROUPS][MV_ROWS][T],
+        constant matmul_args & a, device const char * weights, device float * output, thread const Rows & rows,
+        thread const float (&sums)[R][T], threadgroup float (&partial)[MV_SIMDGROUPS][R][T],
         uint first_token, uint tokens, ushort sg, ushort lane) {
-    for (short r = 0; r < MV_ROWS; ++r) {
+    for (short r = 0; r < R; ++r) {
         for (short t = 0; t < T; ++t) {
             const float total = simd_sum(sums[r][t]);
             if (lane == 0) {
@@ -68,7 +72,7 @@ static inline void matvec_finish(
     const uint id = sg * 32 + lane;
     const short r = id / T;
     const short t = id % T;
-    if (id >= MV_ROWS * T || !rows.valid[r] || (uint)t >= tokens) {
+    if (id >= R * T || !rows.valid[r] || (uint)t >= tokens) {
         return;
     }
 
@@ -81,9 +85,9 @@ static inline void matvec_finish(
     *destination = a.accumulate != 0 ? *destination + total : total;
 }
 
-// Grid: (ceil(total_rows / MV_ROWS), ceil(tokens / T)) threadgroups of MV_SIMDGROUPS * 32 threads. Output rows
-// come from up to three weight segments (for example Q, K, and V) written to their own columns.
-template <short T>
+// Grid: (ceil(total_rows / R), ceil(tokens / T)) threadgroups of MV_SIMDGROUPS * 32 threads. Output rows come
+// from up to three weight segments (for example Q, K, and V) written to their own columns.
+template <short T, short R>
 kernel void synapse_q8_matvec(
         constant matmul_args & a [[buffer(0)]],
         device const char * weights [[buffer(1)]],
@@ -92,15 +96,15 @@ kernel void synapse_q8_matvec(
         uint2 tg [[threadgroup_position_in_grid]],
         ushort lane [[thread_index_in_simdgroup]],
         ushort sg [[simdgroup_index_in_threadgroup]]) {
-    threadgroup float partial[MV_SIMDGROUPS][MV_ROWS][T];
+    threadgroup float partial[MV_SIMDGROUPS][R][T];
 
     const uint first_token = tg.y * T;
     const uint tokens = min((uint)T, a.tokens - first_token);
     const uint blocks = a.columns / 32;
-    const matvec_rows rows = matvec_locate(a, weights, tg.x * MV_ROWS);
+    const matvec_rows<R> rows = matvec_locate<R>(a, weights, tg.x * R);
 
-    float sums[MV_ROWS][T];
-    for (short r = 0; r < MV_ROWS; ++r) {
+    float sums[R][T];
+    for (short r = 0; r < R; ++r) {
         for (short t = 0; t < T; ++t) {
             sums[r][t] = 0.0f;
         }
@@ -120,7 +124,7 @@ kernel void synapse_q8_matvec(
             x1[t] = v[1];
         }
 
-        for (short r = 0; r < MV_ROWS; ++r) {
+        for (short r = 0; r < R; ++r) {
             device const block_q8_0 * b = rows.row[r] + (rows.valid[r] ? block : 0);
             const float d = (float)b->d;
             device const int8_t * q = b->qs + quarter * 8;
@@ -130,18 +134,18 @@ kernel void synapse_q8_matvec(
         }
     }
 
-    matvec_finish<T>(a, weights, output, rows, sums, partial, first_token, tokens, sg, lane);
+    matvec_finish<T, R>(a, weights, output, rows, sums, partial, first_token, tokens, sg, lane);
 }
 
-#define SYNAPSE_MATVEC(T) \
-    template [[host_name("synapse_q8_matvec_" #T)]] kernel void synapse_q8_matvec<T>( \
+#define SYNAPSE_MATVEC(T, R) \
+    template [[host_name("synapse_q8_matvec_" #T)]] kernel void synapse_q8_matvec<T, R>( \
         constant matmul_args &, device const char *, device const float *, device float *, \
         uint2, ushort, ushort);
 
-SYNAPSE_MATVEC(1)
-SYNAPSE_MATVEC(2)
-SYNAPSE_MATVEC(4)
-SYNAPSE_MATVEC(8)
+SYNAPSE_MATVEC(1, 2)
+SYNAPSE_MATVEC(2, 4)
+SYNAPSE_MATVEC(4, 8)
+SYNAPSE_MATVEC(8, 2)
 
 // Prompt-run projections: C[token][row] = sum_k X[token][k] * W[row][k] with FP32 8x8 simdgroup matrices.
 // A threadgroup of four simdgroups computes a tile of GEMM_ROWS weight rows by GEMM_TOKENS tokens; each K step

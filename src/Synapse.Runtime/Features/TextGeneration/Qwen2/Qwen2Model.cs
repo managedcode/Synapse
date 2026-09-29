@@ -3,6 +3,7 @@ using ManagedCode.Synapse.Contracts.Features.GraphExecution;
 using ManagedCode.Synapse.Runtime.Features.CpuKernels;
 using ManagedCode.Synapse.Runtime.Features.ModelLoading;
 using ManagedCode.Synapse.Runtime.Features.ModelLoading.Gguf;
+using ManagedCode.Synapse.Runtime.Features.Speculation;
 
 namespace ManagedCode.Synapse.Runtime.Features.TextGeneration.Qwen2;
 
@@ -12,7 +13,7 @@ namespace ManagedCode.Synapse.Runtime.Features.TextGeneration.Qwen2;
 /// </summary>
 public sealed class Qwen2Model : ITextGenerationModel
 {
-    private const int EndOfSequenceToken = 151645;
+    internal const int EndOfSequenceToken = 151645;
     private readonly GgufFile _file;
     private readonly IDecoderExecutor _executor;
     private readonly ContinuousBatchScheduler? _scheduler;
@@ -27,9 +28,9 @@ public sealed class Qwen2Model : ITextGenerationModel
         var pool = options.KernelBackend == KernelBackend.Reference ? null : new CpuWorkerPool(options.MaximumParallelism);
         try
         {
-            Qwen2ModelComposition.PrefetchWeights(file, pool);
+            Qwen2ModelComposition.PrefetchWeights(file, Dimensions, pool);
             Graph = Qwen2ModelComposition.BuildVerifiedGraph(file, Dimensions);
-            var weights = Qwen2WeightLoader.Load(file, Dimensions.LayerCount);
+            var weights = Qwen2WeightLoader.Load(file, Dimensions);
             _executor = Qwen2ModelComposition.CreateExecutor(file, weights, Dimensions, options, pool);
         }
         catch
@@ -84,7 +85,8 @@ public sealed class Qwen2Model : ITextGenerationModel
     /// <inheritdoc />
     public string RuntimeProfile => _executor.RuntimeProfile +
         (Dimensions.RopeScaling is { } scaling ? "+" + scaling.Name : string.Empty) +
-        (Dimensions.KvPages is { } pages ? "+" + pages.Name : string.Empty);
+        (Dimensions.KvPages is { } pages ? "+" + pages.Name : string.Empty) +
+        (Dimensions.LayerDrop is { } drop ? "+" + drop.Name : string.Empty);
 
     /// <inheritdoc />
     public string KernelImplementation => _executor.KernelImplementation;
@@ -154,22 +156,14 @@ public sealed class Qwen2Model : ITextGenerationModel
                 promptTokens,
                 reused,
                 progress is null ? null : evaluated => progress.Report(new(evaluated, promptCount, 0, timer.Elapsed)));
-            var generated = new List<int>(maximumNewTokens);
-            var timeToFirstToken = TimeSpan.Zero;
-            for (var index = 0; index < maximumNewTokens; index++)
-            {
-                var token = GreedySampling.ArgMax(logits.Span);
-                generated.Add(token);
-                timeToFirstToken = index == 0 ? timer.Elapsed : timeToFirstToken;
-                progress?.Report(new(promptCount, promptCount, generated.Count, timer.Elapsed));
-                if (token == EndOfSequenceToken || index + 1 == maximumNewTokens)
-                {
-                    break;
-                }
-
-                logits = _executor.Decode(token, promptTokens.Count + index);
-            }
-
+            var (generated, timeToFirstToken) = GreedyDecoding.Continue(
+                _executor,
+                logits,
+                promptCount,
+                maximumNewTokens,
+                EndOfSequenceToken,
+                timer,
+                progress is null ? null : count => progress.Report(new(promptCount, promptCount, count, timer.Elapsed)));
             _direct.Remember(promptTokens, generated);
             return new TextGenerationResult([.. promptTokens], generated, timeToFirstToken, timer.Elapsed)
             {
@@ -196,18 +190,17 @@ public sealed class Qwen2Model : ITextGenerationModel
         ValidatePrompt(tokens, 0, allowEmptyOutput: true);
         ArgumentOutOfRangeException.ThrowIfNegative(firstScoredPosition);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(firstScoredPosition, tokens.Count - 2);
-        lock (_executionGate)
+        return RunDirect(executor =>
         {
-            _direct.Clear();
-            _executor.Reserve(tokens.Count);
+            executor.Reserve(tokens.Count);
             var timer = Stopwatch.StartNew();
             var evaluatedTotal = tokens.Count - 1;
             return TokenScoring.Score(
-                _executor,
+                executor,
                 tokens,
                 firstScoredPosition,
                 progress is null ? null : evaluated => progress.Report(new(evaluated, evaluatedTotal, 0, timer.Elapsed)));
-        }
+        });
     }
 
     /// <inheritdoc />
@@ -222,31 +215,45 @@ public sealed class Qwen2Model : ITextGenerationModel
     internal float[] EvaluatePromptLogits(IReadOnlyList<int> promptTokens)
     {
         ValidatePrompt(promptTokens, 0, allowEmptyOutput: true);
-        lock (_executionGate)
+        return RunDirect(executor =>
         {
-            _direct.Clear();
-            _executor.Reserve(promptTokens.Count);
-            return _executor.Prefill(promptTokens).ToArray();
-        }
+            executor.Reserve(promptTokens.Count);
+            return executor.Prefill(promptTokens).ToArray();
+        });
     }
 
     /// <summary>Prefills <paramref name="promptTokens"/>, then decodes each continuation token through the KV cache.</summary>
     internal float[] EvaluateIncrementalLogits(IReadOnlyList<int> promptTokens, IReadOnlyList<int> continuation)
     {
         ValidatePrompt([.. promptTokens, .. continuation], 0, allowEmptyOutput: true);
-        lock (_executionGate)
+        return RunDirect(executor =>
         {
-            _direct.Clear();
-            _executor.Reserve(promptTokens.Count + continuation.Count);
-            var logits = _executor.Prefill(promptTokens);
+            executor.Reserve(promptTokens.Count + continuation.Count);
+            var logits = executor.Prefill(promptTokens);
             for (var index = 0; index < continuation.Count; index++)
             {
-                logits = _executor.Decode(continuation[index], promptTokens.Count + index);
+                logits = executor.Decode(continuation[index], promptTokens.Count + index);
             }
 
             return logits.ToArray();
+        });
+    }
+
+    /// <summary>
+    /// Runs <paramref name="work"/> on the direct slot under the execution gate, after clearing the prompt-prefix
+    /// memory (ADR-018), which any other direct use invalidates.
+    /// </summary>
+    internal T RunDirect<T>(Func<IDecoderExecutor, T> work)
+    {
+        lock (_executionGate)
+        {
+            _direct.Clear();
+            return work(_executor);
         }
     }
+
+    /// <summary>Digest of the first <paramref name="count"/> vocabulary entries and every merge (ADR-020).</summary>
+    internal string VocabularyDigest(int count) => TokenIdentity.Digest(_file, count);
 
     private ContinuousBatchScheduler RequireScheduler() => _scheduler
         ?? throw new NotSupportedException("The reference backend serializes requests and has no batching scheduler.");

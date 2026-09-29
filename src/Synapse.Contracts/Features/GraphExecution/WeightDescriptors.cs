@@ -7,6 +7,10 @@ public enum WeightEncoding
     Fp32,
     /// <summary>GGML Q8_0 blocks with 32 values and one FP16 scale per block.</summary>
     GgmlQ8Zero,
+    /// <summary>GGML Q4_K super-blocks: 256 values in 144 bytes with 6-bit sub-block scales and minimums (ADR-021).</summary>
+    GgmlQ4K,
+    /// <summary>GGML Q6_K super-blocks: 256 values in 210 bytes with signed 8-bit scales per 16 values (ADR-021).</summary>
+    GgmlQ6K,
 }
 
 /// <summary>Bounded byte range inside one model-package file.</summary>

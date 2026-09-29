@@ -30,6 +30,11 @@ public sealed class ModelPackageCatalogTests
         await Assert.That(mlx[0].Revision)
             .IsEqualTo("6474d4c1a05bd7bd634a9c993560e4e7272eda3d");
         await Assert.That(mlx[0].Files.Count).IsEqualTo(9);
+        var longContext = catalog.SelectSet("long-context");
+        await Assert.That(longContext.Select(package => package.Id))
+            .IsEquivalentTo(["qwen2.5-7b-instruct-1m-q4_k_m", "qwen2.5-7b-instruct-1m-q8_0"]);
+        await Assert.That(longContext.All(package =>
+            package.Architecture == "qwen2" && package.Revision == "381ac2097f05bff2f77e7e3864239c11e521c3d3")).IsTrue();
         await Assert.That(catalog.Packages.SelectMany(package => package.Files)
             .All(file => file.Url.Scheme == Uri.UriSchemeHttps && file.Sha256.Length == 64)).IsTrue();
     }

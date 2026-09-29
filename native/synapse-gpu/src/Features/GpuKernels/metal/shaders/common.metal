@@ -4,7 +4,10 @@
 using namespace metal;
 
 #define SYNAPSE_MAX_SLOTS 65
-#define SYNAPSE_HEAD_DIM 64
+// The host compiles the library per model and defines SYNAPSE_HEAD_DIM (64 or 128) before this source.
+#ifndef SYNAPSE_HEAD_DIM
+#error "SYNAPSE_HEAD_DIM must be defined by the host"
+#endif
 #define SYNAPSE_NO_BIAS 0xFFFFFFFFFFFFFFFFul
 
 struct block_q8_0 {

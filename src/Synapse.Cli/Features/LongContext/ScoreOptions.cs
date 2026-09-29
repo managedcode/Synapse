@@ -1,3 +1,4 @@
+using ManagedCode.Synapse.Cli.Features.LayerDrop;
 using ManagedCode.Synapse.Cli.Features.TextGeneration;
 using ManagedCode.Synapse.Contracts.Features.GraphExecution;
 using ManagedCode.Synapse.Runtime.Features.ModelLoading;
@@ -19,14 +20,15 @@ internal sealed record ScoreOptions(
     bool ParseSpecialTokens,
     string? ScoresOutput,
     KvPageActivation? KvPages = null,
-    int? FirstScored = null)
+    int? FirstScored = null,
+    LayerDropProfile? LayerDrop = null)
 {
     public static string Usage =>
         "Usage: synapse score --model <model.gguf> (--text-file <path> | --tokens-file <path>) --context-size <n> " +
         $"[--chunks <n>] [--threads <n>] [--backend <{KernelBackendNames.Usage}>] " +
         "[--rope-scaling yarn:<factor>:<trained-context>] [--kv-precision f32|f16] [--scoring-rows <1..512>] " +
         "[--parse-special] [--scores-output <file.json>] [--kv-pages <budget>:<window>[:p16|p32|p64][:random[:seed]]] " +
-        "[--first-scored <position>]";
+        "[--first-scored <position>] " + LayerDropArguments.Usage;
 
     public static ScoreOptions? Parse(IReadOnlyList<string> arguments)
     {
@@ -62,6 +64,11 @@ internal sealed record ScoreOptions(
             return null;
         }
 
+        if (!LayerDropArguments.TryParse(values, out var drop))
+        {
+            return null;
+        }
+
         var context = GenerationOptions.ParsePositive(values.GetValueOrDefault("--context-size"), -1);
         var chunks = values.TryGetValue("--chunks", out var chunkText) ? GenerationOptions.ParsePositive(chunkText, -1) : (int?)null;
         var threads = GenerationOptions.ParsePositive(values.GetValueOrDefault("--threads"), Environment.ProcessorCount);
@@ -69,7 +76,7 @@ internal sealed record ScoreOptions(
         var first = values.TryGetValue("--first-scored", out var firstText) ? GenerationOptions.ParsePositive(firstText, -1) : context / 2;
         return context >= 4 && chunks is null or > 0 && threads > 0 && rows is > 0 and <= 512 && first >= 0 && first <= context - 2
             ? new ScoreOptions(model, textFile, tokensFile, context, chunks, threads, backend, scaling, kv, rows,
-                parseSpecial, values.GetValueOrDefault("--scores-output"), pages, first)
+                parseSpecial, values.GetValueOrDefault("--scores-output"), pages, first, drop)
             : null;
     }
 

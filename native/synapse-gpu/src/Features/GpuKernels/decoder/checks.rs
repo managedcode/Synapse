@@ -1,9 +1,9 @@
 //! Shape and byte-range validation of a decoder description.
 
 use super::{
-    ACTIVATION_SWIGLU, DecoderDesc, DecoderLayerOffsets, DecoderShape, ENCODING_Q8_0, HEAD_DIM,
-    KV_F16, KV_F32, KvPrecision, MAX_GROUP, MAX_SLOTS, NO_TENSOR, Q8_0_BLOCK_BYTES,
-    Q8_0_BLOCK_VALUES, ROPE_NEOX,
+    ACTIVATION_SWIGLU, DecoderDesc, DecoderLayerOffsets, DecoderShape, Encoding, KV_F16, KV_F32,
+    KvPrecision, MAX_GROUP, MAX_SLOTS, METAL_HEAD_DIMS, Matrix, NO_TENSOR, Q8_0_BLOCK_VALUES,
+    ROPE_NEOX,
 };
 use crate::gpu_kernels::error::GpuError;
 
@@ -16,6 +16,7 @@ pub(super) fn validate_shape(desc: &DecoderDesc) -> Result<DecoderShape, GpuErro
         feed_forward: desc.feed_forward,
         heads: desc.heads,
         kv_heads: desc.kv_heads,
+        head_dim: desc.head_dim,
         vocabulary: desc.vocabulary,
         context: desc.context,
         session_slots: desc.session_slots,
@@ -33,14 +34,12 @@ pub(super) fn validate_shape(desc: &DecoderDesc) -> Result<DecoderShape, GpuErro
 
 /// Encodings, `RoPE` layouts, and activations the kernels do not implement are `Unavailable`.
 fn check_variants(desc: &DecoderDesc) -> Result<(), GpuError> {
-    if desc.matrix_encoding != ENCODING_Q8_0
-        || desc.rope_layout != ROPE_NEOX
-        || desc.activation != ACTIVATION_SWIGLU
-    {
+    Encoding::from_id(desc.embedding_encoding)?;
+    Encoding::from_id(desc.output_encoding)?;
+    if desc.rope_layout != ROPE_NEOX || desc.activation != ACTIVATION_SWIGLU {
         return Err(GpuError::Unavailable(format!(
-            "the GPU kernels implement Q8_0 matrices, NeoX RoPE, and SwiGLU; the model asks for encoding {}, \
-             RoPE layout {}, activation {}",
-            desc.matrix_encoding, desc.rope_layout, desc.activation
+            "the GPU kernels implement NeoX RoPE and SwiGLU; the model asks for RoPE layout {}, activation {}",
+            desc.rope_layout, desc.activation
         )));
     }
 
@@ -72,10 +71,11 @@ fn check_dimensions(desc: &DecoderDesc) -> Result<(), GpuError> {
         ));
     }
 
-    if desc.head_dim != HEAD_DIM || desc.hidden != desc.heads * HEAD_DIM {
+    if !METAL_HEAD_DIMS.contains(&desc.head_dim) || desc.hidden != desc.heads * desc.head_dim {
         return Err(GpuError::Unavailable(format!(
-            "the GPU kernels implement head dimension {HEAD_DIM}; the model uses {}",
-            desc.head_dim
+            "the GPU kernels implement head dimensions {METAL_HEAD_DIMS:?} with hidden = heads x head; the model \
+             uses head {} and hidden {}",
+            desc.head_dim, desc.hidden
         )));
     }
 
@@ -113,9 +113,27 @@ pub(super) fn check_layer(
         u64::from(shape.feed_forward),
     );
     ranges.f32(layer.attention_norm, hidden, "attn_norm")?;
-    ranges.q8(layer.query, hidden, hidden, "attn_q")?;
-    ranges.q8(layer.key, kv, hidden, "attn_k")?;
-    ranges.q8(layer.value, kv, hidden, "attn_v")?;
+    ranges.matrix(
+        layer.query,
+        hidden,
+        hidden,
+        layer.encoding(Matrix::Query)?,
+        "attn_q",
+    )?;
+    ranges.matrix(
+        layer.key,
+        kv,
+        hidden,
+        layer.encoding(Matrix::Key)?,
+        "attn_k",
+    )?;
+    ranges.matrix(
+        layer.value,
+        kv,
+        hidden,
+        layer.encoding(Matrix::Value)?,
+        "attn_v",
+    )?;
     ranges.optional_f32(layer.query_bias, hidden, "attn_q.bias")?;
     ranges.optional_f32(layer.key_bias, kv, "attn_k.bias")?;
     ranges.optional_f32(layer.value_bias, kv, "attn_v.bias")?;
@@ -125,11 +143,29 @@ pub(super) fn check_layer(
         ));
     }
 
-    ranges.q8(layer.attention_output, hidden, hidden, "attn_output")?;
+    ranges.matrix(
+        layer.attention_output,
+        hidden,
+        hidden,
+        layer.encoding(Matrix::Output)?,
+        "attn_output",
+    )?;
     ranges.f32(layer.feed_forward_norm, hidden, "ffn_norm")?;
-    ranges.q8(layer.gate, ffn, hidden, "ffn_gate")?;
-    ranges.q8(layer.up, ffn, hidden, "ffn_up")?;
-    ranges.q8(layer.down, hidden, ffn, "ffn_down")
+    ranges.matrix(
+        layer.gate,
+        ffn,
+        hidden,
+        layer.encoding(Matrix::Gate)?,
+        "ffn_gate",
+    )?;
+    ranges.matrix(layer.up, ffn, hidden, layer.encoding(Matrix::Up)?, "ffn_up")?;
+    ranges.matrix(
+        layer.down,
+        hidden,
+        ffn,
+        layer.encoding(Matrix::Down)?,
+        "ffn_down",
+    )
 }
 
 pub(super) struct RangeCheck {
@@ -137,10 +173,25 @@ pub(super) struct RangeCheck {
 }
 
 impl RangeCheck {
-    pub fn q8(&self, offset: u64, rows: u64, columns: u64, name: &str) -> Result<(), GpuError> {
+    /// A `rows` x `columns` matrix in `encoding`; K-quant rows must be a whole number of 256-value blocks.
+    pub fn matrix(
+        &self,
+        offset: u64,
+        rows: u64,
+        columns: u64,
+        encoding: Encoding,
+        name: &str,
+    ) -> Result<(), GpuError> {
+        if !columns.is_multiple_of(encoding.block_values()) {
+            return Err(GpuError::Unavailable(format!(
+                "tensor {name} has {columns} columns, not a multiple of its {}-value blocks",
+                encoding.block_values()
+            )));
+        }
+
         let bytes = rows
-            .checked_mul(columns / u64::from(Q8_0_BLOCK_VALUES))
-            .and_then(|blocks| blocks.checked_mul(Q8_0_BLOCK_BYTES));
+            .checked_mul(columns / encoding.block_values())
+            .and_then(|blocks| blocks.checked_mul(encoding.block_bytes()));
         self.span(offset, bytes, 2, name)
     }
 

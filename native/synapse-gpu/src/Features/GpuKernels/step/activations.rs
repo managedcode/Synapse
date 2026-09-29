@@ -1,7 +1,7 @@
 //! Step activation buffers and their sizes, shared by every backend.
 
 use crate::gpu_kernels::decoder::DecoderPlan;
-use crate::gpu_kernels::schedule::{PARTIAL_BLOCKS, PARTIAL_ROW_FLOATS};
+use crate::gpu_kernels::schedule::PARTIAL_BLOCKS;
 
 /// Step activations sized for the model's step capacity.
 pub struct Activations<B> {
@@ -39,7 +39,7 @@ impl Activations<u64> {
             logits: floats(u64::from(shape.logits_rows) * u64::from(shape.vocabulary)),
             gather: 4 * u64::from(shape.logits_rows),
             blocks: blocks * 32,
-            partial: floats(u64::from(PARTIAL_BLOCKS) * 64 * u64::from(PARTIAL_ROW_FLOATS)),
+            partial: floats(u64::from(PARTIAL_BLOCKS) * 64 * u64::from(shape.partial_row_floats())),
         }
     }
 }

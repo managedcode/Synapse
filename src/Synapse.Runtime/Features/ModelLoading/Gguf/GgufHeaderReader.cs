@@ -7,6 +7,8 @@ internal static class GgufHeaderReader
     private const uint Magic = 0x4655_4747;
     private const uint Float32Type = 0;
     private const uint Q8Type = 8;
+    private const uint Q4KType = 12;
+    private const uint Q6KType = 14;
     private const int DefaultAlignment = 32;
 
     public static GgufDescriptor Read(string path)
@@ -117,6 +119,8 @@ internal static class GgufHeaderReader
             {
                 Float32Type => checked(elementCount * sizeof(float)),
                 Q8Type when elementCount % 32 == 0 => checked(elementCount / 32 * 34),
+                Q4KType when elementCount % 256 == 0 => checked(elementCount / 256 * 144),
+                Q6KType when elementCount % 256 == 0 => checked(elementCount / 256 * 210),
                 _ => throw new NotSupportedException(
                     $"Tensor '{header.Name}' uses unsupported GGML type {header.Type}."),
             };

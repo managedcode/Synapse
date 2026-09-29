@@ -10,6 +10,12 @@ constant constexpr short ATT_MAX_SIMDGROUPS = 8;
 // K/V load but spill registers on an M2 Pro (32k time to first token 38.1 s against 26.9 s), so one is used.
 constant constexpr short ATT_RUN_HALVES = 1;
 constant constexpr short ATT_ROW_FLOATS = SYNAPSE_HEAD_DIM + 2;
+// 8x8 fragments across one head row: 8 at head dimension 64, 16 at 128.
+constant constexpr short ATT_FRAGMENTS = SYNAPSE_HEAD_DIM / 8;
+// Query and output rows pass through threadgroup memory 64 columns at a time, so the staging footprint is the
+// same at every head dimension (eight simdgroups × 8 rows × 128 columns would fill the whole 32 KiB).
+constant constexpr short ATT_STAGE_COLUMNS = 64;
+constant constexpr short ATT_STAGE_PASSES = SYNAPSE_HEAD_DIM / ATT_STAGE_COLUMNS;
 
 struct attention_row {
     bool valid;
@@ -51,7 +57,7 @@ static inline thread float2 & lane_pair(thread simdgroup_float8x8 & matrix) {
 
 // One simdgroup's online-softmax state over its eight rows; each lane tracks the row it holds in every fragment.
 struct attention_state {
-    float2 out[8];
+    float2 out[ATT_FRAGMENTS];
     float running_max;
     float running_sum;
 };
@@ -97,14 +103,14 @@ static inline float softmax_scores(
     return alpha;
 }
 
-// Folds one tile of up to ATT_KEYS keys (row-major [key][64] at `keys` and `values`) into `H` halves of eight
+// Folds one tile of up to ATT_KEYS keys (row-major [key][head dim] at `keys` and `values`) into `H` halves of eight
 // query rows each. Every key and value fragment is loaded once and multiplied into all halves, so more rows share
 // each load. Scores and outputs stay in registers as each lane's element pair; matrices exist only per multiply.
 // `T` is the element type the tile is read as; half tiles multiply into FP32.
 template <typename T, short H, typename Pointer>
 static inline void attend_tile(
         thread attention_state (&state)[H],
-        thread const simdgroup_float8x8 (&query)[H][8],
+        thread const simdgroup_float8x8 (&query)[H][ATT_FRAGMENTS],
         Pointer keys,
         Pointer values,
         uint first_key,
@@ -120,7 +126,7 @@ static inline void attend_tile(
             product[h] = make_filled_simdgroup_matrix<float, 8>(0.0f);
         }
 
-        for (short dk = 0; dk < 8; ++dk) {
+        for (short dk = 0; dk < ATT_FRAGMENTS; ++dk) {
             simdgroup_matrix<T, 8, 8> key_block;
             simdgroup_load(key_block, keys + c * 8 * SYNAPSE_HEAD_DIM + dk * 8, SYNAPSE_HEAD_DIM, ulong2(0, 0), true);
             for (short h = 0; h < H; ++h) {
@@ -138,7 +144,7 @@ static inline void attend_tile(
         alpha[h] = softmax_scores(state[h], scores[h], first_key, count, row_valid[h], row_position[h], scale, lane);
     }
 
-    for (short j = 0; j < 8; ++j) {
+    for (short j = 0; j < ATT_FRAGMENTS; ++j) {
         simdgroup_float8x8 output[H];
         for (short h = 0; h < H; ++h) {
             lane_pair(output[h]) = state[h].out[j] * alpha[h];
@@ -174,62 +180,69 @@ static inline void attention_finish(
         ushort sg,
         ushort lane,
         ushort row_base) {
-    for (short j = 0; j < 8; ++j) {
-        simdgroup_float8x8 output;
-        lane_pair(output) = state.out[j];
-        simdgroup_store(output, stage + j * 8, SYNAPSE_HEAD_DIM);
-    }
-
     if (fragment_column(lane) == 0) {
         row_state[fragment_row(lane)] = state.running_sum;
         row_state[8 + fragment_row(lane)] = state.running_max;
     }
 
-    simdgroup_barrier(mem_flags::mem_threadgroup);
-    for (ushort idx = lane; idx < 8 * SYNAPSE_HEAD_DIM; idx += 32) {
-        const ushort r = idx / SYNAPSE_HEAD_DIM;
-        const ushort d = idx % SYNAPSE_HEAD_DIM;
-        const attention_row row = attention_map(block, a.group, sg, row_base + r);
-        if (!row.valid) {
-            continue;
+    for (short pass = 0; pass < ATT_STAGE_PASSES; ++pass) {
+        for (short j = 0; j < 8; ++j) {
+            simdgroup_float8x8 out_block;
+            lane_pair(out_block) = state.out[pass * 8 + j];
+            simdgroup_store(out_block, stage + j * 8, ATT_STAGE_COLUMNS);
         }
 
-        if (a.splits == 1) {
-            output[(ulong)row.token * a.out_stride + row.head * SYNAPSE_HEAD_DIM + d] = stage[idx] / row_state[r];
-            continue;
+        simdgroup_barrier(mem_flags::mem_threadgroup);
+        for (ushort idx = lane; idx < 8 * ATT_STAGE_COLUMNS; idx += 32) {
+            const ushort r = idx / ATT_STAGE_COLUMNS;
+            const ushort d = pass * ATT_STAGE_COLUMNS + idx % ATT_STAGE_COLUMNS;
+            const attention_row row = attention_map(block, a.group, sg, row_base + r);
+            if (!row.valid) {
+                continue;
+            }
+
+            if (a.splits == 1) {
+                output[(ulong)row.token * a.out_stride + row.head * SYNAPSE_HEAD_DIM + d] = stage[idx] / row_state[r];
+                continue;
+            }
+
+            device float * target =
+                partial + (((ulong)block_index * a.splits + split) * 64 + sg * 8 + r) * ATT_ROW_FLOATS;
+            target[d] = stage[idx];
+            if (d == 0) {
+                target[SYNAPSE_HEAD_DIM] = row_state[8 + r];
+                target[SYNAPSE_HEAD_DIM + 1] = row_state[r];
+            }
         }
 
-        device float * target = partial + (((ulong)block_index * a.splits + split) * 64 + sg * 8 + r) * ATT_ROW_FLOATS;
-        target[d] = stage[idx];
-        if (d == 0) {
-            target[SYNAPSE_HEAD_DIM] = row_state[8 + r];
-            target[SYNAPSE_HEAD_DIM + 1] = row_state[r];
-        }
+        simdgroup_barrier(mem_flags::mem_threadgroup);
     }
 }
 
-// Stages eight 64-wide query rows starting at `row_base` (zero for invalid rows) and loads them as fragments.
+// Stages eight query rows starting at `row_base` (zero for invalid rows), 64 columns per pass, and loads them as
+// fragments.
 static inline void stage_query(constant attention_args & a, attention_block block, device const float * qkv,
                                threadgroup float * stage, ushort sg, ushort lane, ushort row_base,
-                               thread simdgroup_float8x8 (&query)[8]) {
-    for (ushort idx = lane; idx < 8 * SYNAPSE_HEAD_DIM; idx += 32) {
-        const attention_row row = attention_map(block, a.group, sg, row_base + idx / SYNAPSE_HEAD_DIM);
-        stage[idx] = row.valid
-            ? qkv[(ulong)row.token * a.qkv_stride + row.head * SYNAPSE_HEAD_DIM + idx % SYNAPSE_HEAD_DIM]
-            : 0.0f;
-    }
+                               thread simdgroup_float8x8 (&query)[ATT_FRAGMENTS]) {
+    for (short pass = 0; pass < ATT_STAGE_PASSES; ++pass) {
+        for (ushort idx = lane; idx < 8 * ATT_STAGE_COLUMNS; idx += 32) {
+            const attention_row row = attention_map(block, a.group, sg, row_base + idx / ATT_STAGE_COLUMNS);
+            const ushort d = pass * ATT_STAGE_COLUMNS + idx % ATT_STAGE_COLUMNS;
+            stage[idx] = row.valid ? qkv[(ulong)row.token * a.qkv_stride + row.head * SYNAPSE_HEAD_DIM + d] : 0.0f;
+        }
 
-    simdgroup_barrier(mem_flags::mem_threadgroup);
-    for (short dk = 0; dk < 8; ++dk) {
-        simdgroup_load(query[dk], stage + dk * 8, SYNAPSE_HEAD_DIM);
-    }
+        simdgroup_barrier(mem_flags::mem_threadgroup);
+        for (short dk = 0; dk < 8; ++dk) {
+            simdgroup_load(query[pass * 8 + dk], stage + dk * 8, ATT_STAGE_COLUMNS);
+        }
 
-    simdgroup_barrier(mem_flags::mem_threadgroup);
+        simdgroup_barrier(mem_flags::mem_threadgroup);
+    }
 }
 
 static inline attention_state attention_start() {
     attention_state state;
-    for (short j = 0; j < 8; ++j) {
+    for (short j = 0; j < ATT_FRAGMENTS; ++j) {
         state.out[j] = float2(0.0f);
     }
 
@@ -256,7 +269,7 @@ kernel void synapse_attention(
         ushort2 threads_2d [[threads_per_threadgroup]],
         ushort lane [[thread_index_in_simdgroup]],
         ushort sg [[simdgroup_index_in_threadgroup]]) {
-    threadgroup float region[ATT_MAX_SIMDGROUPS][8 * SYNAPSE_HEAD_DIM];
+    threadgroup float region[ATT_MAX_SIMDGROUPS][8 * ATT_STAGE_COLUMNS];
     threadgroup float row_state[ATT_MAX_SIMDGROUPS][16];
     if (sg >= a.group) {
         return;
@@ -272,7 +285,7 @@ kernel void synapse_attention(
     const ulong value_base = kv_value_base(a.layers, a.kv_heads, capacity) + key_base;
 
     threadgroup float * stage = region[sg];
-    simdgroup_float8x8 query[ATT_RUN_HALVES][8];
+    simdgroup_float8x8 query[ATT_RUN_HALVES][ATT_FRAGMENTS];
     attention_state state[ATT_RUN_HALVES];
     bool valid[ATT_RUN_HALVES];
     uint position[ATT_RUN_HALVES];
@@ -313,7 +326,7 @@ kernel void synapse_attention_decode(
         device float * partial [[buffer(6)]],
         uint2 tg [[threadgroup_position_in_grid]],
         ushort lane [[thread_index_in_simdgroup]]) {
-    threadgroup float stage[8 * SYNAPSE_HEAD_DIM];
+    threadgroup float stage[8 * ATT_STAGE_COLUMNS];
     threadgroup float row_state[16];
 
     const attention_block block = blocks[a.block_base + tg.x];
@@ -325,7 +338,7 @@ kernel void synapse_attention_decode(
     const ulong key_base = kv_offset(a.layer, block.kv_head, 0, a.kv_heads, capacity);
     const ulong value_base = kv_value_base(a.layers, a.kv_heads, capacity) + key_base;
 
-    simdgroup_float8x8 query[1][8];
+    simdgroup_float8x8 query[1][ATT_FRAGMENTS];
     stage_query(a, block, qkv, stage, 0, lane, 0, query[0]);
     attention_state state[1] = {attention_start()};
     const attention_row mine = attention_map(block, a.group, 0, fragment_row(lane));
@@ -339,44 +352,6 @@ kernel void synapse_attention_decode(
     }
 
     attention_finish(a, state[0], block, stage, row_state, output, partial, tg.x, split, 0, lane, 0);
-}
-
-// Grid (64 dims, 64 rows, blocks): merges the splits of one decode dispatch into the attention output.
-kernel void synapse_attention_reduce(
-        constant attention_args & a [[buffer(0)]],
-        device const attention_block * blocks [[buffer(1)]],
-        device const float * partial [[buffer(2)]],
-        device float * output [[buffer(3)]],
-        uint3 gid [[thread_position_in_grid]]) {
-    const uint d = gid.x;
-    const uint row_index = gid.y;
-    const attention_block block = blocks[a.block_base + gid.z];
-    const attention_row row = attention_map(block, a.group, row_index / 8, row_index % 8);
-    if (d >= SYNAPSE_HEAD_DIM || !row.valid) {
-        return;
-    }
-
-    float maximum = -INFINITY;
-    for (uint split = 0; split < a.splits; ++split) {
-        device const float * source = partial + (((ulong)gid.z * a.splits + split) * 64 + row_index) * ATT_ROW_FLOATS;
-        if (source[SYNAPSE_HEAD_DIM + 1] > 0.0f) {
-            maximum = max(maximum, source[SYNAPSE_HEAD_DIM]);
-        }
-    }
-
-    float sum = 0.0f;
-    float value = 0.0f;
-    for (uint split = 0; split < a.splits; ++split) {
-        device const float * source = partial + (((ulong)gid.z * a.splits + split) * 64 + row_index) * ATT_ROW_FLOATS;
-        const float weight_sum = source[SYNAPSE_HEAD_DIM + 1];
-        if (weight_sum > 0.0f) {
-            const float factor = exp(source[SYNAPSE_HEAD_DIM] - maximum);
-            sum += weight_sum * factor;
-            value += source[d] * factor;
-        }
-    }
-
-    output[(ulong)row.token * a.out_stride + row.head * SYNAPSE_HEAD_DIM + d] = value / sum;
 }
 
 #define SYNAPSE_ATTENTION(NAME, KERNEL, KV) \

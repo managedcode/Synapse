@@ -11,14 +11,16 @@ use super::encoder::{
     Buffer, Submission, copy_regions, download, shared_buffer, upload, zero_fill,
 };
 use crate::gpu_kernels::GpuDeviceInfo;
-use crate::gpu_kernels::decoder::{BatchToken, DecoderPlan, DecoderShape, HEAD_DIM};
+use crate::gpu_kernels::decoder::{BatchToken, DecoderPlan, DecoderShape};
 use crate::gpu_kernels::error::GpuError;
 use crate::gpu_kernels::params::{MAX_SLOTS, SlotTable};
 use crate::gpu_kernels::schedule::{METAL_RUN_TOKENS, plan_attention};
-use crate::gpu_kernels::step::{Activations, StepInputs, encode_step};
+use crate::gpu_kernels::step::{Activations, StepInputs, WeightSegment, encode_step};
 
-/// One attention tile of FP32 keys (32 x 64 floats) after the last value position.
-const SLOT_PADDING_BYTES: u64 = 32 * 64 * 4;
+/// One attention tile of FP32 keys (32 keys x head dimension floats) after the last value position.
+const fn slot_padding_bytes(shape: &DecoderShape) -> u64 {
+    32 * shape.head_dim as u64 * 4
+}
 
 unsafe extern "C" {
     fn getpagesize() -> i32;
@@ -34,8 +36,8 @@ struct KvSlot {
 pub struct MetalDecoder {
     context: MetalContext,
     plan: DecoderPlan,
-    weights: Buffer,
-    weights_offset: u64,
+    /// No-copy buffers over the weight segments the plan reads; dropped layers lie outside them (ADR-019).
+    weights: Vec<WeightSegment<Buffer>>,
     cosines: Buffer,
     sines: Buffer,
     activations: Activations<Buffer>,
@@ -65,10 +67,9 @@ impl MetalDecoder {
             ));
         }
 
-        let context = MetalContext::new()?;
+        let context = MetalContext::new(plan.shape.head_dim)?;
         // SAFETY: forwarded from this function's contract.
-        let (weights, weights_offset) =
-            unsafe { wrap_weights(&context, weights, plan.weights_length)? };
+        let weights = unsafe { wrap_segments(&context, weights, &plan)? };
         let device = &context.device;
         let cosine_buffer = shared_buffer(device, bytes_of(cosines), "rope cosines")?;
         let sine_buffer = shared_buffer(device, bytes_of(sines), "rope sines")?;
@@ -83,7 +84,6 @@ impl MetalDecoder {
             context,
             plan,
             weights,
-            weights_offset,
             cosines: cosine_buffer,
             sines: sine_buffer,
             activations,
@@ -132,7 +132,6 @@ impl MetalDecoder {
         let inputs = StepInputs {
             plan: &self.plan,
             weights: &self.weights,
-            weights_offset: self.weights_offset,
             cosines: &self.cosines,
             sines: &self.sines,
             activations: &self.activations,
@@ -229,7 +228,7 @@ impl MetalDecoder {
         let shape = self.plan.shape;
         let buffer = shared_buffer(
             &self.context.device,
-            shape.slot_bytes(capacity) + SLOT_PADDING_BYTES,
+            shape.slot_bytes(capacity) + slot_padding_bytes(&shape),
             "KV slot",
         )?;
         zero_fill(&self.context, &buffer)?;
@@ -243,9 +242,9 @@ impl MetalDecoder {
 }
 
 /// `(source, target, length)` byte ranges that move every (K or V, layer, KV head) region of `from` positions
-/// to its place in a slot of `to` positions; the layout is `[K|V][layer][KV head][position][HEAD_DIM]`.
+/// to its place in a slot of `to` positions; the layout is `[K|V][layer][KV head][position][head dim]`.
 fn region_copies(shape: &DecoderShape, from: u32, to: u32) -> Vec<(u64, u64, u64)> {
-    let row = u64::from(HEAD_DIM) * shape.kv_precision.element_bytes();
+    let row = u64::from(shape.head_dim) * shape.kv_precision.element_bytes();
     let regions = 2 * u64::from(shape.layer_count) * u64::from(shape.kv_heads);
     (0..regions)
         .map(|region| {
@@ -258,42 +257,53 @@ fn region_copies(shape: &DecoderShape, from: u32, to: u32) -> Vec<(u64, u64, u64
         .collect()
 }
 
-/// Wraps the page-aligned span that covers `[weights, weights + length)` as a no-copy shared buffer.
+/// Wraps every weight segment of `plan` as a no-copy shared buffer. Bytes outside every segment, such as the
+/// tensors of dropped layers (ADR-019), belong to no buffer, so the GPU never makes their pages resident.
 ///
 /// # Safety
 ///
-/// The whole page span must stay mapped and readable while the buffer lives.
-unsafe fn wrap_weights(
+/// `weights` must be the start of a mapping readable for `plan.weights_length` bytes (rounded up to a page).
+unsafe fn wrap_segments(
     context: &MetalContext,
     weights: NonNull<u8>,
-    length: u64,
-) -> Result<(Buffer, u64), GpuError> {
+    plan: &DecoderPlan,
+) -> Result<Vec<WeightSegment<Buffer>>, GpuError> {
     // SAFETY: `getpagesize` has no preconditions.
     let page = usize::try_from(unsafe { getpagesize() })
         .unwrap_or(16_384)
         .max(4_096);
     let address = weights.as_ptr() as usize;
-    let base = address - address % page;
-    let offset = address - base;
-    let length =
-        usize::try_from(length).map_err(|_| GpuError::invalid("weights length overflows usize"))?;
-    let span = (offset + length).next_multiple_of(page);
-    let pointer = NonNull::new(base as *mut c_void).ok_or(GpuError::NullPointer("weights"))?;
-    // SAFETY: `base..base + span` lies inside the caller's page-aligned mapping per this function's contract,
-    // and no deallocator is installed because the caller owns the mapping.
-    let buffer = unsafe {
-        context
-            .device
-            .newBufferWithBytesNoCopy_length_options_deallocator(
-                pointer,
-                span,
-                MTLResourceOptions::StorageModeShared,
-                None,
-            )
+    let to_usize = |value: u64| {
+        usize::try_from(value).map_err(|_| GpuError::invalid("weight offsets overflow usize"))
     };
-    let buffer =
-        buffer.ok_or_else(|| GpuError::Device("Metal could not wrap the mapped weights".into()))?;
-    Ok((buffer, offset as u64))
+    let mut segments = Vec::new();
+    for (start, end) in plan.weight_segments(page as u64) {
+        let first = address + to_usize(start)?;
+        let base = first - first % page;
+        let last = (address + to_usize(end.min(plan.weights_length))?).next_multiple_of(page);
+        let pointer = NonNull::new(base as *mut c_void).ok_or(GpuError::NullPointer("weights"))?;
+        // SAFETY: `base..last` lies inside the caller's page-aligned mapping per this function's contract, and no
+        // deallocator is installed because the caller owns the mapping.
+        let buffer = unsafe {
+            context
+                .device
+                .newBufferWithBytesNoCopy_length_options_deallocator(
+                    pointer,
+                    last - base,
+                    MTLResourceOptions::StorageModeShared,
+                    None,
+                )
+        }
+        .ok_or_else(|| GpuError::Device("Metal could not wrap a mapped weight segment".into()))?;
+        segments.push(WeightSegment {
+            first: start,
+            end,
+            buffer,
+            buffer_offset: (first - base) as u64,
+        });
+    }
+
+    Ok(segments)
 }
 
 const fn bytes_of(values: &[f32]) -> u64 {

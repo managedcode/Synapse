@@ -42,6 +42,12 @@ public sealed record ModelLoadOptions
     public KvPageActivation? KvPageActivation { get; init; }
 
     /// <summary>
+    /// Whole layers that do not run (ADR-019), or <see langword="null"/> for the dense model. An approximation
+    /// profile: every backend runs the kept layers only, and dropped weights and KV are never touched.
+    /// </summary>
+    public LayerDropProfile? LayerDrop { get; init; }
+
+    /// <summary>
     /// Reuses the direct session's K and V for the longest token prefix shared with the previous direct request
     /// (ADR-018). Reused positions carry the earlier request's numbers, so this is opt-in.
     /// </summary>

@@ -4,6 +4,7 @@
 //! the NVIDIA driver reports `Unavailable`. Kernels are compiled to PTX for the device at load. This backend
 //! is not claimed until a CUDA device runs the parity suite.
 
+mod admission;
 pub mod decoder;
 mod driver;
 mod nvrtc;

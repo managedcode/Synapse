@@ -14,6 +14,7 @@ use objc2_metal::{
 };
 
 use super::{MetalContext, Pipeline};
+use crate::gpu_kernels::decoder::Encoding;
 use crate::gpu_kernels::error::GpuError;
 use crate::gpu_kernels::step::{Binding, Kernel, StepBackend};
 
@@ -232,13 +233,13 @@ impl<'a> Submission<'a> {
     fn pipeline(&self, kernel: Kernel) -> &Pipeline {
         let pipelines = &self.context.pipelines;
         match kernel {
-            Kernel::Embed => &pipelines.embed,
+            Kernel::Embed(encoding) => &pipelines.embed[encoding.index()],
             Kernel::RmsNorm => &pipelines.rms_norm,
-            Kernel::Matvec(1) => &pipelines.matvec[0],
-            Kernel::Matvec(2) => &pipelines.matvec[1],
-            Kernel::Matvec(4) => &pipelines.matvec[2],
-            Kernel::Matvec(_) => &pipelines.matvec[3],
-            Kernel::Gemm => &pipelines.gemm,
+            Kernel::Matvec(encoding, 1) => &pipelines.matvec[encoding.index()][0],
+            Kernel::Matvec(encoding, 2) => &pipelines.matvec[encoding.index()][1],
+            Kernel::Matvec(encoding, 4) => &pipelines.matvec[encoding.index()][2],
+            Kernel::Matvec(encoding, _) => &pipelines.matvec[encoding.index()][3],
+            Kernel::Gemm(encoding) => &pipelines.gemm[encoding.index()],
             Kernel::RopeKv(precision) => &pipelines.rope_kv[precision as usize],
             Kernel::Attention(precision) => &pipelines.attention[precision as usize],
             Kernel::AttentionDecode(precision) => &pipelines.attention_decode[precision as usize],
@@ -305,6 +306,10 @@ impl StepBackend for Submission<'_> {
         Ok(())
     }
 
+    fn matvec_rows(&self, encoding: Encoding, tokens_per_group: u32) -> u32 {
+        metal_matvec_rows(encoding, tokens_per_group)
+    }
+
     fn flush(&mut self) -> Result<(), GpuError> {
         let done = self.reopen()?;
         self.committed.push(done);
@@ -315,6 +320,23 @@ impl StepBackend for Submission<'_> {
 impl Drop for Submission<'_> {
     fn drop(&mut self) {
         self.end_encoding();
+    }
+}
+
+/// Rows per Metal matrix-vector threadgroup, matching the `SYNAPSE_MATVEC(T, R)` instances in `matmul.metal`: more
+/// tokens share a group, so more rows amortize each activation load.
+#[must_use]
+pub const fn metal_matvec_rows(encoding: Encoding, tokens_per_group: u32) -> u32 {
+    match encoding {
+        // Q8_0 threadgroups split R rows' blocks across four simdgroups (matmul.metal).
+        Encoding::Q8_0 => match tokens_per_group {
+            2 => 4,
+            4 => 8,
+            _ => 2,
+        },
+        // K-quant threadgroups hold four simdgroups of one row each (matmul_kquant.metal): the kernel is
+        // latency-bound, so independent rows beat reused activations.
+        Encoding::Q4K | Encoding::Q6K => 4,
     }
 }
 
@@ -348,3 +370,7 @@ const fn size(values: [usize; 3]) -> MTLSize {
         depth: values[2],
     }
 }
+
+#[cfg(test)]
+#[path = "encoder_tests.rs"]
+mod tests;

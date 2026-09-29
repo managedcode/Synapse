@@ -6,6 +6,20 @@ namespace ManagedCode.Synapse.IntegrationTests.Features.ModelPackages;
 public sealed class SourceTensorDecoderTests
 {
     [Test]
+    public async Task GgufFloatTypesResolveToTheirDecoders()
+    {
+        foreach (var type in new[] { GgufType.F32, GgufType.F16, GgufType.BF16, GgufType.F64 })
+        {
+            await Assert.That(SourceEncodings.TryGetGguf((uint)type, out var decoder) && decoder is not null).IsTrue();
+        }
+
+        var values = new float[2];
+        SourceEncodings.GetGguf((uint)GgufType.F32).Decode([.. BitConverter.GetBytes(1.5f), .. BitConverter.GetBytes(-2f)], values);
+
+        await Assert.That(values).IsEquivalentTo([1.5f, -2f]);
+    }
+
+    [Test]
     public async Task GgufQ40GoldenBlockDecodes()
     {
         var block = new byte[18];

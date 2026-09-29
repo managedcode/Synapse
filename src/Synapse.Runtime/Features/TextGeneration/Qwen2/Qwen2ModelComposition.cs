@@ -15,8 +15,11 @@ internal static class Qwen2ModelComposition
         var embedding = file.GetRequiredTensor("token_embd.weight");
         var scaling = RopeScalingResolver.Resolve(file.Metadata, "qwen2", options.RopeScaling);
         var trained = file.GetRequiredInt32("qwen2.context_length");
+        var sourceLayers = file.GetRequiredInt32("qwen2.block_count");
+        options.LayerDrop?.Validate(sourceLayers);
+        var kept = options.LayerDrop?.KeptLayers(sourceLayers);
         return new DecoderDimensions(
-            file.GetRequiredInt32("qwen2.block_count"),
+            kept?.Length ?? sourceLayers,
             file.GetRequiredInt32("qwen2.embedding_length"),
             file.GetRequiredInt32("qwen2.feed_forward_length"),
             file.GetRequiredInt32("qwen2.attention.head_count"),
@@ -27,7 +30,9 @@ internal static class Qwen2ModelComposition
             file.GetRequiredSingle("qwen2.attention.layer_norm_rms_epsilon"),
             scaling,
             options.KvPageActivation,
-            options.KvGrowthPositions);
+            options.KvGrowthPositions,
+            options.LayerDrop,
+            kept);
     }
 
     /// <summary>The model context limit: trained, or extended by an explicit scaling profile (ADR-013).</summary>
@@ -38,7 +43,8 @@ internal static class Qwen2ModelComposition
     {
         var graph = Qwen2GraphBuilder.Build(
             file,
-            dimensions.LayerCount,
+            file.GetRequiredInt32("qwen2.block_count"),
+            dimensions.LayerDrop,
             dimensions.HiddenSize,
             dimensions.FeedForwardSize,
             dimensions.KvWidth,
@@ -73,19 +79,48 @@ internal static class Qwen2ModelComposition
                 : $"Requested context {requested} exceeds {limit}, the trained context {trained} extended by {scaling.Name}.");
     }
 
-    /// <summary>Prefaults densely read weights; the token embedding is read by row and stays lazily mapped.</summary>
-    public static void PrefetchWeights(GgufFile file, CpuWorkerPool? pool)
+    /// <summary>
+    /// Prefaults densely read weights. The token embedding is read by row and stays lazily mapped, and the tensors of
+    /// dropped layers (ADR-019) are never touched, so their pages are never loaded.
+    /// </summary>
+    public static void PrefetchWeights(GgufFile file, DecoderDimensions dimensions, CpuWorkerPool? pool)
     {
         if (pool is null)
         {
             return;
         }
 
-        var work = new MappedPagePrefetchWork(file.GetTensorDataRanges(["token_embd.weight"]), pool.ThreadCount);
+        var work = new MappedPagePrefetchWork(PrefetchRanges(file, dimensions), pool.ThreadCount);
         if (work.PageCount > 0)
         {
             _ = pool.Start(work);
         }
+    }
+
+    /// <summary>The managed and native CPU kernels multiply Q8_0 matrices only; K-quant models run on the reference and Metal backends.</summary>
+    private static void RequireQ8Matrices(Qwen2Weights weights, KernelBackend backend)
+    {
+        var matrices = weights.Layers.SelectMany(layer => new[]
+        {
+            layer.Query, layer.Key, layer.Value, layer.AttentionOutput, layer.FeedForwardGate, layer.FeedForwardUp,
+            layer.FeedForwardDown,
+        }).Append(weights.TokenEmbedding).Append(weights.Output);
+        if (matrices.FirstOrDefault(matrix => matrix.Type != 8) is { } other)
+        {
+            throw new NotSupportedException(
+                $"The {KernelBackendNames.ToName(backend)} CPU kernels multiply Q8_0 matrices; '{other.Name}' is GGML type {other.Type}. " +
+                "K-quant models run on the reference and Metal backends (ADR-021).");
+        }
+    }
+
+    /// <summary>The mapped ranges prefetch touches: every tensor except the token embedding and dropped layers.</summary>
+    internal static IReadOnlyList<(nint Start, long Length)> PrefetchRanges(GgufFile file, DecoderDimensions dimensions)
+    {
+        var dropped = dimensions.LayerDrop?.Layers.Select(layer => $"blk.{layer}.").ToArray() ?? [];
+        return file.GetTensorDataRanges([
+            "token_embd.weight",
+            .. file.Tensors.Keys.Where(name => dropped.Any(prefix => name.StartsWith(prefix, StringComparison.Ordinal))),
+        ]);
     }
 
     public static IDecoderExecutor CreateExecutor(
@@ -118,6 +153,7 @@ internal static class Qwen2ModelComposition
                 gpuCapacity);
         }
 
+        RequireQ8Matrices(weights, options.KernelBackend);
         var (kernel, profile) = options.KernelBackend switch
         {
             KernelBackend.Managed => ((Q8MatrixKernel)ManagedQ8Kernel.CreateBest(), "managed-simd-qwen2-q8_0xq8_0"),

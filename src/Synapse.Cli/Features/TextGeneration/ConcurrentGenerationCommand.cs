@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ManagedCode.Synapse.Cli.Features.LayerDrop;
 using ManagedCode.Synapse.Runtime.Features.ModelLoading;
 using ManagedCode.Synapse.Runtime.Features.TextGeneration;
 
@@ -20,6 +21,11 @@ internal static class ConcurrentGenerationCommand
             var subjectTimer = Stopwatch.StartNew();
             var cpuStart = process.TotalProcessorTime;
             var loadTimer = Stopwatch.StartNew();
+            if (options.LayerDrop is { } drop)
+            {
+                Console.Error.WriteLine(LayerDropArguments.Describe(drop));
+            }
+
             using var model = ModelLoader.Load(
                 options.ModelPath,
                 new ModelLoadOptions
@@ -31,6 +37,7 @@ internal static class ConcurrentGenerationCommand
                     RopeScaling = options.RopeScaling,
                     KvCachePrecision = options.KvCachePrecision,
                     KvPageActivation = options.KvPages,
+                    LayerDrop = options.LayerDrop,
                 });
             loadTimer.Stop();
             var wallTimer = Stopwatch.StartNew();

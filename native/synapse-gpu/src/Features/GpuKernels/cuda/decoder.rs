@@ -4,14 +4,15 @@
 use std::ffi::c_void;
 
 use super::CudaContext;
+use super::admission::admit;
 use super::driver::{CuDevicePtr, CuFunction};
 use crate::gpu_kernels::GpuDeviceInfo;
-use crate::gpu_kernels::decoder::{BatchToken, DecoderPlan, KvPrecision};
+use crate::gpu_kernels::decoder::{BatchToken, DecoderPlan};
 use crate::gpu_kernels::error::GpuError;
 use crate::gpu_kernels::params::{MAX_SLOTS, SlotTable};
 use crate::gpu_kernels::schedule::{RUN_TOKENS, plan_attention};
 use crate::gpu_kernels::step::{
-    Activations, Binding, Kernel, StepBackend, StepInputs, encode_step,
+    Activations, Binding, Kernel, StepBackend, StepInputs, WeightSegment, encode_step,
 };
 
 /// One attention tile of FP32 keys after the last value position (as on Metal).
@@ -26,7 +27,8 @@ pub struct DeviceBuffer {
 pub struct CudaDecoder {
     context: CudaContext,
     plan: DecoderPlan,
-    weights: DeviceBuffer,
+    /// The whole weight file on the device, as one segment; CUDA does not map dropped layers separately yet.
+    weights: [WeightSegment<DeviceBuffer>; 1],
     cosines: DeviceBuffer,
     sines: DeviceBuffer,
     activations: Activations<DeviceBuffer>,
@@ -46,12 +48,7 @@ impl CudaDecoder {
         cosines: &[f32],
         sines: &[f32],
     ) -> Result<Self, GpuError> {
-        if plan.shape.kv_precision != KvPrecision::F32 {
-            return Err(GpuError::Unavailable(
-                "the FP16 KV profile is implemented for Metal only; CUDA uses FP32 KV".into(),
-            ));
-        }
-
+        admit(&plan)?;
         if cosines.len() != plan.rope_floats || sines.len() != plan.rope_floats {
             return Err(GpuError::invalid(
                 "RoPE tables must hold context * head_dim / 2 floats",
@@ -73,7 +70,12 @@ impl CudaDecoder {
                 .collect(),
             context,
             plan,
-            weights: weights_buffer,
+            weights: [WeightSegment {
+                first: 0,
+                end: weights.len() as u64,
+                buffer: weights_buffer,
+                buffer_offset: 0,
+            }],
             cosines: cosine_buffer,
             sines: sine_buffer,
             activations,
@@ -113,7 +115,6 @@ impl CudaDecoder {
         let inputs = StepInputs {
             plan: &self.plan,
             weights: &self.weights,
-            weights_offset: 0,
             cosines: &self.cosines,
             sines: &self.sines,
             activations: &self.activations,
@@ -203,7 +204,7 @@ impl Drop for CudaDecoder {
     fn drop(&mut self) {
         let activations = &self.activations;
         let buffers = [
-            &self.weights,
+            &self.weights[0].buffer,
             &self.cosines,
             &self.sines,
             &activations.tokens,
@@ -269,13 +270,14 @@ impl Launcher<'_> {
     const fn function(&self, kernel: Kernel) -> CuFunction {
         let functions = &self.context.functions;
         match kernel {
-            Kernel::Embed => functions.embed,
+            // CudaDecoder::new admits Q8_0 weights only, so every matrix kernel here is the Q8_0 one.
+            Kernel::Embed(_) => functions.embed,
             Kernel::RmsNorm => functions.rms_norm,
-            Kernel::Matvec(1) => functions.matvec[0],
-            Kernel::Matvec(2) => functions.matvec[1],
-            Kernel::Matvec(4) => functions.matvec[2],
-            Kernel::Matvec(_) => functions.matvec[3],
-            Kernel::Gemm => functions.gemm,
+            Kernel::Matvec(_, 1) => functions.matvec[0],
+            Kernel::Matvec(_, 2) => functions.matvec[1],
+            Kernel::Matvec(_, 4) => functions.matvec[2],
+            Kernel::Matvec(_, _) => functions.matvec[3],
+            Kernel::Gemm(_) => functions.gemm,
             Kernel::RopeKv(_) => functions.rope_kv,
             Kernel::Attention(_) => functions.attention,
             Kernel::AttentionDecode(_) => functions.attention_decode,

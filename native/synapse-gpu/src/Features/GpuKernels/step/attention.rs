@@ -1,12 +1,14 @@
 //! Attention dispatches: prompt-run blocks in watchdog-safe groups, then decode blocks with key splits.
 
 use super::{Binding, Kernel, StepBackend, StepInputs};
-use crate::gpu_kernels::decoder::HEAD_DIM;
+use crate::gpu_kernels::decoder::DecoderShape;
 use crate::gpu_kernels::error::GpuError;
 use crate::gpu_kernels::params::AttentionArgs;
 
-/// `1 / sqrt(HEAD_DIM)`, exact for a head dimension of 64 and equal to the reference operator.
-const ATTENTION_SCALE: f32 = 0.125;
+/// `1 / sqrt(head_dim)`, computed as the reference operator computes it (exactly 0.125 at head dimension 64).
+fn attention_scale(shape: &DecoderShape) -> f32 {
+    1.0 / f32::from(u16::try_from(shape.head_dim).unwrap_or(u16::MAX)).sqrt()
+}
 /// Query-key pairs of prompt-run attention per submission: about 40 ms on an M2 Pro, well under the display
 /// watchdog, and enough blocks (about 47 at 88k keys) to keep every core busy for whole waves.
 const ATTENTION_GROUP_PAIRS: u64 = 1 << 25;
@@ -31,7 +33,7 @@ pub(super) fn attention<S: StepBackend>(
         splits: 1,
         block_base: 0,
         pad: 0,
-        scale: ATTENTION_SCALE,
+        scale: attention_scale(&shape),
         pad0: 0,
         pad1: 0,
         pad2: 0,
@@ -138,6 +140,6 @@ fn decode_blocks<S: StepBackend>(
             Binding::whole(3, &a.attention),
         ],
         [1, 64, plan.single_blocks as usize],
-        [HEAD_DIM as usize, 1, 1],
+        [inputs.plan.shape.head_dim as usize, 1, 1],
     )
 }

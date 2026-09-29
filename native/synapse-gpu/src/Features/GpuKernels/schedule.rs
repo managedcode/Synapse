@@ -16,8 +16,6 @@ pub const METAL_RUN_TOKENS: usize = 8;
 pub const ATTENTION_KEYS: u32 = 32;
 /// Block-split pairs the partial buffer holds.
 pub const PARTIAL_BLOCKS: u32 = 512;
-/// Floats per partial row: 64 output values, the running maximum, and the running sum.
-pub const PARTIAL_ROW_FLOATS: u32 = 66;
 const TARGET_GROUPS: u32 = 256;
 const MIN_SPLIT_KEYS: u32 = 256;
 

@@ -24,7 +24,8 @@ internal static class Qwen2LayerGraphBuilder
         int keyValueHeads,
         int headDimension,
         RopeAttributes rope,
-        float normalizationEpsilon)
+        float normalizationEpsilon,
+        ModelLoading.LayerDropProfile? dropped)
     {
         var nodes = new List<NodeId>();
         var weights = new List<TensorId>();
@@ -58,6 +59,7 @@ internal static class Qwen2LayerGraphBuilder
             nodes,
             weights);
         context.AddRegion(
+            Activation(dropped, hidden, output),
             nodes,
             [hidden.Id, position.Id],
             [output.Id],
@@ -69,6 +71,18 @@ internal static class Qwen2LayerGraphBuilder
             $"Layer:{layer}");
         return output;
     }
+
+    /// <summary>
+    /// Dense blocks always run. A dropped block (ADR-019) is a session-wide profile decision whose output bypasses to
+    /// its hidden input; its provenance is the drop's evidence or, for experimental runs, its request digest.
+    /// </summary>
+    private static RegionActivation Activation(ModelLoading.LayerDropProfile? dropped, GraphValue hidden, GraphValue output) =>
+        dropped is null
+            ? new RegionActivation(new AlwaysActive(), new StructuralProvenance(), new NotSkippable())
+            : new RegionActivation(
+                new ProfileDecision(dropped.Name),
+                new ApproximateProvenance(new ContentHash(dropped.ProvenanceSha256)),
+                new BypassOutputs([new ValueBypass(output.Id, hidden.Id)]));
 
     private static GraphValue AddAttention(
         Qwen2GraphBuildContext context,

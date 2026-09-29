@@ -109,6 +109,8 @@ internal static class GraphWeightVerifier
     {
         WeightEncoding.Fp32 => storage == StorageDataType.Fp32,
         WeightEncoding.GgmlQ8Zero => storage == StorageDataType.BlockQ8,
+        WeightEncoding.GgmlQ4K => storage == StorageDataType.BlockQ4,
+        WeightEncoding.GgmlQ6K => storage == StorageDataType.BlockQ6,
         _ => false,
     };
 

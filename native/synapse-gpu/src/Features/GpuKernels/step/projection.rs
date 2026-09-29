@@ -1,16 +1,17 @@
 //! Projections: decode tokens on the batch-invariant matrix-vector kernel, prompt runs on the tiled GEMM.
 
 use super::{Binding, Kernel, StepBackend};
+use crate::gpu_kernels::decoder::Encoding;
 use crate::gpu_kernels::error::GpuError;
 use crate::gpu_kernels::params::{MatmulArgs, MatmulSegment};
 
-const MATVEC_ROWS: u32 = 2;
 const MATVEC_THREADS: usize = 128;
 const GEMM_ROWS: u32 = 64;
 const GEMM_TOKENS: u32 = 32;
 const GEMM_THREADS: usize = 128;
-/// Prompt runs of at most this many tokens stay on the matrix-vector kernel.
-const GEMM_MINIMUM_TOKENS: u32 = 8;
+/// Prompt runs of at most this many tokens stay on the matrix-vector kernel. Longer runs, including speculative
+/// verification steps of five or more tokens (ADR-020), read each weight tile once on the GEMM.
+const GEMM_MINIMUM_TOKENS: u32 = 4;
 
 /// One projection: up to three weight segments over `span = (tokens, first prompt-run token)`.
 pub(super) struct Projection<'a> {
@@ -19,6 +20,8 @@ pub(super) struct Projection<'a> {
     pub span: (u32, u32),
     pub strides: [u32; 2],
     pub accumulate: bool,
+    /// The one encoding of every segment's weights (ADR-021).
+    pub encoding: Encoding,
 }
 
 impl Projection<'_> {
@@ -83,7 +86,7 @@ fn matrix_vector<S: StepBackend>(
         _ => 8,
     };
     backend.launch(
-        Kernel::Matvec(per_group),
+        Kernel::Matvec(projection.encoding, per_group),
         &projection.args(count),
         &[
             Binding::whole(1, weights),
@@ -91,7 +94,9 @@ fn matrix_vector<S: StepBackend>(
             Binding::whole(3, output),
         ],
         [
-            projection.total_rows().div_ceil(MATVEC_ROWS) as usize,
+            projection
+                .total_rows()
+                .div_ceil(backend.matvec_rows(projection.encoding, per_group)) as usize,
             count.div_ceil(per_group) as usize,
             1,
         ],
@@ -110,7 +115,7 @@ fn gemm<S: StepBackend>(
     let rest = projection.span.0 - first;
     let [in_stride, out_stride] = projection.strides.map(|stride| stride as usize * 4);
     backend.launch(
-        Kernel::Gemm,
+        Kernel::Gemm(projection.encoding),
         &projection.args(rest),
         &[
             Binding::whole(1, weights),

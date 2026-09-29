@@ -81,6 +81,11 @@ internal static class GraphRegionSkipVerifier
 
         foreach (var slotId in region.StateWrites)
         {
+            if (SessionWideInternalState(context, region, slotId))
+            {
+                continue;
+            }
+
             if (!context.StateSlots.TryGetValue(slotId, out var slot) || !slot.PositionHolesAllowed)
             {
                 AddInvalid(context, region, $"skippable state writer requires position holes for slot {slotId}");
@@ -96,6 +101,14 @@ internal static class GraphRegionSkipVerifier
             }
         }
     }
+
+    /// <summary>
+    /// A profile decision holds for the whole session (ADR-019), so its region runs for every position or for none.
+    /// State that only the region itself reads can then never show a position hole.
+    /// </summary>
+    private static bool SessionWideInternalState(GraphVerificationContext context, RegionDescriptor region, StateSlotId slotId) =>
+        region.Activation.Decision is ProfileDecision &&
+        context.Graph.Nodes.Where(node => node.StateReads.Contains(slotId)).All(node => region.Nodes.Contains(node.Id));
 
     private static bool SameShape(TensorShape left, TensorShape right) =>
         left.Rank == right.Rank && left.Dimensions.SequenceEqual(right.Dimensions);
