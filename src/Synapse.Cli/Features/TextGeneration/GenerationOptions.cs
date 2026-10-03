@@ -22,7 +22,7 @@ internal sealed record GenerationOptions(
     SpeculationArguments? Speculation = null)
 {
     public static string Usage =>
-        "Usage: synapse generate --model <model.gguf> (--tokens <id,id,...> | --tokens-file <path>) " +
+        "Usage: synapse generate --model <model.synapse> (--tokens <id,id,...> | --tokens-file <path>) " +
         "[--max-tokens <count>] [--context-size <count>] [--threads <count>] " +
         $"[--backend <{KernelBackendNames.Usage}>] [--concurrent-requests <count>] " +
         "[--rope-scaling yarn:<factor>:<trained-context>] [--kv-precision f32|f16] " +

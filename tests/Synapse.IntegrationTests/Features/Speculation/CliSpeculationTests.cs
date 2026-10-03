@@ -2,6 +2,7 @@ using System.Text.Json;
 using ManagedCode.Synapse.IntegrationTests.Features.GpuKernels;
 using ManagedCode.Synapse.IntegrationTests.Features.LayerDrop;
 using ManagedCode.Synapse.IntegrationTests.Features.LongContext;
+using ManagedCode.Synapse.Runtime.Features.ModelPackages;
 
 namespace ManagedCode.Synapse.IntegrationTests.Features.Speculation;
 
@@ -15,12 +16,14 @@ public sealed class CliSpeculationTests
         var model = TinyQwen2Gguf.Write(
             new TinyQwen2Gguf.Shape(Layers: 4, Heads: 2, KeyValueHeads: 1, HeadDimension: 64, FeedForward: 256, Vocabulary: 320, Context: 512),
             seed: 22);
+        var compiled = Path.ChangeExtension(model, ".synapse");
         try
         {
-            var plain = await RunAsync("--model", model, "--tokens", "1,2,3,4,5,6", "--max-tokens", "24");
+            _ = await CompiledPackageCompiler.CompileAsync(model, compiled);
+            var plain = await RunAsync("--model", compiled, "--tokens", "1,2,3,4,5,6", "--max-tokens", "24");
             var speculative = await RunAsync(
-                "--model", model, "--tokens", "1,2,3,4,5,6", "--max-tokens", "24", "--draft-drop-layers", "2", "--draft-tokens", "4");
-            var malformed = await RunAsync("--model", model, "--tokens", "1,2", "--draft-tokens", "4");
+                "--model", compiled, "--tokens", "1,2,3,4,5,6", "--max-tokens", "24", "--draft-drop-layers", "2", "--draft-tokens", "4");
+            var malformed = await RunAsync("--model", compiled, "--tokens", "1,2", "--draft-tokens", "4");
 
             await Assert.That(plain.ExitCode).IsEqualTo(0).Because(plain.Error);
             await Assert.That(speculative.ExitCode).IsEqualTo(0).Because(speculative.Error);
@@ -36,6 +39,7 @@ public sealed class CliSpeculationTests
         finally
         {
             File.Delete(model);
+            File.Delete(compiled);
         }
     }
 

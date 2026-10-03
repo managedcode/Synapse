@@ -13,6 +13,17 @@ Design references were studied from source (license noted, nothing copied):
 
 ## Steps
 
+2026-10-03 K-quant checkpoint: a real M2 Pro profile identifies Q4_K/Q6_K
+GEMM as the dominant 512-token prefill cost. Float prefetch, packed prefetch
+and vector staging each matched all 17 output token IDs but regressed median
+TTFT in five alternating pairs (3,507 -> 3,638 ms; 3,217 -> 3,756 ms;
+3,237 -> 3,333 ms). All shader candidates were reverted; source matches the
+original baseline. Significant CPU/memory contention and five pairs prevent
+a release verdict. Four retained `MetalKQuantGemmTests` cover super-block,
+partial-tile and chunk boundaries with FP32/FP16 KV. This checkpoint leaves
+GPU.5 and GPU.9 open. Rejected raw files and gate results are listed in
+`benchmarks/results/2026-10-03-performance-preparation-evidence.md`.
+
 - [x] CTX.1 `TASK-CTX-001`: no silent context clamp. The red state was the compile failure of
   `ContextBeyondTrainedLengthFailsExplicitly`; it is green now.
 - [x] CTX.2 `TASK-CTX-002`: explicit YaRN profile, one C# frequency source for every backend, and the

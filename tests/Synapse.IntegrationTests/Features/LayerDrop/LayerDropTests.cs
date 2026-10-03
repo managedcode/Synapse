@@ -146,7 +146,7 @@ public sealed class LayerDropTests
         }
     }
 
-    private static Qwen2Model Load(string path, KernelBackend backend, LayerDropProfile? drop) => (Qwen2Model)ModelLoader.Load(
+    private static Qwen2Model Load(string path, KernelBackend backend, LayerDropProfile? drop) => (Qwen2Model)ModelLoader.LoadSourceForValidation(
         path,
         new ModelLoadOptions
         {

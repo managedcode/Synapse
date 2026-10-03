@@ -4,6 +4,7 @@ using ManagedCode.Synapse.Runtime.Features.CpuKernels;
 using ManagedCode.Synapse.Runtime.Features.ModelLoading;
 using ManagedCode.Synapse.Runtime.Features.ModelLoading.Gguf;
 using ManagedCode.Synapse.Runtime.Features.Speculation;
+using ManagedCode.Synapse.Runtime.Features.Tokenization;
 
 namespace ManagedCode.Synapse.Runtime.Features.TextGeneration.Qwen2;
 
@@ -19,10 +20,12 @@ public sealed class Qwen2Model : ITextGenerationModel
     private readonly ContinuousBatchScheduler? _scheduler;
     private readonly object _executionGate = new();
     private readonly DirectSessionPrefix _direct;
+    private readonly Lazy<ITextTokenizer> _tokenizer;
 
     private Qwen2Model(GgufFile file, ModelLoadOptions options)
     {
         _file = file;
+        _tokenizer = new Lazy<ITextTokenizer>(() => TextTokenizers.FromGguf(file));
         Dimensions = Qwen2ModelComposition.ReadDimensions(file, options);
         _direct = new DirectSessionPrefix(options.ReusePromptPrefix);
         var pool = options.KernelBackend == KernelBackend.Reference ? null : new CpuWorkerPool(options.MaximumParallelism);
@@ -94,6 +97,9 @@ public sealed class Qwen2Model : ITextGenerationModel
     /// <summary>Verified portable dense graph corresponding to this loaded model.</summary>
     public ModelGraph Graph { get; }
 
+    /// <inheritdoc />
+    public ITextTokenizer CreateTokenizer() => _tokenizer.Value;
+
     internal DecoderDimensions Dimensions { get; }
 
     /// <summary>Bytes of KV currently allocated across the executor's slots (ADR-017); waits for a running step.</summary>
@@ -108,30 +114,26 @@ public sealed class Qwen2Model : ITextGenerationModel
         }
     }
 
-    /// <summary>Loads a supported Qwen2 Q8_0 GGUF file through a read-only memory map.</summary>
+    /// <summary>Loads a separately compiled Qwen2 .synapse package through a read-only memory map.</summary>
     public static Qwen2Model Load(string modelPath, int contextSize = 512) =>
         Load(modelPath, contextSize, Environment.ProcessorCount);
 
-    /// <summary>Loads a supported Qwen2 Q8_0 GGUF with an explicit CPU parallelism limit.</summary>
+    /// <summary>Loads a compiled Qwen2 package with an explicit CPU parallelism limit.</summary>
     public static Qwen2Model Load(string modelPath, int contextSize, int maximumParallelism) =>
         Load(modelPath, new ModelLoadOptions { ContextSize = contextSize, MaximumParallelism = maximumParallelism });
 
-    /// <summary>Loads a supported Qwen2 Q8_0 GGUF with explicit limits and CPU kernel backend.</summary>
-    public static Qwen2Model Load(string modelPath, ModelLoadOptions options)
-    {
-        ArgumentNullException.ThrowIfNull(options);
-        options.Validate();
-        var file = GgufFile.Open(modelPath);
-        try
-        {
-            return new Qwen2Model(file, options);
-        }
-        catch
-        {
-            file.Dispose();
-            throw;
-        }
-    }
+    /// <summary>Loads a compiled Qwen2 package with explicit limits and CPU kernel backend.</summary>
+    public static Qwen2Model Load(string modelPath, ModelLoadOptions options) =>
+        (Qwen2Model)ModelLoader.Load(modelPath, options);
+
+    internal static Qwen2Model LoadSourceForValidation(string modelPath, int contextSize = 512) =>
+        (Qwen2Model)ModelLoader.LoadSourceForValidation(modelPath, contextSize);
+
+    internal static Qwen2Model LoadSourceForValidation(string modelPath, int contextSize, int maximumParallelism) =>
+        (Qwen2Model)ModelLoader.LoadSourceForValidation(modelPath, contextSize, maximumParallelism);
+
+    internal static Qwen2Model LoadSourceForValidation(string modelPath, ModelLoadOptions options) =>
+        (Qwen2Model)ModelLoader.LoadSourceForValidation(modelPath, options);
 
     internal static Qwen2Model Load(GgufFile file, ModelLoadOptions options) => new(file, options);
 

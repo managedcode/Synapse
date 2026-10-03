@@ -95,7 +95,7 @@ public sealed class ConcurrentGenerationTests
     }
 
     private static Qwen2Model Load(KernelBackend backend, int maximumSessions, int contextSize = 64) =>
-        (Qwen2Model)ModelLoader.Load(
+        (Qwen2Model)ModelLoader.LoadSourceForValidation(
             ReferenceBenchmarkFixture.GetModelPath(),
             new ModelLoadOptions
             {

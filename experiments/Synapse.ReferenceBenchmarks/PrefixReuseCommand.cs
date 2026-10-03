@@ -36,7 +36,7 @@ internal static class PrefixReuseCommand
         var runs = new List<PrefixReuseRun>();
         foreach (var reuse in new[] { false, true })
         {
-            using var loaded = ModelLoader.Load(model, new ModelLoadOptions
+            using var loaded = ModelLoader.Load(PreparedBenchmarkModel.Require(model), new ModelLoadOptions
             {
                 ContextSize = context,
                 KernelBackend = KernelBackendNames.TryParse(values.GetValueOrDefault("--backend", "metal"), out var backend)

@@ -73,7 +73,7 @@ public sealed class CliBackendOptionTests
         [
             Path.Combine(AppContext.BaseDirectory, "synapse.dll"),
             "generate",
-            "--model", ReferenceBenchmarkFixture.GetModelPath(),
+            "--model", await ReferenceBenchmarkFixture.GetCompiledModelPathAsync(),
             "--tokens", string.Join(',', ReferenceBenchmarkFixture.PromptTokens),
             "--max-tokens", "2",
             "--context-size", "64",

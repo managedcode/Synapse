@@ -1,4 +1,5 @@
 using ManagedCode.Synapse.Contracts.Features.GraphExecution;
+using ManagedCode.Synapse.Runtime.Features.Tokenization;
 
 namespace ManagedCode.Synapse.Runtime.Features.TextGeneration;
 
@@ -16,6 +17,9 @@ public interface ITextGenerationModel : IDisposable
 
     /// <summary>Verified family-independent model graph.</summary>
     ModelGraph Graph { get; }
+
+    /// <summary>Returns the model's cached tokenizer from its verified mapping; unsupported tokenizers fail explicitly.</summary>
+    ITextTokenizer CreateTokenizer();
 
     /// <summary>Runs bounded greedy generation from token IDs.</summary>
     TextGenerationResult Generate(IReadOnlyList<int> promptTokens, int maximumNewTokens);

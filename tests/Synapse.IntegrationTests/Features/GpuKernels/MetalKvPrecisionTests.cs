@@ -15,7 +15,7 @@ public sealed class MetalKvPrecisionTests
     public async Task MetalFp16KvMatchesPinnedContinuationAndTracksReference()
     {
         GpuHardware.RequireMetal();
-        using var reference = (Qwen2Model)ModelLoader.Load(
+        using var reference = (Qwen2Model)ModelLoader.LoadSourceForValidation(
             ReferenceBenchmarkFixture.GetModelPath(),
             new ModelLoadOptions { ContextSize = 64, MaximumParallelism = 8, KernelBackend = KernelBackend.Reference });
         using var half = LoadFp16(contextSize: 64);
@@ -49,7 +49,7 @@ public sealed class MetalKvPrecisionTests
     [Test]
     public async Task Fp16KvOnCpuFailsExplicitly()
     {
-        var exception = await Assert.That(() => ModelLoader.Load(
+        var exception = await Assert.That(() => ModelLoader.LoadSourceForValidation(
                 ReferenceBenchmarkFixture.GetModelPath(),
                 new ModelLoadOptions { ContextSize = 64, KernelBackend = KernelBackend.Managed, KvCachePrecision = KvCachePrecision.Fp16 }))
             .Throws<NotSupportedException>();
@@ -58,7 +58,7 @@ public sealed class MetalKvPrecisionTests
     }
 
     private static Qwen2Model LoadFp16(int contextSize) =>
-        (Qwen2Model)ModelLoader.Load(
+        (Qwen2Model)ModelLoader.LoadSourceForValidation(
             ReferenceBenchmarkFixture.GetModelPath(),
             new ModelLoadOptions
             {

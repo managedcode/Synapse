@@ -110,6 +110,17 @@ jobs:
           dotnet run --project src/Synapse.Cli --configuration Release --no-build -- \
             model fetch --set "${SYNAPSE_EMBEDDING_MODEL_SET}" --output "${SYNAPSE_MODEL_ROOT}"
 
+      - name: Prepare Synapse model before runtime checks
+        shell: bash
+        run: |
+          source_model="${SYNAPSE_MODEL_ROOT}/${SYNAPSE_GGUF_MODEL_ID}/${SYNAPSE_GGUF_MODEL_FILE}"
+          prepared_model="${source_model%.gguf}.synapse"
+          if [[ -f "${prepared_model}" ]]; then
+            dotnet run --project src/Synapse.Cli --configuration Release --no-build -- model inspect --model "${prepared_model}"
+          else
+            dotnet run --project src/Synapse.Cli --configuration Release --no-build -- model compile --source "${source_model}" --output "${prepared_model}"
+          fi
+
       - name: Restore Foundry Local anchor model cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:

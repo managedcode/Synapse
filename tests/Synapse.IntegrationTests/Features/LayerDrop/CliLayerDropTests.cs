@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using ManagedCode.Synapse.IntegrationTests.Features.GpuKernels;
 using ManagedCode.Synapse.IntegrationTests.Features.LongContext;
+using ManagedCode.Synapse.Runtime.Features.ModelPackages;
 
 namespace ManagedCode.Synapse.IntegrationTests.Features.LayerDrop;
 
@@ -15,21 +16,23 @@ public sealed class CliLayerDropTests
         var model = TinyQwen2Gguf.Write(
             new TinyQwen2Gguf.Shape(Layers: 4, Heads: 2, KeyValueHeads: 1, HeadDimension: 64, FeedForward: 256, Vocabulary: 320, Context: 512),
             seed: 21);
+        var compiled = Path.ChangeExtension(model, ".synapse");
         var evidence = Path.Combine(Path.GetTempPath(), $"synapse-drop-{Guid.NewGuid():N}.json");
         var tokens = Path.Combine(Path.GetTempPath(), $"synapse-drop-{Guid.NewGuid():N}.ids");
         await File.WriteAllTextAsync(evidence, /*lang=json,strict*/ """{ "qualifiedDrop": { "layers": [2] } }""");
         await File.WriteAllTextAsync(tokens, string.Join('\n', Enumerable.Range(0, 80).Select(index => index * 7 % 320)));
         try
         {
+            _ = await CompiledPackageCompiler.CompileAsync(model, compiled);
             var experimental = await RunAsync(
-                "generate", "--model", model, "--tokens", "1,2,3,4", "--max-tokens", "3", "--drop-layers", "1,2");
+                "generate", "--model", compiled, "--tokens", "1,2,3,4", "--max-tokens", "3", "--drop-layers", "1,2");
             var qualified = await RunAsync(
-                "generate", "--model", model, "--tokens", "1,2,3,4", "--max-tokens", "3", "--drop-profile", evidence);
+                "generate", "--model", compiled, "--tokens", "1,2,3,4", "--max-tokens", "3", "--drop-profile", evidence);
             var scored = await RunAsync(
-                "score", "--model", model, "--tokens-file", tokens, "--context-size", "64", "--backend", "managed",
+                "score", "--model", compiled, "--tokens-file", tokens, "--context-size", "64", "--backend", "managed",
                 "--drop-layers", "3");
             var invalid = await RunAsync(
-                "generate", "--model", model, "--tokens", "1,2", "--drop-layers", "0,1,2,3");
+                "generate", "--model", compiled, "--tokens", "1,2", "--drop-layers", "0,1,2,3");
 
             await Assert.That(experimental.ExitCode).IsEqualTo(0).Because(experimental.Error);
             await Assert.That(Subject(experimental.Output)).EndsWith("+drop2x");
@@ -44,6 +47,7 @@ public sealed class CliLayerDropTests
         finally
         {
             File.Delete(model);
+            File.Delete(compiled);
             File.Delete(evidence);
             File.Delete(tokens);
         }

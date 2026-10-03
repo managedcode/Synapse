@@ -114,7 +114,7 @@ internal sealed record SweepModel(long WeightsBytes, int Layers, int KeyValueHea
 {
     public static SweepModel Describe(string modelPath)
     {
-        using var model = (Qwen2Model)ModelLoader.Load(modelPath,
+        using var model = (Qwen2Model)ModelLoader.Load(PreparedBenchmarkModel.Require(modelPath),
             new ModelLoadOptions { ContextSize = 16, KernelBackend = KernelBackend.Reference, MaximumParallelism = 1 });
         return new SweepModel(new FileInfo(modelPath).Length, model.LayerCount, model.KeyValueHeads,
             model.HiddenSize / model.AttentionHeads);

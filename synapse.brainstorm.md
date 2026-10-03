@@ -9,6 +9,38 @@ Ignoring generated `benchmarks/` output requires relocating the small tracked
 scenario/configuration and recorded parser-fixture inputs used by clean CI.
 
 
+## 2026-10-03 model preparation and performance investigation
+
+- Compile supported Qwen GGUF sources into a deterministic, lossless,
+  memory-mapped `.synapse` package with verified provenance and graph-ordered
+  aligned tensors. This is an initial executable package slice; general
+  SafeTensors family import and Execution IR compilation stay planned.
+- Test four adjacent weights replaced by their mean as an explicitly
+  approximate encoding. The direct linear computes one input-group sum and
+  one multiplication per weight group. It needs measured distortion and
+  held-out model quality before runtime use; arbitrary dense matrices do not
+  have interchangeable weights.
+- ZoneTree remains the durable metadata/index store. Its compaction and
+  compressed storage inform immutable chunk/index layout; they do not prove
+  that arithmetic averaging preserves model outputs.
+- Remove per-element temporary arrays in scalar source decoding, preserving
+  full validation before output writes. This targets model preparation, not
+  token decode throughput.
+- Profile the real local Metal K-quant path before changing kernels. Preserve
+  paired raw measurements and qualify numerical parity; unavailable device
+  access cannot be counted as passing hardware verification.
+
+Decisions after measurement: keep exact whole-tensor source decoding with
+SIMD finite validation (30 paired BF16 probes, 6.38735 -> 0.108675 ms,
+identical bits and zero allocations); require explicit
+preparation before runtime and reuse the loaded tokenizer. Leave four-weight
+averaging outside executable profiles because the real-weight synthetic
+output error energy is 0.7813 versus Q4's 0.01586. Revert all three slower
+Metal GEMM pilots. Benchmark identity cannot be cached by path or file
+timestamps: source and package are revalidated before each measured child.
+The prepared package startup scan remains explicit; no generation-speed
+claim follows from its layout alone.
+
 Date: 2026-09-27. Status: accepted for the bootstrap slice.
 
 ## Decisions
@@ -345,3 +377,13 @@ stays (owner decision). The owner commits.
 - **Update the same day (ADR-021):** Q4_K/Q6_K now run on Metal. The 7B Q4_K_M peaks at 4.2 GB in
   Synapse (llama.cpp 4.8 GB) with no measured perplexity loss against Q8_0. Decode is 0.64× llama.cpp's, which is
   the next kernel target.
+# Format-neutral conversion checkpoint (2026-10-03)
+
+The user wants one explicit source-to-`.synapse` slice covering GGUF, ONNX and
+other formats, with native graphs and dynamic capabilities. Start with GGUF,
+ONNX and SafeTensors; weight-only sources require an inert graph description.
+Separate source adapters, exact graph preparation, artifact publication and
+execution. Preserve version-1 Qwen packages while adding a native graph v2.
+Bound dynamic batches and execute real reference math before describing support.
+Identity/dead-node elimination is safe; adaptive scheduling, GPU lowering,
+MoE/stateful graphs and approximate profiles require their own qualification.

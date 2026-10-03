@@ -46,7 +46,7 @@ public sealed class MetalHeadDimensionTests
         }
     }
 
-    private static Qwen2Model Load(string path, KernelBackend backend, KvCachePrecision precision) => (Qwen2Model)ModelLoader.Load(
+    private static Qwen2Model Load(string path, KernelBackend backend, KvCachePrecision precision) => (Qwen2Model)ModelLoader.LoadSourceForValidation(
         path,
         new ModelLoadOptions
         {

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ManagedCode.Synapse.Runtime.Features.ModelPackages.Catalog;
+using ManagedCode.Synapse.Cli.Features.ModelConversion;
 
 namespace ManagedCode.Synapse.Cli.Features.ModelPackages;
 
@@ -16,6 +17,16 @@ internal static class ModelCommand
 
         try
         {
+            if (arguments[0] is "convert" or "run" or "formats" or "inspect")
+            {
+                return await ConversionCommand.RunAsync(arguments).ConfigureAwait(false);
+            }
+
+            if (arguments[0] == "compile")
+            {
+                return await CompiledModelCommand.RunAsync(arguments).ConfigureAwait(false);
+            }
+
             var options = ModelCommandOptions.Parse(arguments);
             if (options is null)
             {
@@ -61,7 +72,12 @@ internal static class ModelCommand
     private static void PrintUsage() => Console.Error.WriteLine(
         "Usage: synapse model list [--catalog models/catalog.json] | " +
         "synapse model fetch (--set <name> | --id <package>) " +
-        "[--catalog models/catalog.json] [--output artifacts/models]");
+        "[--catalog models/catalog.json] [--output artifacts/models] | " +
+        "synapse model convert --source <model.gguf|model.onnx|weights.safetensors> --output <model.synapse> " +
+        "[--graph graph.json] [--dimension name=min:max] | synapse model formats | " +
+        "synapse model run --model <model.synapse> --inputs <inputs.json> | " +
+        "synapse model compile --source <model.gguf> --output <model.synapse> | " +
+        "synapse model inspect --model <model.synapse>");
 
     private static IReadOnlyList<ModelPackageDefinition> SelectPackages(
         ModelPackageCatalog catalog,

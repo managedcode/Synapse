@@ -75,7 +75,7 @@ public sealed class PromptPrefixReuseTests
         await Assert.That(retried.GeneratedTokens).IsEquivalentTo(expected.GeneratedTokens);
     }
 
-    private static Qwen2Model Load(KernelBackend backend, bool reuse) => (Qwen2Model)ModelLoader.Load(
+    private static Qwen2Model Load(KernelBackend backend, bool reuse) => (Qwen2Model)ModelLoader.LoadSourceForValidation(
         ReferenceBenchmarkFixture.GetModelPath(),
         new ModelLoadOptions
         {

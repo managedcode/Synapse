@@ -18,6 +18,8 @@ return await (args.FirstOrDefault() switch
     "sweep-report" => SweepReportCommand.RunAsync(args[1..]),
     "prefix-reuse" => PrefixReuseCommand.RunAsync(args[1..]),
     "layer-drop" => LayerDropCommand.RunAsync(args[1..]),
+    "source-decode" => SourcePreparationCommand.RunAsync(args[1..]),
+    "weight-study" => WeightStudyCommand.RunAsync(args[1..]),
     "report-dialogue" => DialogueReportCommand.RunAsync(args[1..]),
     "aggregate" => HostedArtifactReportCommand.RunAsync(args[1..]),
     "site-data" => SiteDataCommand.RunAsync(args[1..]),

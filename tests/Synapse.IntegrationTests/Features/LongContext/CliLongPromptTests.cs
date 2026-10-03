@@ -75,7 +75,7 @@ public sealed class CliLongPromptTests
         [
             Path.Combine(AppContext.BaseDirectory, "synapse.dll"),
             "generate",
-            "--model", ReferenceBenchmarkFixture.GetModelPath(),
+            "--model", await ReferenceBenchmarkFixture.GetCompiledModelPathAsync(),
             "--max-tokens", "2",
             "--context-size", "64",
             "--threads", "2",

@@ -44,6 +44,16 @@ grain per token, layer, node, or neuron. Local execution never requires
 Orleans, a coordination server, or a network. Unsupported models,
 operators, profiles, or devices fail before generation with structured errors.
 
+Model preparation is an explicit operation before execution. The CLI converts
+a source into a `.synapse` artifact; public generation, scoring and model
+loading consume that prepared artifact. The initial Qwen2 package preserves
+the exact source encodings, tokenizer metadata and graph identity in a bounded,
+integrity-checked layout and executes directly from its mapped tensor ranges
+(ADR-022). Source loaders remain internal numerical oracles. Preparation never
+happens implicitly inside a measured runtime request. Grouped weight averaging
+is a separate, unqualified approximation experiment (ADR-023); it is excluded
+from default precision selection and generation.
+
 ## External comparison boundary
 
 dotLLM, LLamaSharp, and direct llama.cpp are launched as separate benchmark
@@ -73,3 +83,10 @@ backend (perplexity with the llama-perplexity protocol) and by exact-answer
 long-context tasks, with every engine given identical tokens (ADR-015). Model
 acquisition and import boundaries are in `ADR-004` and
 `docs/Features/ModelPackages.md`.
+
+Explicit `model convert` preparation (ADR-024) also lowers supported ONNX and
+SafeTensors graphs to native version-2 `.synapse` packages. Bounded batch rows
+execute locally through verified Model IR and the scalar reference interpreter.
+The separate `model run` boundary exposes native tensor graph inputs/outputs;
+text generation still requires a qualified decoder-family adapter. General
+dynamic scheduling and optimized graph lowering remain planned.

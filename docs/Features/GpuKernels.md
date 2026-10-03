@@ -33,6 +33,7 @@ Decision: ADR-012. Plan: `gpu-kernels.plan.md`. Long-context behavior: `LongCont
 | `AC-GPU-002-2` Metal logits track the reference within 0.2% of the range | `TEST-GPU-002-2` `MetalLogitsTrackReferenceLogits`, `MetalPromptRunsTrackReference` |
 | `AC-GPU-002-3` incremental decode tracks full prefill; concurrent requests equal independent runs | `TEST-GPU-002-3` `MetalIncrementalDecodeTracksFullPrefill`, `MetalConcurrentRequestsMatchIndependent` |
 | `AC-GPU-003-1` a prompt longer than one GPU chunk tracks the managed CPU backend, and split decode attention tracks prompt-run attention | `TEST-GPU-003-1` `MetalLongPromptAcrossChunksTracksManagedCpu`, `MetalSplitDecodeTracksPromptRunAttention` |
+| `AC-GPU-003-2` Q4_K/Q6_K prompt projections cross super-blocks, partial token/output tiles, and a one-token chunk tail within the existing FP32/FP16 tolerances | `TEST-GPU-003-2` `KQuantGemmPartialTilesAndChunkTailTrackReference` |
 | `AC-GPU-004-1` without the NVIDIA driver the CUDA probe and load fail as unavailable; with a driver the probe names the device (parity on NVIDIA hardware is still `not_run_missing_hardware`) | `TEST-GPU-004-1` `probe_reports_a_device_or_unavailable` (Rust), `CudaBackendFailsExplicitlyWithoutDriver` |
 | `AC-GPU-006-1` at head dimensions 64 and 128 (FP32 and FP16 KV), Metal prompt and incremental logits track the FP32 reference on a generated model with seven query heads per KV head | `TEST-GPU-006-1` `MetalMatchesReferenceAtEveryHeadDimension` |
 | `AC-GPU-006-2` the host row counts match the shader's matrix-vector instances | `TEST-GPU-006-2` `matvec_rows_match_the_shader_instances` (Rust) |
@@ -93,3 +94,28 @@ and carries no paired or statistical claim.
 - **llama.cpp Metal on the same machine** (`llama-bench` b29c606e2, `-fa 1`, two repetitions):
   - pp512 5,289 tok/s and tg64 157 tok/s;
   - at depth 30,000: pp 650 tok/s and tg 101 tok/s.
+
+## Rejected K-quant experiments (2026-10-03)
+
+A current local profile on Qwen2.5-7B-Instruct-1M Q4_K_M, 512 prompt tokens and FP16 KV put 2,617 ms
+in the Q4_K/Q6_K GEMM kernels and about 68 ms in the other prefill kernels. The profiler serializes
+dispatches and is hotspot evidence only. Three exact-format staging experiments were then compared
+with a saved baseline CLI; each used one warm-up pair and five alternating fresh-process pairs, the
+same 512 token IDs, 17 output tokens, two CPU threads, context 1,024, and FP16 KV. Managed assemblies
+were identical; GPU-library SHA-256 fingerprints are in each raw file.
+
+| Candidate | Baseline median TTFT | Candidate median TTFT | Decision |
+|---|---:|---:|---|
+| Dequantized next-chunk prefetch | 3,507 ms | 3,638 ms | Rejected |
+| Packed next-chunk prefetch | 3,217 ms | 3,756 ms | Rejected |
+| Packed vector staging without prefetch | 3,237 ms | 3,333 ms | Rejected |
+
+Every pair reproduced all 17 generated token IDs. The first two candidates also passed the eight
+real scalar/Metal K-quant regressions. None established a latency gain, so the shader changes were
+reverted. The host was under substantial unrelated CPU and memory pressure (about 70 MiB free and
+11.0 GiB occupied by the compressor during one snapshot); these five-pair diagnostics support no
+release verdict. GPU tuning and the 30-pair benchmark gate remain open.
+
+Raw evidence: `benchmarks/results/2026-10-03-m2-pro-kquant-gemm-prefetch-rejected.json`,
+`2026-10-03-m2-pro-kquant-gemm-packed-prefetch-rejected.json`, and
+`2026-10-03-m2-pro-kquant-gemm-vector-staging-rejected.json`.

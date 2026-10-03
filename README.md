@@ -213,8 +213,27 @@ dotnet run --project src/Synapse.Cli -- model fetch --set smoke
 ```
 
 ```bash
-dotnet run --project src/Synapse.Cli --configuration Release -- generate --model artifacts/models/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.gguf --tokens 785,6722,315,9625,374 --max-tokens 8
+dotnet run --project src/Synapse.Cli --configuration Release -- model compile \
+  --source artifacts/models/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.gguf \
+  --output artifacts/models/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.synapse
 ```
+
+```bash
+dotnet run --project src/Synapse.Cli --configuration Release -- generate \
+  --model artifacts/models/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.synapse \
+  --tokens 785,6722,315,9625,374 --max-tokens 8
+```
+
+Compilation is a separate preparation step. Product inference and tokenizer
+commands require `.synapse`; they never convert a source while launching.
+
+The explicit `model convert` command also accepts supported ONNX graphs and
+SafeTensors with an inert graph sidecar. Native graph packages execute through
+`model run`, with bounded batch dimensions and exact graph preparation. Run
+`model formats` for current limits; see [ModelConversion](docs/Features/ModelConversion.md).
+The initial Qwen2 compiler preserves exact weights and tokenizer metadata,
+orders tensors by the verified graph, and checks package integrity. General
+SafeTensors import and optimized Execution IR compilation remain planned.
 
 Needs .NET SDK 10.0.401 and Rust 1.98.1. All commands are in
 [`AGENTS.md`](AGENTS.md#canonical-commands).

@@ -90,7 +90,7 @@ internal static class ScoreCommand
     {
         if (options.TextFile is { } textFile)
         {
-            return TextTokenizers.FromGguf(options.ModelPath)
+            return TextTokenizers.FromModel(options.ModelPath)
                 .Encode(File.ReadAllText(textFile), options.ParseSpecialTokens);
         }
 

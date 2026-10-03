@@ -81,7 +81,7 @@ internal sealed class Qwen2GraphBuildContext
         var tensorId = new TensorId(_nextTensor++);
         Weights.Add(new WeightDescriptor(
             tensorId,
-            new WeightSourceRange(sourceFile, tensor.Offset, tensor.ByteLength),
+            new WeightSourceRange(sourceFile, tensor.SourceOffset ?? tensor.Offset, tensor.ByteLength),
             ToEncoding(tensor),
             logicalShape));
         var node = AddNode(GraphOperationKind.Constant, inputs: null, [value.Id], tensor: tensorId);

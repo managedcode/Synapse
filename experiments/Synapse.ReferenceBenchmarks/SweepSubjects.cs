@@ -46,7 +46,7 @@ internal sealed class SynapseSweepSubject(SweepOptions options, string backend, 
         {
             var run = await QualityProcess.RunAsync(options.SynapseExecutable,
             [
-                "generate", "--model", options.ModelPath, "--tokens-file", tokensFile,
+                "generate", "--model", PreparedBenchmarkModel.Require(options.ModelPath), "--tokens-file", tokensFile,
                 "--max-tokens", Number(options.MaxTokens), "--context-size", Number(context),
                 "--backend", backend, "--kv-precision", kv, "--threads", Number(options.Threads),
             ], cancellationToken, sampleMemory: true).ConfigureAwait(false);

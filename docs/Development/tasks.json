@@ -2,6 +2,15 @@
   "schemaVersion": 1,
   "tasks": [
     {
+      "id": "TASK-CNV-001",
+      "requirement": "REQ-CNV-001",
+      "slice": "ModelConversion",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-PKG-004", "TASK-GRF-001"],
+      "tests": ["TEST-CNV-001-1", "TEST-CNV-001-2", "TEST-CNV-001-3", "TEST-CNV-001-4", "TEST-CNV-001-5"]
+    },
+    {
       "id": "TASK-BST-002",
       "requirement": "REQ-BST-002",
       "slice": "Bootstrap",
@@ -62,7 +71,16 @@
       "stage": "D1",
       "status": "in_progress",
       "dependsOn": ["TASK-PKG-001", "TASK-BST-002"],
-      "tests": ["TEST-PKG-003-1", "TEST-PKG-003-2", "TEST-PKG-003-3"]
+      "tests": ["TEST-PKG-003-1", "TEST-PKG-003-2", "TEST-PKG-003-3", "TEST-PKG-003-4", "TEST-PKG-003-5"]
+    },
+    {
+      "id": "TASK-PKG-004",
+      "requirement": "REQ-PKG-004",
+      "slice": "ModelPackages",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-PKG-003", "TASK-GRF-001"],
+      "tests": ["TEST-PKG-004-1", "TEST-PKG-004-2", "TEST-PKG-004-3", "TEST-PKG-004-4", "TEST-PKG-004-5", "TEST-PKG-004-6", "TEST-PKG-004-7", "TEST-PKG-004-10"]
     },
     {
       "id": "TASK-GRF-001",
@@ -242,7 +260,7 @@
       "stage": "D1",
       "status": "in_progress",
       "dependsOn": ["TASK-GPU-002"],
-      "tests": ["TEST-GPU-003-1"]
+      "tests": ["TEST-GPU-003-1", "TEST-GPU-003-2"]
     },
     {
       "id": "TASK-GPU-005",
@@ -331,6 +349,15 @@
       "status": "in_progress",
       "dependsOn": ["TASK-SPC-001", "TASK-LDP-004"],
       "tests": ["TEST-SPC-003-1"]
+    },
+    {
+      "id": "TASK-QNT-006",
+      "requirement": "REQ-QNT-006",
+      "slice": "Quantization",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-QNT-005"],
+      "tests": ["TEST-QNT-006-1", "TEST-QNT-006-2", "TEST-QNT-006-3", "TEST-QNT-006-4", "TEST-QNT-006-5", "TEST-QNT-006-6", "TEST-QNT-006-7", "TEST-QNT-006-8", "TEST-QNT-006-9"]
     },
     {
       "id": "TASK-QNT-005",

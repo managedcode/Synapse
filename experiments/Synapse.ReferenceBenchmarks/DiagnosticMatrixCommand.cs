@@ -45,6 +45,7 @@ internal static class DiagnosticMatrixCommand
 
     private static async Task<DiagnosticMatrixEvidence> MeasureAsync(DiagnosticMatrixArguments options)
     {
+        _ = PreparedBenchmarkModel.Require(options.ModelPath);
         var samples = new List<DiagnosticMatrixSample>();
         for (var round = 0; round < options.Warmups + options.Measurements; round++)
         {
@@ -89,8 +90,9 @@ internal static class DiagnosticMatrixCommand
     private static async Task<DiagnosticMatrixSample> MeasureSubjectAsync(
         DiagnosticMatrixArguments options, string subject, int round, bool warmup)
     {
+        var startInfo = CreateStartInfo(options, subject);
         var wall = Stopwatch.StartNew();
-        using var process = Process.Start(CreateStartInfo(options, subject))
+        using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException($"{subject} process did not start.");
         await using var sampler = new ProcessMemorySampler(process);
         var output = process.StandardOutput.ReadToEndAsync();
@@ -148,7 +150,7 @@ internal static class DiagnosticMatrixCommand
 
     private static string[] SynapseArguments(DiagnosticMatrixArguments options) =>
     [
-        "generate", "--model", options.ModelPath,
+        "generate", "--model", PreparedBenchmarkModel.Require(options.ModelPath),
         "--tokens", string.Join(',', options.PromptTokenIds),
         "--max-tokens", options.MaxTokens.ToString(System.Globalization.CultureInfo.InvariantCulture),
         "--context-size", "512",

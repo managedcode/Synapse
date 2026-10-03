@@ -9,8 +9,8 @@ namespace ManagedCode.Synapse.Cli.Features.Tokenization;
 internal static class TokenizeCommand
 {
     private const string Usage =
-        "Usage: synapse tokenize --model <model.gguf> --text-file <path> [--no-parse-special]\n" +
-        "       synapse detokenize --model <model.gguf> --tokens-file <path> [--special]";
+        "Usage: synapse tokenize --model <model.synapse> --text-file <path> [--no-parse-special]\n" +
+        "       synapse detokenize --model <model.synapse> --tokens-file <path> [--special]";
 
     public static int Run(string command, IReadOnlyList<string> arguments)
     {
@@ -40,7 +40,7 @@ internal static class TokenizeCommand
 
         try
         {
-            var tokenizer = TextTokenizers.FromGguf(model);
+            var tokenizer = TextTokenizers.FromModel(model);
             if (command == "tokenize")
             {
                 var ids = tokenizer.Encode(File.ReadAllText(path), parseSpecialTokens: !flags.Contains("--no-parse-special"));

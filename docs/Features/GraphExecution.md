@@ -81,7 +81,12 @@ Add, Multiply, SiLU, and Softmax through scalar reference operators. Its
 current numerical mode is FP32 storage/compute with declared FP64 accumulation;
 other precision modes, conditional regions, state effects, symbolic shapes,
 and unsupported ops fail before node execution. A one-million-element-per-
-tensor safety bound keeps this correctness bridge small. Qwen execution from
+tensor safety bound keeps this correctness bridge small. Its optional
+cancellation token is checked before preflight, between graph nodes and before
+returning outputs; conversion forwards the caller's token into each row.
+Each bounded scalar operator keeps its existing atomic numerical evaluation.
+Cancellation therefore interrupts a long single-row graph at a node boundary.
+Qwen execution from
 IR, additional operations, and the region scheduler remain pending.
 
 This represents the `what executes` axis. Execution IR will add kernels,
@@ -130,3 +135,7 @@ layouts, and non-mutating shape errors.
 `GraphReferenceInterpreterTests` executes real tiny Linear and RMSNorm→SiLU
 graphs and rejects unsupported operators, conditional regions, FP32
 accumulation, and short weight payloads.
+`ConversionGraphCancellationTests` (`TEST-CNV-001-4`) exercises real shared
+1000×1000 Linear chains with timer cancellation inside one long row, verifies
+the conversion bridge forwards cancellation promptly, and checks cancellation
+before interpreter preflight.

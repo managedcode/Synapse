@@ -1,5 +1,9 @@
 # Model packages
 
+Explicit format-neutral conversion is implemented as a bounded separate slice
+in [ModelConversion](ModelConversion.md), ADR-024. It adds ONNX/SafeTensors
+native graph packages; the Qwen GGUF preparation below remains version 1.
+
 ## Outcome
 
 Synapse separates reproducible acquisition from executable support. The
@@ -14,7 +18,9 @@ exists, but every status surface must say which layer is available:
 5. **executable** — required operators and state semantics are implemented;
 6. **benchmark eligible** — output parity and provenance gates pass.
 
-Only Qwen2 Q8_0 currently reaches executable/benchmark-eligible smoke status.
+Qwen2 Q8_0 reaches executable/benchmark-eligible smoke status; Q4_K/Q6_K
+have qualified reference/Metal execution (ADR-021). Product execution requires
+separate compilation into `.synapse` (ADR-022).
 SmolLM2 and the BERT embedding fixtures currently reach bounded SafeTensors
 index verification. Other catalog entries are acquisition targets, not hidden
 claims of runtime support.
@@ -97,9 +103,103 @@ Verification:
 - A deliberate sign mutation in Q4_K was caught by the differential test
   before being reverted.
 
+Source preparation now avoids per-element arrays for all scalar formats.
+F32/F16/BF16 decode whole tensors after a complete finite-value scan using
+SIMD exponent masks where available; the first invalid index is preserved.
+BF16 uses SIMD widening on disjoint little-endian storage. F32 uses a bulk copy
+when storage is disjoint. Portable fallbacks and existing forward alias
+semantics remain. `AC-PKG-003-4` / `TEST-PKG-003-4`
+(`ScalarDecodingAllocatesNoMemoryPerElement`, `LateNonFiniteScalarLeavesWholeDestinationUnchanged`)
+guard allocation and rejection behavior. `AC-PKG-003-5` / `TEST-PKG-003-5`
+(`WholeTensorFloatDecoderTests`) guard finite F32 bit patterns, every finite
+BF16/F16 code, signed zero/subnormals, invalid index/output atomicity,
+length/overflow and aliases. The 21 whole-tensor cases also pass with hardware
+intrinsics disabled. Decoder timing is a preparation diagnostic,
+separate from model loading, compilation and generation throughput.
+
 ## Next implementation slice
 
-`TASK-PKG-002..005` adds the actual Synapse manifest/chunk format, tensor source
-descriptors, repo-owned BPE/chat templates, SafeTensors conversion, ZoneTree
-content identity cache, and atomic compiler/export. It must not execute remote
-model code or introduce Python/Node tooling.
+The bounded first `TASK-PKG-004` compiled artifact is described below.
+`TASK-PKG-002..005` still includes general manifests/content-addressed chunks,
+multi-family tokenizer/template import, SafeTensors conversion, and ZoneTree
+content identity caching. It must not execute remote model code or introduce
+Python/Node tooling.
+
+## Explicit lossless preparation (`REQ-PKG-004`)
+
+Decision: `ADR-022`. Runtime entry points require a prepared artifact. Convert
+once, inspect the result, then use the compiled path:
+
+```text
+synapse model compile --source model.gguf --output model.synapse
+synapse model inspect --model model.synapse
+synapse generate --model model.synapse --tokens 1,2,3 --max-tokens 4
+```
+
+The first compiler supports the current executable Qwen2 family and preserves
+F32/Q8_0/Q4_K/Q6_K tensor bytes, shape, encoding, and the complete GGUF metadata
+header, including tokenizer arrays. It verifies the existing Model IR and
+packs tensors in that graph's first-use order with 64-byte alignment. Original
+source tensor ranges and basename remain graph provenance, so source and
+compiled graph fingerprints agree. Runtime opens the compiled file itself
+through a read-only memory map and uses existing family executors; Qwen
+execution from Model IR/Execution IR remains planned.
+
+The format has a 96-byte little-endian envelope: eight-byte `SYNAPSE\0` magic,
+32-bit version, 32-bit manifest length, 64-bit payload offset, 64-bit total
+file length, and SHA-256 digests of manifest and payload. The inert JSON
+manifest is limited to 4 MiB; the verbatim source header to 64 MiB; source
+metadata and tensor counts to 16,384. Tensor offsets are relative to the
+payload; ranges are canonical, aligned, non-overlapping, and checked against
+the preserved source index. The manifest records source SHA-256, graph
+fingerprint, original ranges, and source encoding. Package identity hashes
+the envelope. Digests provide integrity, not publisher authentication.
+
+Compilation streams with one reused 64 KiB copy buffer, checks cancellation,
+rechecks source identity after copying, flushes to disk, verifies the output,
+then moves a unique temporary sibling atomically. It never overwrites an
+existing destination. Failure deletes the partial artifact. Unsupported
+families, unknown versions/types, malformed bounds, mismatched hashes, and
+inconsistent source/compiled indexes fail explicitly. Compilation changes no
+weight values and applies no averaging or approximate compression.
+
+Complete payload verification adds an intentional startup scan. The format
+alone is not a demonstrated throughput improvement; any speed claim requires
+paired measurements and unchanged output quality.
+
+| Criterion | Regression |
+|---|---|
+| `AC-PKG-004-1`: deterministic, lossless tensor and metadata packing with source digest | `TEST-PKG-004-1`: `CompilationPreservesTensorBytesArraysAndSourceIdentity`, `CompilationIsDeterministicAcrossDestinationNames` |
+| `AC-PKG-004-2`: direct execution without source, equal graph identity/logits/tokens on reference/managed/native/available Metal | `TEST-PKG-004-2`: `PackageExecutesDirectlyWithoutSourceAndMatchesEveryBackend`, `PackagePreservesKQuantReferenceOutputs` |
+| `AC-PKG-004-3`: reject malformed index/envelope/payload, including recomputed adversarial digests | `TEST-PKG-004-3`: `ReaderRejectsEnvelopeAndPayloadCorruption`, `ReaderRejectsMalformedIndexEvenWhenDigestsAreRecomputed` |
+| `AC-PKG-004-4`: no publication on invalid or unsupported sources, cancelled writes, identical paths, or failed move | `TEST-PKG-004-4`: `CompilerRejectsInvalidSourceRangesWithoutPublishing`, `CompilerRejectsUnsupportedSourcesExplicitly`, `FailedPublicationAndCancellationPreserveExistingDestination`, `CompilerRejectsIdenticalPathsWithoutChangingSource`, `AtomicMoveFailureDeletesCompiledTemporaryFile` |
+| `AC-PKG-004-5`: separate explicit CLI preparation; runtime rejects unprepared sources | `TEST-PKG-004-5`: `CompileCommandPublishesExecutablePackage`, `RuntimeRequiresExplicitCompiledArtifact` |
+| `AC-PKG-004-7`: output decoding reuses the loaded mapping and a single thread-safe cached tokenizer | `TEST-PKG-004-7`: `LoadedTokenizerDecodesWithoutReopeningCompiledPath`, `UnsupportedLoadedTokenizerStillReturnsNullCliText` |
+| `AC-PKG-004-6`: public runtime rejects source formats without conversion | `TEST-PKG-004-6`: `RuntimeRequiresExplicitCompiledArtifact` |
+| `AC-PKG-004-10`: mixed-engine benchmark requires a matching prepared artifact and rechecks each sample | `TEST-PKG-004-10`: `BenchmarkRefusesUnpreparedSourceWithoutCreatingOutput`, `BenchmarkVerifiesPreparedArtifactAgainstSourceIdentity`, `BenchmarkRevalidatesChangedFilesAfterSuccessfulPreparation` |
+
+General compressed chunks, ZoneTree cache integration, SafeTensors compilation,
+quantization/averaging profiles, and a graph scheduler remain outside this
+implemented slice. Hardware that cannot run a parity case is
+`not_run_missing_hardware`, never passed.
+
+Focused evidence on 2026-10-03: the initial 31 compiled-package cases passed on macOS
+ARM64, including actual reference, managed, native, and Metal execution, with
+zero skips. The sandbox-only run exposed no Metal device and failed that case;
+the rerun with actual device access passed all 31. Scoped whitespace format
+and diff checks passed. The final 33 cases include loaded tokenizer reuse and
+strong ordered byte/token/logit assertions. Full .NET verification passed
+429/429; focused package file coverage is 232/251 (92.43%). Exact commands,
+raw evidence and the ZoneTree background-exception limitation are recorded in
+`benchmarks/results/2026-10-03-performance-preparation-evidence.md`.
+
+The pinned Qwen2.5-0.5B Q8_0 source (675,710,816 bytes, SHA-256
+`ca59ca7f13d0e15a8cfa77bd17e65d24f6844b554a7b6c12e07a5f89ff76844e`)
+compiled into 675,749,760 bytes with 291 tensors. Inspection passed and real
+managed CLI execution produced the same tokens `[12095,13]` and text ` Paris.`.
+One sequential startup diagnostic measured 100.2118 ms in the saved GGUF
+baseline and 593.863 ms for the compiled artifact. This exposes startup
+verification cost, not a statistical performance comparison: cache state and
+binary revisions differ. Raw local diagnostics remain under ignored
+`artifacts/performance-audit/`, including `compiled-package-qwen05b.json`,
+`gguf-load-diagnostic.json`, and `compiled-load-diagnostic.json`.

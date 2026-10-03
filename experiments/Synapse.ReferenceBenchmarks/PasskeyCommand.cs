@@ -107,7 +107,7 @@ internal static class PasskeyCommand
     {
         var arguments = new List<string>
         {
-            "generate", "--model", options.ModelPath, "--tokens-file", tokensFile,
+            "generate", "--model", PreparedBenchmarkModel.Require(options.ModelPath), "--tokens-file", tokensFile,
             "--max-tokens", options.MaxTokens.ToString(CultureInfo.InvariantCulture),
             "--context-size", options.ContextSize.ToString(CultureInfo.InvariantCulture),
             "--threads", options.Threads.ToString(CultureInfo.InvariantCulture),

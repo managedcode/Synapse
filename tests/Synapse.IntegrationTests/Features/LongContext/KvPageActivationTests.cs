@@ -142,7 +142,7 @@ public sealed class KvPageActivationTests
         await Assert.That(random.RuntimeProfile).EndsWith("+kvpages2w128r");
         foreach (var backend in new[] { KernelBackend.Reference, KernelBackend.Metal })
         {
-            var exception = await Assert.That(() => ModelLoader.Load(ReferenceBenchmarkFixture.GetModelPath(),
+            var exception = await Assert.That(() => ModelLoader.LoadSourceForValidation(ReferenceBenchmarkFixture.GetModelPath(),
                     new ModelLoadOptions { ContextSize = 64, KernelBackend = backend, KvPageActivation = new KvPageActivation(2, 64) }))
                 .Throws<NotSupportedException>();
             await Assert.That(exception!.Message).Contains("ADR-016");
@@ -151,7 +151,7 @@ public sealed class KvPageActivationTests
         await Assert.That(() => new KvPageActivation(-1, 64).Validate()).Throws<ArgumentOutOfRangeException>();
     }
 
-    private static Qwen2Model Load(KvPageActivation? activation, bool reusePrefix = false) => (Qwen2Model)ModelLoader.Load(
+    private static Qwen2Model Load(KvPageActivation? activation, bool reusePrefix = false) => (Qwen2Model)ModelLoader.LoadSourceForValidation(
         ReferenceBenchmarkFixture.GetModelPath(),
         new ModelLoadOptions
         {

@@ -58,8 +58,9 @@ internal static class LayerDropCommand
     {
         public DropRun Run(int[]? layers, DropRun? dense = null)
         {
+            var prepared = PreparedBenchmarkModel.Require(model);
             var timer = Stopwatch.StartNew();
-            using var loaded = (Qwen2Model)ModelLoader.Load(model, new ModelLoadOptions
+            using var loaded = (Qwen2Model)ModelLoader.Load(prepared, new ModelLoadOptions
             {
                 ContextSize = tokens.Length,
                 KernelBackend = KernelBackendNames.TryParse(values.GetValueOrDefault("--backend", "metal"), out var backend)

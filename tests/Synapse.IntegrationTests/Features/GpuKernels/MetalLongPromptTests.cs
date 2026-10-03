@@ -14,7 +14,7 @@ public sealed class MetalLongPromptTests
     {
         GpuHardware.RequireMetal();
         int[] prompt = [.. Enumerable.Range(0, 40).Select(index => (index * 7919 % 150_000) + 100)];
-        using var reference = (Qwen2Model)ModelLoader.Load(
+        using var reference = (Qwen2Model)ModelLoader.LoadSourceForValidation(
             ReferenceBenchmarkFixture.GetModelPath(),
             new ModelLoadOptions { ContextSize = 64, MaximumParallelism = 8, KernelBackend = KernelBackend.Reference });
         using var metal = Load(contextSize: 64);
@@ -31,7 +31,7 @@ public sealed class MetalLongPromptTests
     {
         GpuHardware.RequireMetal();
         int[] prompt = [.. Enumerable.Range(0, 1_100).Select(index => (index * 7919 % 150_000) + 100)];
-        using var managed = (Qwen2Model)ModelLoader.Load(
+        using var managed = (Qwen2Model)ModelLoader.LoadSourceForValidation(
             ReferenceBenchmarkFixture.GetModelPath(),
             new ModelLoadOptions { ContextSize = 1_200, MaximumParallelism = 8, KernelBackend = KernelBackend.Managed });
         using var metal = Load(contextSize: 1_200);

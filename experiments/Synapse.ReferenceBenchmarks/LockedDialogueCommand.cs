@@ -153,7 +153,7 @@ internal static class LockedDialogueCommand
     {
         if (subject == "synapse")
         {
-            return ["generate", "--model", options.Model, "--tokens",
+            return ["generate", "--model", PreparedBenchmarkModel.Require(options.Model), "--tokens",
                 string.Join(',', turn.PromptTokenIds), "--max-tokens", Number(options.MaxTokens),
                 "--context-size", "512", "--threads", Number(options.Threads)];
         }

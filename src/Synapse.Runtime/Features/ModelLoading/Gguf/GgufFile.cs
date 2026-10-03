@@ -1,4 +1,5 @@
 using System.IO.MemoryMappedFiles;
+using ManagedCode.Synapse.Runtime.Features.ModelPackages;
 using ManagedCode.Synapse.Runtime.Features.TextGeneration;
 
 namespace ManagedCode.Synapse.Runtime.Features.ModelLoading.Gguf;
@@ -56,26 +57,44 @@ internal sealed unsafe class GgufFile : IDisposable, IMappedWeights
     public static GgufFile Open(string path)
     {
         var fullPath = Path.GetFullPath(path);
+        if (string.Equals(Path.GetExtension(fullPath), ".synapse", StringComparison.OrdinalIgnoreCase))
+        {
+            return CompiledPackageReader.Open(fullPath).File;
+        }
+
         var descriptor = GgufHeaderReader.Read(fullPath);
+        return OpenMapped(fullPath, descriptor, Path.GetFileName(fullPath));
+    }
+
+    internal static GgufFile OpenMapped(string path, GgufDescriptor descriptor, string sourceFile)
+    {
+        var fullPath = Path.GetFullPath(path);
+        using var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        return OpenMapped(stream, descriptor, sourceFile);
+    }
+
+    internal static GgufFile OpenMapped(FileStream stream, GgufDescriptor descriptor, string sourceFile)
+    {
         var mapping = MemoryMappedFile.CreateFromFile(
-            fullPath,
-            FileMode.Open,
+            stream,
             mapName: null,
             capacity: 0,
-            MemoryMappedFileAccess.Read);
+            MemoryMappedFileAccess.Read,
+            HandleInheritability.None,
+            leaveOpen: true);
         var view = mapping.CreateViewAccessor(0, 0, MemoryMappedFileAccess.Read);
         byte* pointer = null;
         view.SafeMemoryMappedViewHandle.AcquirePointer(ref pointer);
         pointer += view.PointerOffset;
         return new GgufFile(
-            Path.GetFileName(fullPath),
+            sourceFile,
             descriptor.Metadata,
             descriptor.Tensors,
             descriptor.Arrays,
             mapping,
             view,
             pointer,
-            new FileInfo(fullPath).Length);
+            stream.Length);
     }
 
     public string GetRequiredString(string key) => Metadata.TryGetValue(key, out var value) && value is string text

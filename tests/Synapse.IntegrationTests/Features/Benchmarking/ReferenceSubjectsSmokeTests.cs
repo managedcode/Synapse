@@ -55,7 +55,7 @@ public sealed class ReferenceSubjectsSmokeTests
     [Test]
     public async Task SynapseManagedQwen2MatchesReferenceFirstToken()
     {
-        using var model = ModelLoader.Load(GetModelPath(), contextSize: 512);
+        using var model = ModelLoader.LoadSourceForValidation(GetModelPath(), contextSize: 512);
 
         var graphVerification = ModelGraphVerifier.Verify(model.Graph);
         var result = model.Generate(PromptTokens, maximumNewTokens: 1);
@@ -77,7 +77,7 @@ public sealed class ReferenceSubjectsSmokeTests
     [Test]
     public async Task PositionIsExplicitRegionInput()
     {
-        using var model = ModelLoader.Load(GetModelPath(), contextSize: 512);
+        using var model = ModelLoader.LoadSourceForValidation(GetModelPath(), contextSize: 512);
         var entryPoint = model.Graph.EntryPoints.Single();
         await Assert.That(entryPoint.Inputs.Count).IsEqualTo(2);
         var positionId = entryPoint.Inputs[1];
@@ -137,7 +137,7 @@ public sealed class ReferenceSubjectsSmokeTests
     {
         var modelPath = GetModelPath();
         var modelLength = new FileInfo(modelPath).Length;
-        using var model = ModelLoader.Load(modelPath, contextSize: 512);
+        using var model = ModelLoader.LoadSourceForValidation(modelPath, contextSize: 512);
         var descriptors = model.Graph.Weights.ToDictionary(weight => weight.Id);
         var requiredWeights = model.Graph.Regions
             .SelectMany(region => region.RequiredWeights)
@@ -160,7 +160,7 @@ public sealed class ReferenceSubjectsSmokeTests
         string modelPath,
         int contextSize)
     {
-        using var model = ModelLoader.Load(modelPath, contextSize);
+        using var model = ModelLoader.LoadSourceForValidation(modelPath, contextSize);
         return (
             ModelGraphFingerprint.Compute(model.Graph),
             model.Graph.StateSlots.Select(slot => slot.Shape.Dimensions[0]).ToArray());

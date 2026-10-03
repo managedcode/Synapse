@@ -21,17 +21,16 @@ public static class SourceEncodings
     ];
 
     /// <summary>IEEE 754 single precision.</summary>
-    public static ISourceTensorDecoder Fp32 { get; } = Scalar("f32", 4, bytes => BinaryPrimitives.ReadSingleLittleEndian(bytes));
+    public static ISourceTensorDecoder Fp32 { get; } = new FloatSourceDecoder("f32", FloatSourceKind.Fp32, sizeof(float));
 
     /// <summary>IEEE 754 double precision, narrowed to FP32 when representable.</summary>
     public static ISourceTensorDecoder Fp64 { get; } = Scalar("f64", 8, bytes => (float)BinaryPrimitives.ReadDoubleLittleEndian(bytes));
 
     /// <summary>IEEE 754 half precision.</summary>
-    public static ISourceTensorDecoder Fp16 { get; } = Scalar("f16", 2, bytes => (float)BinaryPrimitives.ReadHalfLittleEndian(bytes));
+    public static ISourceTensorDecoder Fp16 { get; } = new FloatSourceDecoder("f16", FloatSourceKind.Fp16, sizeof(ushort));
 
     /// <summary>Brain floating point: the upper 16 bits of an FP32 value.</summary>
-    public static ISourceTensorDecoder Bf16 { get; } =
-        Scalar("bf16", 2, bytes => BitConverter.UInt32BitsToSingle((uint)BinaryPrimitives.ReadUInt16LittleEndian(bytes) << 16));
+    public static ISourceTensorDecoder Bf16 { get; } = new FloatSourceDecoder("bf16", FloatSourceKind.Bf16, sizeof(ushort));
 
     /// <summary>OCP FP8 E4M3FN: no infinities; S.1111.111 is NaN; maximum 448.</summary>
     public static ISourceTensorDecoder Fp8E4M3Fn { get; } = Scalar("f8_e4m3fn", 1, bytes => DecodeE4M3Fn(bytes[0]));
@@ -92,13 +91,15 @@ public static class SourceEncodings
         return decoders;
     }
 
-    private static BlockSourceDecoder Scalar(string id, int bytes, Func<byte[], float> read) =>
+    private static BlockSourceDecoder Scalar(string id, int bytes, ScalarReader read) =>
         new(
             id,
             1,
             bytes,
-            block => float.IsFinite(read(block.ToArray())) ? null : SourceEncodingFailure.NonFiniteValue,
-            (block, output) => output[0] = read(block.ToArray()));
+            block => float.IsFinite(read(block)) ? null : SourceEncodingFailure.NonFiniteValue,
+            (block, output) => output[0] = read(block));
+
+    private delegate float ScalarReader(ReadOnlySpan<byte> bytes);
 
     private static float DecodeE4M3Fn(byte code)
     {

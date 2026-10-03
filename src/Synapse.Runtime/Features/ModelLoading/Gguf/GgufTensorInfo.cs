@@ -5,7 +5,8 @@ internal sealed record GgufTensorInfo(
     ulong[] Dimensions,
     uint Type,
     long Offset,
-    long ByteLength)
+    long ByteLength,
+    long? SourceOffset = null)
 {
     public long ElementCount => Dimensions.Aggregate(1L, static (count, dimension) =>
         checked(count * checked((long)dimension)));

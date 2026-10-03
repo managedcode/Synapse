@@ -92,7 +92,7 @@ public sealed class KvCacheParityTests
             options = options with { PrefillChunkTokens = chunk };
         }
 
-        return (Qwen2Model)ModelLoader.Load(ReferenceBenchmarkFixture.GetModelPath(), options);
+        return (Qwen2Model)ModelLoader.LoadSourceForValidation(ReferenceBenchmarkFixture.GetModelPath(), options);
     }
 
     private static int[] Bits(float[] values) => [.. values.Select(BitConverter.SingleToInt32Bits)];

@@ -59,7 +59,7 @@ public sealed class PasskeyCommandTests
             Path.Combine(AppContext.BaseDirectory, "Synapse.ReferenceBenchmarks.dll"),
             "passkey",
             "--synapse-executable", Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "synapse.exe" : "synapse"),
-            "--model", ReferenceBenchmarkFixture.GetModelPath(),
+            "--model", await ReferenceBenchmarkFixture.GetCompiledModelPathAsync(),
             "--scenario", ReferenceBenchmarkFixture.BenchmarkInputPath("Scenarios", "passkey-qwen2.5.json"),
             "--threads", "4",
             .. extra,

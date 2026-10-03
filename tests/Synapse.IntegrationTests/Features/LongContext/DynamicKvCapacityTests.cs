@@ -94,7 +94,7 @@ public sealed class DynamicKvCapacityTests
         await Assert.That(model.AllocatedKvBytes).IsEqualTo(3_072L * bytesPerPosition);
     }
 
-    private static Qwen2Model Load(KernelBackend backend, int contextSize, int growthPositions) => (Qwen2Model)ModelLoader.Load(
+    private static Qwen2Model Load(KernelBackend backend, int contextSize, int growthPositions) => (Qwen2Model)ModelLoader.LoadSourceForValidation(
         ReferenceBenchmarkFixture.GetModelPath(),
         new ModelLoadOptions
         {

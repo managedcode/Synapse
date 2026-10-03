@@ -83,7 +83,7 @@ public sealed class TokenScoringTests
         await Assert.That(reports[^1].PromptTokens).IsEqualTo(tokens.Count - 1);
     }
 
-    internal static Qwen2Model Load(KernelBackend backend, int scoringRows) => (Qwen2Model)ModelLoader.Load(
+    internal static Qwen2Model Load(KernelBackend backend, int scoringRows) => (Qwen2Model)ModelLoader.LoadSourceForValidation(
         ReferenceBenchmarkFixture.GetModelPath(),
         new ModelLoadOptions
         {

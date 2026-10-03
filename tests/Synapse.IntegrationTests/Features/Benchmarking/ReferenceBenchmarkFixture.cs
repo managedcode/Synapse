@@ -1,6 +1,8 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text.Json;
 using ManagedCode.Synapse.Runtime.Features.ModelPackages.Catalog;
+using ManagedCode.Synapse.Runtime.Features.ModelPackages;
 
 namespace ManagedCode.Synapse.IntegrationTests.Features.Benchmarking;
 
@@ -8,6 +10,8 @@ internal static class ReferenceBenchmarkFixture
 {
     public const string Prompt = "The capital of France is";
     public static readonly int[] PromptTokens = [785, 6722, 315, 9625, 374];
+    private static readonly SemaphoreSlim CompilationGate = new(1, 1);
+    private static string? _compiledModelPath;
 
     public static async Task<JsonDocument> RunSubjectAsync(
         string subject,
@@ -74,6 +78,47 @@ internal static class ReferenceBenchmarkFixture
         file = string.IsNullOrWhiteSpace(file)
             ? package.Files.Single(entry => entry.Path.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase)).Path : file;
         return Path.Combine(GetModelRoot(), package.Id, file);
+    }
+
+    public static async Task<string> GetCompiledModelPathAsync(CancellationToken cancellationToken = default)
+    {
+        await CompilationGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (_compiledModelPath is not null && File.Exists(_compiledModelPath))
+            {
+                return _compiledModelPath;
+            }
+
+            var source = GetModelPath();
+            await using var stream = File.OpenRead(source);
+            var digest = Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken));
+            var destination = Path.Combine(FindRepositoryRoot(), "artifacts", "compiled-tests", digest + ".synapse");
+            if (!File.Exists(destination))
+            {
+                try
+                {
+                    _ = await CompiledPackageCompiler.CompileAsync(source, destination, cancellationToken);
+                }
+                catch (IOException) when (File.Exists(destination))
+                {
+                    // A different test process may have atomically published the same content-addressed fixture.
+                }
+            }
+
+            var info = CompiledPackageReader.Inspect(destination, cancellationToken);
+            if (!string.Equals(info.SourceSha256, digest, StringComparison.Ordinal))
+            {
+                throw new InvalidDataException("Compiled test fixture does not match the pinned source content.");
+            }
+
+            _compiledModelPath = destination;
+            return destination;
+        }
+        finally
+        {
+            CompilationGate.Release();
+        }
     }
 
     public static string RequireEnvironmentFile(string variableName)

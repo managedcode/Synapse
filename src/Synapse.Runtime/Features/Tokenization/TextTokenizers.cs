@@ -18,6 +18,17 @@ public interface ITextTokenizer
 /// <summary>Loads repo-owned tokenizers from model files.</summary>
 public static class TextTokenizers
 {
+    /// <summary>Loads tokenizer metadata from a separately compiled .synapse package.</summary>
+    public static ITextTokenizer FromModel(string modelPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelPath);
+        if (!string.Equals(Path.GetExtension(modelPath), ".synapse", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new NotSupportedException("Tokenizer runtime requires .synapse. Convert first with synapse model compile --source <model.gguf> --output <model.synapse>.");
+        }
+
+        return FromGguf(modelPath);
+    }
     /// <summary>Reads the byte-level BPE vocabulary, merges, and token types from a GGUF file.</summary>
     public static ITextTokenizer FromGguf(string modelPath)
     {

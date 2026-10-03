@@ -1,5 +1,14 @@
 # Commands
 
+Format-neutral preparation and bounded native graph execution are documented
+in [ModelConversion](../Features/ModelConversion.md):
+
+```text
+synapse model convert --source graph.onnx --output graph.synapse --dimension batch=1:64
+synapse model convert --source weights.safetensors --graph graph.json --output graph.synapse
+synapse model run --model graph.synapse --inputs inputs.json
+```
+
 Run from the repository root. Add `/opt/homebrew/opt/rustup/bin` to `PATH` on
 this Apple machine because Homebrew installs rustup keg-only.
 
@@ -14,8 +23,11 @@ cargo clippy --manifest-path native/Cargo.toml --workspace --all-targets -- -D w
 
 dotnet run --project src/Synapse.Cli -- doctor --memory-budget-bytes 1073741824
 dotnet run --project src/Synapse.Cli -- model fetch --set smoke
+dotnet run --project src/Synapse.Cli --configuration Release -- model compile \
+  --source artifacts/models/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.gguf \
+  --output artifacts/models/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.synapse
 dotnet run --project src/Synapse.Cli --configuration Release -- generate \
-  --model artifacts/models/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.gguf \
+  --model artifacts/models/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.synapse \
   --tokens 785,6722,315,9625,374 --max-tokens 8 --context-size 512 --threads 12
 cargo run --manifest-path native/Cargo.toml --locked -p synapse-runtime -- \
   doctor --memory-budget-bytes 1073741824
@@ -32,12 +44,12 @@ the summed GPU milliseconds per kernel (a diagnostic: it slows the run down).
 
 ```text
 dotnet run --project src/Synapse.Cli --configuration Release -- generate \
-  --model artifacts/models/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.gguf \
+  --model artifacts/models/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.synapse \
   --tokens-file prompt-tokens.txt --max-tokens 64 --context-size 131072 \
   --backend metal --rope-scaling yarn:4:32768
 dotnet run --project experiments/Synapse.ReferenceBenchmarks --configuration Release -- passkey \
   --synapse-executable src/Synapse.Cli/bin/Release/net10.0/synapse \
-  --model artifacts/models/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.gguf \
+  --model artifacts/models/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.synapse \
   --scenario experiments/Synapse.ReferenceBenchmarks/Features/Benchmarking/Scenarios/passkey-qwen2.5.json --prompt-tokens 4096,16384 \
   --depths 0.1,0.5,0.9 --backend metal --context-size 32768 --output passkey.json
 ```
@@ -48,11 +60,11 @@ llama.cpp tools need `--no-escape`, because they otherwise rewrite `\n`-style
 escapes. llama.cpp `-f` also drops one trailing newline from a prompt file.
 
 ```text
-synapse tokenize --model <model.gguf> --text-file <text> [--no-parse-special]
-synapse detokenize --model <model.gguf> --tokens-file <ids> [--special]
+synapse tokenize --model <model.synapse> --text-file <text> [--no-parse-special]
+synapse detokenize --model <model.synapse> --tokens-file <ids> [--special]
 git ls-tree -r --name-only b090e95 | grep -E '\.(md|cs|rs)$' | sort \
   | while read f; do git show "b090e95:$f"; printf '\n'; done > corpus-all.txt
-synapse score --model <model.gguf> --text-file corpus-all.txt --context-size 32768 \
+synapse score --model <model.synapse> --text-file corpus-all.txt --context-size 32768 \
   --chunks 7 --backend metal --kv-precision f16 --scores-output trace.json
 llama-perplexity -m <model.gguf> -f corpus-all.txt -c 32768 --chunks 7 -ngl 99 -fa on --no-escape
 dotnet run --project experiments/Synapse.ReferenceBenchmarks --configuration Release -- quality \
@@ -61,4 +73,21 @@ dotnet run --project experiments/Synapse.ReferenceBenchmarks --configuration Rel
   --subjects synapse:metal:f32,synapse:metal:f16,llamacpp:metal,mlx \
   --synapse-executable src/Synapse.Cli/bin/Release/net10.0/synapse \
   --mlx-binary <SwiftLM> --mlx-model <mlx-qwen2.5-0.5b-8bit-directory>
+```
+
+Prepare `.synapse` in a separate command before these runtime commands. Mixed
+engine benchmarks keep `--model <model.gguf>` for the external engines and
+require a separately compiled sibling `<model.synapse>` with matching source
+SHA-256 for Synapse. They refuse to convert a missing artifact during a run.
+
+Model preparation diagnostics (real source weights, CPU codec measurements;
+synthetic probe vectors do not establish model quality):
+
+```text
+dotnet experiments/Synapse.ReferenceBenchmarks/bin/Release/net10.0/Synapse.ReferenceBenchmarks.dll source-decode \
+  --model artifacts/models/smollm2-135m-instruct-bf16/model.safetensors \
+  --tensor model.layers.0.self_attn.q_proj.weight --samples 30
+dotnet experiments/Synapse.ReferenceBenchmarks/bin/Release/net10.0/Synapse.ReferenceBenchmarks.dll weight-study \
+  --model artifacts/models/smollm2-135m-instruct-bf16/model.safetensors \
+  --tensor model.layers.0.self_attn.q_proj.weight --samples 30
 ```

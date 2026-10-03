@@ -52,7 +52,7 @@ internal sealed class SynapseQualitySubject(
         {
             List<string> arguments =
             [
-                "generate", "--model", options.ModelPath, "--tokens-file", tokensFile,
+                "generate", "--model", PreparedBenchmarkModel.Require(options.ModelPath), "--tokens-file", tokensFile,
                 "--max-tokens", Number(quality.MaxTokens), "--context-size", Number(options.ContextSize),
                 "--backend", backend, "--kv-precision", kv, "--threads", Number(options.Threads),
             ];

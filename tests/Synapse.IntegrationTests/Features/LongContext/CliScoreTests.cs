@@ -194,8 +194,11 @@ public sealed class CliScoreTests
         };
         startInfo.ArgumentList.Add(Path.Combine(AppContext.BaseDirectory, "synapse.dll"));
         startInfo.ArgumentList.Add(command);
-        startInfo.ArgumentList.Add("--model");
-        startInfo.ArgumentList.Add(ReferenceBenchmarkFixture.GetModelPath());
+        if (!extra.Contains("--model", StringComparer.Ordinal))
+        {
+            startInfo.ArgumentList.Add("--model");
+            startInfo.ArgumentList.Add(await ReferenceBenchmarkFixture.GetCompiledModelPathAsync());
+        }
         foreach (var argument in extra)
         {
             startInfo.ArgumentList.Add(argument);

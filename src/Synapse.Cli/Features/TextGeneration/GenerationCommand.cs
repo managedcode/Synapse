@@ -6,7 +6,6 @@ using ManagedCode.Synapse.Cli.Features.LayerDrop;
 using ManagedCode.Synapse.Cli.Features.Speculation;
 using ManagedCode.Synapse.Runtime.Features.ModelLoading;
 using ManagedCode.Synapse.Runtime.Features.TextGeneration;
-using ManagedCode.Synapse.Runtime.Features.Tokenization;
 
 namespace ManagedCode.Synapse.Cli.Features.TextGeneration;
 
@@ -98,7 +97,7 @@ internal static class GenerationCommand
             options.ContextSize,
             options.RopeScaling?.Name,
             result.GeneratedTokens,
-            DecodeOrNull(options.ModelPath, result.GeneratedTokens),
+            DecodeOrNull(model, result.GeneratedTokens),
             options.Threads,
             measurement.Load.TotalMilliseconds,
             result.TimeToFirstToken.TotalMilliseconds,
@@ -116,12 +115,12 @@ internal static class GenerationCommand
             measurement.ManagedAllocated);
     }
 
-    /// <summary>Decodes with the model file's own tokenizer (ADR-014); null when that tokenizer is not implemented.</summary>
-    internal static string? DecodeOrNull(string modelPath, IReadOnlyList<int> tokens)
+    /// <summary>Decodes with the loaded model's tokenizer (ADR-014); null when that tokenizer is not implemented.</summary>
+    internal static string? DecodeOrNull(ITextGenerationModel model, IReadOnlyList<int> tokens)
     {
         try
         {
-            return TextTokenizers.FromGguf(modelPath).Decode(tokens);
+            return model.CreateTokenizer().Decode(tokens);
         }
         catch (Exception exception) when (exception is NotSupportedException or InvalidDataException)
         {

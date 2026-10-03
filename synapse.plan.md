@@ -17,6 +17,55 @@
   `TASK-BMK-001` remains `in_progress`; release benchmark work is open.
 
 
+## 2026-10-03 format-neutral conversion slice
+
+- [x] Local first `TASK-CNV-001` / ADR-024 slice: explicit `model convert` dispatcher for GGUF,
+  ONNX and SafeTensors with an inert graph sidecar for tensor-only sources.
+- [x] Native graph package v2, deterministic integrity checks, atomic publication,
+  exact Identity/dead-node passes and source-independent scalar execution.
+- [x] Bound symbolic batch dimensions and prove execution at two batch sizes;
+  unsupported operators, shapes, numeric recipes and hardware fail explicitly.
+- [x] Local TDD adapter/package/CLI regressions, format/build/analyzer/security
+  checks, 429/429 .NET tests, 32 Rust tests and file-scoped 89.3% conversion
+  coverage recorded in `docs/Development/ModelConversionEvidence-2026-10-03.md`.
+  Two existing ZoneTree background exceptions are disclosed in that evidence.
+  Hosted CI/changed-line gates, general graph scheduling, family import and
+  adaptive optimization remain open; `TASK-CNV-001` stays `in_progress`.
+
+## 2026-10-03 performance and compiled package checkpoint
+
+- [x] Bounded `TASK-PKG-003` checkpoint: scalar allocation regression failed
+  first; all float formats now avoid scalar arrays. Whole-tensor F32/F16/BF16
+  with SIMD validation preserve exact finite bits and rejection/alias behavior.
+  Thirty immutable paired BF16 diagnostics measure 6.38735 -> 0.108675 ms,
+  median paired speedup 58.9805x, and 21,233,664 -> 0 allocated bytes per
+  576x576 tensor; all 30 pairs are faster and decoded hashes match.
+  [Final raw evidence](benchmarks/results/2026-10-03-m2-pro-simd-source-decoding-paired.json)
+  retains all 1,800 samples; the intermediate 27.2x
+  [raw evidence](benchmarks/results/2026-10-03-m2-pro-whole-tensor-source-decoding-paired.json)
+  remains available. This excludes whole-model preparation and generation;
+  the general source-import task remains open.
+- [x] Bounded `TASK-PKG-004` checkpoint: ADR-022, deterministic streaming
+  compilation, bounded integrity validation and direct mapped execution with
+  exact source/compiled parity. Runtime requires separate preparation;
+  loaded text decoding reuses its tokenizer. Benchmark source/package
+  identity is revalidated before each measured child. General model
+  compilation and graph scheduling remain open.
+- [x] Isolated `TASK-QNT-006` experiment: ADR-023, block-mean math/validation,
+  direct grouped linear and real-weight speed/distortion diagnostic. Four
+  weights per mean produce relative output error energy 0.7813 on synthetic
+  probes versus 0.01586 for Q4. Runtime use remains unqualified until held-out
+  model quality is proven.
+- [x] Profile Metal K-quant prefill/decode and test three exact GEMM
+  candidates. All were slower in five-pair pilots and were reverted. Retain
+  numerical regressions and rejected evidence; no GPU speed win is claimed.
+- [x] Local verification: format, locked restore, Release build/analyzers,
+  429/429 full .NET tests, 32/32 Rust tests, security audit and focused coverage.
+  Core preparation/codec/package file coverage is 488/525 (92.95%). Record the
+  ZoneTree background exception, hardware and automated-gate limitations in
+  `benchmarks/results/2026-10-03-performance-preparation-evidence.md`; broader
+  task statuses remain open.
+
 Status reflects executed evidence only. The design specification remains the
 normative product scope.
 

@@ -25,7 +25,7 @@ internal sealed record SpeculationOutput(
 /// </summary>
 internal sealed record SpeculationArguments(string? DraftModel, LayerDropProfile? DraftDrop, int DraftTokens)
 {
-    public const string Usage = "[--draft-model <gguf>] [--draft-drop-layers <i,j,...>] [--draft-tokens <1..7>]";
+    public const string Usage = "[--draft-model <model.synapse>] [--draft-drop-layers <i,j,...>] [--draft-tokens <1..7>]";
 
     /// <summary>False only for malformed input; no draft option yields null.</summary>
     public static bool TryParse(IReadOnlyDictionary<string, string> values, out SpeculationArguments? speculation)

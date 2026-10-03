@@ -1,4 +1,5 @@
 using ManagedCode.Synapse.Runtime.Features.ModelLoading.Gguf;
+using ManagedCode.Synapse.Runtime.Features.ModelConversion;
 using ManagedCode.Synapse.Runtime.Features.TextGeneration;
 
 namespace ManagedCode.Synapse.Runtime.Features.ModelLoading;
@@ -24,12 +25,44 @@ public static class ModelLoader
         ArgumentException.ThrowIfNullOrWhiteSpace(modelPath);
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
-        if (!string.Equals(Path.GetExtension(modelPath), ".gguf", StringComparison.OrdinalIgnoreCase))
+        var extension = Path.GetExtension(modelPath);
+        if (!string.Equals(extension, ".synapse", StringComparison.OrdinalIgnoreCase))
         {
             throw new NotSupportedException(
-                $"Model format '{Path.GetExtension(modelPath)}' is unsupported; the current executable adapter accepts GGUF.");
+                "Runtime requires a prepared .synapse model. Convert it first: " +
+                "synapse model convert --source <model.gguf|model.onnx|weights.safetensors> --output <model.synapse>.");
         }
 
+        if (NativeGraphPackage.Version(modelPath) == 2)
+        {
+            throw new NotSupportedException("This native graph has no qualified text-generation adapter. " +
+                "Execute its graph explicitly: synapse model run --model <model.synapse> --inputs <inputs.json>.");
+        }
+
+        return LoadMapped(modelPath, options);
+    }
+
+    internal static ITextGenerationModel LoadSourceForValidation(string modelPath, int contextSize = 512) =>
+        LoadSourceForValidation(modelPath, new ModelLoadOptions { ContextSize = contextSize });
+
+    internal static ITextGenerationModel LoadSourceForValidation(string modelPath, int contextSize, int maximumParallelism) =>
+        LoadSourceForValidation(modelPath, new ModelLoadOptions { ContextSize = contextSize, MaximumParallelism = maximumParallelism });
+
+    internal static ITextGenerationModel LoadSourceForValidation(string modelPath, ModelLoadOptions options)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelPath);
+        ArgumentNullException.ThrowIfNull(options);
+        options.Validate();
+        if (!string.Equals(Path.GetExtension(modelPath), ".gguf", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new NotSupportedException("Source validation requires a GGUF input; product runtime requires .synapse.");
+        }
+
+        return LoadMapped(modelPath, options);
+    }
+
+    private static ITextGenerationModel LoadMapped(string modelPath, ModelLoadOptions options)
+    {
         var file = GgufFile.Open(modelPath);
         try
         {

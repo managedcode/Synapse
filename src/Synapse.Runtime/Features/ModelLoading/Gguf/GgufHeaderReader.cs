@@ -14,12 +14,21 @@ internal static class GgufHeaderReader
     public static GgufDescriptor Read(string path)
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1 << 16);
+        return Read(stream, stream.Length);
+    }
+
+    internal static GgufDescriptor Read(Stream stream, long sourceLength, int maximumTensorCount = 1_000_000, int maximumMetadataCount = 1_000_000)
+    {
         using var reader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true);
         ValidateHeader(reader);
-        var tensorCount = GgufMetadataValues.ReadBoundedCount(reader, "tensor", 1_000_000);
-        var metadataCount = GgufMetadataValues.ReadBoundedCount(reader, "metadata", 1_000_000);
+        var tensorCount = GgufMetadataValues.ReadBoundedCount(reader, "tensor", maximumTensorCount);
+        var metadataCount = GgufMetadataValues.ReadBoundedCount(reader, "metadata", maximumMetadataCount);
         var (metadata, arrays) = ReadMetadata(reader, metadataCount);
         var tensorHeaders = ReadTensorHeaders(reader, tensorCount);
+        if (stream.Position > stream.Length)
+        {
+            throw new InvalidDataException("GGUF header is truncated.");
+        }
         var alignment = metadata.TryGetValue("general.alignment", out var configuredAlignment)
             ? Convert.ToInt32(configuredAlignment, System.Globalization.CultureInfo.InvariantCulture)
             : DefaultAlignment;
@@ -31,8 +40,9 @@ internal static class GgufHeaderReader
         var dataOffset = checked((stream.Position + alignment - 1) / alignment * alignment);
         return new GgufDescriptor(
             metadata,
-            MaterializeTensorInfos(tensorHeaders, dataOffset, stream.Length),
-            arrays);
+            MaterializeTensorInfos(tensorHeaders, dataOffset, sourceLength),
+            arrays,
+            dataOffset);
     }
 
     private static void ValidateHeader(BinaryReader reader)
@@ -153,7 +163,8 @@ internal static class GgufHeaderReader
 internal sealed record GgufDescriptor(
     IReadOnlyDictionary<string, object> Metadata,
     IReadOnlyDictionary<string, GgufTensorInfo> Tensors,
-    IReadOnlyDictionary<string, GgufArrayReference> Arrays);
+    IReadOnlyDictionary<string, GgufArrayReference> Arrays,
+    long DataOffset);
 
 /// <summary>A metadata array located in the file: element type, element count, and offset of the first element.</summary>
 internal sealed record GgufArrayReference(uint ElementType, int Count, long Offset);

@@ -47,7 +47,7 @@ public sealed class MetalBackendTests
     public async Task MetalLogitsTrackReferenceLogits()
     {
         GpuHardware.RequireMetal();
-        using var reference = (Qwen2Model)ModelLoader.Load(
+        using var reference = (Qwen2Model)ModelLoader.LoadSourceForValidation(
             ReferenceBenchmarkFixture.GetModelPath(),
             new ModelLoadOptions { ContextSize = 64, MaximumParallelism = 4, KernelBackend = KernelBackend.Reference });
         using var metal = Load(contextSize: 64);
@@ -113,7 +113,7 @@ public sealed class MetalBackendTests
         Skip.Unless(OperatingSystem.IsMacOS(), "The CUDA negative path is asserted on macOS, where no NVIDIA driver exists.");
 
         var probe = await Assert.That(() => GpuDevices.Probe(KernelBackend.Cuda)).Throws<NotSupportedException>();
-        var load = await Assert.That(() => ModelLoader.Load(
+        var load = await Assert.That(() => ModelLoader.LoadSourceForValidation(
                 ReferenceBenchmarkFixture.GetModelPath(),
                 new ModelLoadOptions { ContextSize = 64, KernelBackend = KernelBackend.Cuda }))
             .Throws<NotSupportedException>();
@@ -123,7 +123,7 @@ public sealed class MetalBackendTests
     }
 
     internal static Qwen2Model Load(int contextSize, int maximumSessions = 4) =>
-        (Qwen2Model)ModelLoader.Load(
+        (Qwen2Model)ModelLoader.LoadSourceForValidation(
             ReferenceBenchmarkFixture.GetModelPath(),
             new ModelLoadOptions
             {

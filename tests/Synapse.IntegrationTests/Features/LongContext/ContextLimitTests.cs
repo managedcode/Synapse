@@ -72,5 +72,5 @@ public sealed class ContextLimitTests
     }
 
     private static Qwen2Model Load(ModelLoadOptions options) =>
-        (Qwen2Model)ModelLoader.Load(ReferenceBenchmarkFixture.GetModelPath(), options);
+        (Qwen2Model)ModelLoader.LoadSourceForValidation(ReferenceBenchmarkFixture.GetModelPath(), options);
 }

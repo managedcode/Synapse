@@ -6,17 +6,21 @@ namespace ManagedCode.Synapse.Runtime.Features.GraphExecution.Reference;
 public static class GraphReferenceInterpreter
 {
     /// <summary>Runs one stateless FP32 entry point with explicit tensor payloads.</summary>
-    /// <remarks>Inputs and weights are copied before execution; unsupported semantics fail closed in preflight.</remarks>
+    /// <remarks>Inputs and weights are copied before execution; unsupported semantics fail closed in preflight.
+    /// Cancellation is observed before preflight and between atomic scalar node evaluations.</remarks>
     public static IReadOnlyDictionary<ValueId, float[]> Execute(
         ModelGraph graph,
         EntryPointId entryPointId,
         IReadOnlyDictionary<ValueId, float[]> inputs,
-        IReadOnlyDictionary<TensorId, float[]> weights)
+        IReadOnlyDictionary<TensorId, float[]> weights,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var (entryPoint, values) = GraphReferencePreflight.Prepare(graph, entryPointId, inputs, weights);
         var declarations = graph.Values.ToDictionary(value => value.Id);
         foreach (var node in graph.Nodes)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (node.Operation is GraphOperationKind.Input or GraphOperationKind.Constant or GraphOperationKind.Output)
             {
                 continue;
@@ -28,7 +32,9 @@ public static class GraphReferenceInterpreter
             values.Add(outputId, output);
         }
 
-        return entryPoint.Outputs.ToDictionary(id => id, id => (float[])values[id].Clone());
+        var result = entryPoint.Outputs.ToDictionary(id => id, id => (float[])values[id].Clone());
+        cancellationToken.ThrowIfCancellationRequested();
+        return result;
     }
 
     private static void ExecuteNode(GraphNode node, Dictionary<ValueId, float[]> values, float[] output)

@@ -24,7 +24,7 @@ internal sealed record ScoreOptions(
     LayerDropProfile? LayerDrop = null)
 {
     public static string Usage =>
-        "Usage: synapse score --model <model.gguf> (--text-file <path> | --tokens-file <path>) --context-size <n> " +
+        "Usage: synapse score --model <model.synapse> (--text-file <path> | --tokens-file <path>) --context-size <n> " +
         $"[--chunks <n>] [--threads <n>] [--backend <{KernelBackendNames.Usage}>] " +
         "[--rope-scaling yarn:<factor>:<trained-context>] [--kv-precision f32|f16] [--scoring-rows <1..512>] " +
         "[--parse-special] [--scores-output <file.json>] [--kv-pages <budget>:<window>[:p16|p32|p64][:random[:seed]]] " +

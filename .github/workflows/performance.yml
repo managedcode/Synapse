@@ -89,6 +89,16 @@ jobs:
       - name: Fetch selected verified GGUF model
         shell: bash
         run: dotnet run --project src/Synapse.Cli --configuration Release --no-build -- model fetch --id "${SYNAPSE_GGUF_MODEL_ID}" --output "${SYNAPSE_MODEL_ROOT}"
+      - name: Prepare Synapse model before benchmark execution
+        shell: bash
+        run: |
+          source_model="${SYNAPSE_MODEL_ROOT}/${SYNAPSE_GGUF_MODEL_ID}/${SYNAPSE_GGUF_MODEL_FILE}"
+          prepared_model="${source_model%.gguf}.synapse"
+          if [[ -f "${prepared_model}" ]]; then
+            dotnet run --project src/Synapse.Cli --configuration Release --no-build -- model inspect --model "${prepared_model}"
+          else
+            dotnet run --project src/Synapse.Cli --configuration Release --no-build -- model compile --source "${source_model}" --output "${prepared_model}"
+          fi
       - name: Build pinned dotLLM
         run: dotnet build _external/dotLLM/src/DotLLM.Cli/DotLLM.Cli.csproj --configuration Release
       - name: Build pinned CPU llama.cpp

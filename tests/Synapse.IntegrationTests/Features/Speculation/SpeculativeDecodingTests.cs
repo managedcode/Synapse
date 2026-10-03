@@ -107,7 +107,7 @@ public sealed class SpeculativeDecodingTests
         await Assert.That(TokenIdentity.Digest(target, draftTokens)).IsEqualTo(TokenIdentity.Digest(draft, draftTokens));
     }
 
-    private static Qwen2Model Load(string path, KernelBackend backend) => (Qwen2Model)ModelLoader.Load(
+    private static Qwen2Model Load(string path, KernelBackend backend) => (Qwen2Model)ModelLoader.LoadSourceForValidation(
         path,
         new ModelLoadOptions { ContextSize = 1_024, MaximumParallelism = 8, KernelBackend = backend });
 }
