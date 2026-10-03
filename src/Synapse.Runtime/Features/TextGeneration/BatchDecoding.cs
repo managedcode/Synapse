@@ -20,6 +20,9 @@ internal interface IBatchDecoder
     /// <summary>Logit rows one step may request.</summary>
     int LogitsRowCapacity { get; }
 
+    /// <summary>Sizes a newly assigned slot before its first step; the caller holds the execution gate (ADR-017).</summary>
+    void Reserve(int slot, int positions);
+
     /// <summary>
     /// Evaluates one step. Logits rows must be exactly <c>0..k-1</c> in token order. Tokens from index
     /// <paramref name="promptStart"/> on are prompt tokens: they always attend densely, even alone in their slot (ADR-016).

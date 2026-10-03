@@ -47,4 +47,7 @@ internal sealed class Qwen2KvSlots(DecoderDimensions dimensions, int slotCount)
 
     /// <summary>Bytes of K and V allocated across every slot.</summary>
     public long AllocatedBytes => _slots.Sum(slot => slot?.AllocatedBytes ?? 0);
+
+    /// <summary>Releases every idle slot after the scheduler has joined.</summary>
+    public void Release() => Array.Clear(_slots);
 }

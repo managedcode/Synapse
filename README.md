@@ -57,6 +57,15 @@ Details: [`docs/Architecture.md`](docs/Architecture.md).
 | How does **Microsoft Foundry Local** do? | **Fast, but quality-limited in this test.** With separate ONNX weights on about 6 cores, Qwen2.5 0.5B reached 231 tokens/s and the 7B models 22–25 tokens/s; none of the 7 model/device variants fully completed the 128-token instruction. |
 | Is it faster than the other .NET engine, dotLLM? | **In the same 8-token smoke, 14× faster.** |
 
+The latest local Qwen2.5 0.5B trial measures FP16 KV separately from prefix
+reuse: at 16K, median cold TTFT is 9.80 s with FP32 and 8.59 s with FP16,
+with identical continuations across all 42 measured pairs. Both profiles solve
+26/42 requests. KV is halved and now contracts after a shorter request:
+24→384→24 MiB for FP32, 12→192→12 MiB for FP16, then zero on disposal.
+These shared-host timings are diagnostic; [raw evidence, memory scope and
+qualification limits](docs/Development/OptimizationAblationEvidence-2026-10-03.md)
+remain explicit. Weight averaging is removed.
+
 ### Where it is tested
 
 | Machine | Chip · CPU | RAM | OS | What runs there |
@@ -234,6 +243,28 @@ SafeTensors with an inert graph sidecar. Native graph packages execute through
 The initial Qwen2 compiler preserves exact weights and tokenizer metadata,
 orders tensors by the verified graph, and checks package integrity. General
 SafeTensors import and optimized Execution IR compilation remain planned.
+
+Generation and scoring accept an explicit control mode:
+
+| `--optimization` | Execution |
+|---|---|
+| `off` | Scalar reference, FP32 KV, every layer and dense attention |
+| `dense` | Selected backend, FP32 KV, every layer and dense attention |
+| `custom` (default) | Explicit backend, KV precision, page selection, layer drop and generation draft options |
+
+`off` and `dense` reject contradictory approximation options. Dense execution
+still follows the selected backend's numerical
+profile; managed/native activation quantization and GPU accumulation are visible
+in the reported `runtime_profile`.
+
+Single-request generation allocates one session and one vocabulary-logits row;
+speculation reserves its verification rows and accepts `--draft-tokens 1..7`.
+Concurrent generation reserves the requested sessions, while scoring keeps
+its explicit `--scoring-rows` bound. Generation JSON includes
+`allocated_kv_bytes`, the KV memory actually retained after the request.
+
+See [ADR-025](docs/ADR/ADR-025-explicit-optimization-ablation.md) for the paired
+long-context quality and timing protocol.
 
 Needs .NET SDK 10.0.401 and Rust 1.98.1. All commands are in
 [`AGENTS.md`](AGENTS.md#canonical-commands).

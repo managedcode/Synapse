@@ -56,6 +56,8 @@ internal sealed unsafe class GpuDecoderExecutor : IDecoderExecutor, IBatchDecode
 
     public void Reserve(int positions) => _library.Reserve(_model, 0, positions);
 
+    public void Reserve(int slot, int positions) => _library.Reserve(_model, slot, positions);
+
     public int LogitsRowCapacity => _logits.Length / _dimensions.VocabularySize;
 
     public ReadOnlyMemory<float> PrefillFrom(IReadOnlyList<int> tokens, int first, Action<int>? evaluated)

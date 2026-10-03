@@ -50,9 +50,9 @@ loading consume that prepared artifact. The initial Qwen2 package preserves
 the exact source encodings, tokenizer metadata and graph identity in a bounded,
 integrity-checked layout and executes directly from its mapped tensor ranges
 (ADR-022). Source loaders remain internal numerical oracles. Preparation never
-happens implicitly inside a measured runtime request. Grouped weight averaging
-is a separate, unqualified approximation experiment (ADR-023); it is excluded
-from default precision selection and generation.
+happens implicitly inside a measured runtime request. Weight averaging was
+rejected and removed after quality measurements (ADR-023). Dynamic KV capacity
+and explicit precision profiles preserve their numerical and ownership rules.
 
 ## External comparison boundary
 

@@ -1,5 +1,17 @@
 # Synapse bootstrap decisions
 
+## 2026-10-03 generation effects and user controls
+
+The preparation-only speedup does not answer whether generation improves.
+Evaluate dense original weights against FP16 KV and real repeated-prefix
+requests on identical long-context tasks. Averaging is rejected and removed:
+all three Q8-code-mean variants lost the answer in the first real pilot.
+Memory must follow active demand in both directions: oversized KV retained
+after a long request and buffers retained after disposal are concrete targets.
+Keep scalar/off, accelerated dense and custom controls distinct. Measure tail
+NLL/greedy drift and exact-answer tasks together with TTFT/decode/KV/memory;
+report approximate losses rather than hiding them in a single preset label.
+
 ## 2026-10-03 pipeline model parameters
 
 Expose model IDs/files, model sets and smoke qualification as workflow inputs
@@ -15,11 +27,8 @@ scenario/configuration and recorded parser-fixture inputs used by clean CI.
   memory-mapped `.synapse` package with verified provenance and graph-ordered
   aligned tensors. This is an initial executable package slice; general
   SafeTensors family import and Execution IR compilation stay planned.
-- Test four adjacent weights replaced by their mean as an explicitly
-  approximate encoding. The direct linear computes one input-group sum and
-  one multiplication per weight group. It needs measured distortion and
-  held-out model quality before runtime use; arbitrary dense matrices do not
-  have interchangeable weights.
+- Weight averaging was tested and rejected; keep the source math and use
+  measured KV precision, exact prefix reuse and bounded memory policies.
 - ZoneTree remains the durable metadata/index store. Its compaction and
   compressed storage inform immutable chunk/index layout; they do not prove
   that arithmetic averaging preserves model outputs.
@@ -33,9 +42,9 @@ scenario/configuration and recorded parser-fixture inputs used by clean CI.
 Decisions after measurement: keep exact whole-tensor source decoding with
 SIMD finite validation (30 paired BF16 probes, 6.38735 -> 0.108675 ms,
 identical bits and zero allocations); require explicit
-preparation before runtime and reuse the loaded tokenizer. Leave four-weight
-averaging outside executable profiles because the real-weight synthetic
-output error energy is 0.7813 versus Q4's 0.01586. Revert all three slower
+preparation before runtime and reuse the loaded tokenizer. Remove four-weight
+averaging after synthetic output error energy 0.7813 versus Q4's 0.01586 and
+failed real-model answers. Revert all three slower
 Metal GEMM pilots. Benchmark identity cannot be cached by path or file
 timestamps: source and package are revalidated before each measured child.
 The prepared package startup scan remains explicit; no generation-speed

@@ -179,8 +179,8 @@ paired measurements and unchanged output quality.
 | `AC-PKG-004-10`: mixed-engine benchmark requires a matching prepared artifact and rechecks each sample | `TEST-PKG-004-10`: `BenchmarkRefusesUnpreparedSourceWithoutCreatingOutput`, `BenchmarkVerifiesPreparedArtifactAgainstSourceIdentity`, `BenchmarkRevalidatesChangedFilesAfterSuccessfulPreparation` |
 
 General compressed chunks, ZoneTree cache integration, SafeTensors compilation,
-quantization/averaging profiles, and a graph scheduler remain outside this
-implemented slice. Hardware that cannot run a parity case is
+per-tensor quantization and a graph scheduler
+remain outside this implemented slice. Hardware that cannot run a parity case is
 `not_run_missing_hardware`, never passed.
 
 Focused evidence on 2026-10-03: the initial 31 compiled-package cases passed on macOS

@@ -19,8 +19,10 @@ public sealed class Qwen2Model : ITextGenerationModel
     private readonly IDecoderExecutor _executor;
     private readonly ContinuousBatchScheduler? _scheduler;
     private readonly object _executionGate = new();
+    private readonly Lock _disposeGate = new();
     private readonly DirectSessionPrefix _direct;
     private readonly Lazy<ITextTokenizer> _tokenizer;
+    private volatile bool _disposed;
 
     private Qwen2Model(GgufFile file, ModelLoadOptions options)
     {
@@ -98,12 +100,22 @@ public sealed class Qwen2Model : ITextGenerationModel
     public ModelGraph Graph { get; }
 
     /// <inheritdoc />
-    public ITextTokenizer CreateTokenizer() => _tokenizer.Value;
+    public ITextTokenizer CreateTokenizer()
+    {
+        lock (_executionGate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return _tokenizer.Value;
+        }
+    }
 
     internal DecoderDimensions Dimensions { get; }
 
+    /// <summary>Whether disposal would reenter an execution callback; also used by owner diagnostics.</summary>
+    internal bool IsExecutionCallback => Monitor.IsEntered(_executionGate) || (_scheduler?.IsExecutingThread ?? false);
+
     /// <summary>Bytes of KV currently allocated across the executor's slots (ADR-017); waits for a running step.</summary>
-    internal long AllocatedKvBytes
+    public long AllocatedKvBytes
     {
         get
         {
@@ -147,9 +159,11 @@ public sealed class Qwen2Model : ITextGenerationModel
         int maximumNewTokens,
         IProgress<GenerationProgress>? progress)
     {
+        RejectExecutionCallback();
         ValidatePrompt(promptTokens, maximumNewTokens, allowEmptyOutput: false);
         lock (_executionGate)
         {
+            ObjectDisposedException.ThrowIf(_disposed, this);
             var timer = Stopwatch.StartNew();
             var promptCount = promptTokens.Count;
             var reused = _direct.Claim(promptTokens);
@@ -181,9 +195,13 @@ public sealed class Qwen2Model : ITextGenerationModel
         CancellationToken cancellationToken)
     {
         ValidatePrompt(promptTokens, maximumNewTokens, allowEmptyOutput: false);
-        return _scheduler is not null
-            ? _scheduler.EnqueueAsync(promptTokens, maximumNewTokens, cancellationToken)
-            : Task.Run(() => Generate(promptTokens, maximumNewTokens), cancellationToken);
+        lock (_executionGate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return _scheduler is not null
+                ? _scheduler.EnqueueAsync(promptTokens, maximumNewTokens, cancellationToken)
+                : Task.Run(() => Generate(promptTokens, maximumNewTokens), cancellationToken);
+        }
     }
 
     /// <inheritdoc />
@@ -208,9 +226,30 @@ public sealed class Qwen2Model : ITextGenerationModel
     /// <inheritdoc />
     public void Dispose()
     {
-        _scheduler?.Dispose();
-        _executor.Dispose();
-        _file.Dispose();
+        if (IsExecutionCallback)
+        {
+            throw new InvalidOperationException("A model cannot be disposed from its own execution callback.");
+        }
+
+        lock (_disposeGate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            lock (_executionGate)
+            {
+                _disposed = true;
+            }
+
+            _scheduler?.Dispose();
+            lock (_executionGate)
+            {
+                _executor.Dispose();
+                _file.Dispose();
+            }
+        }
     }
 
     /// <summary>Evaluates a prompt from position zero and returns a copy of the final logits.</summary>
@@ -227,6 +266,7 @@ public sealed class Qwen2Model : ITextGenerationModel
     /// <summary>Prefills <paramref name="promptTokens"/>, then decodes each continuation token through the KV cache.</summary>
     internal float[] EvaluateIncrementalLogits(IReadOnlyList<int> promptTokens, IReadOnlyList<int> continuation)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         ValidatePrompt([.. promptTokens, .. continuation], 0, allowEmptyOutput: true);
         return RunDirect(executor =>
         {
@@ -247,19 +287,39 @@ public sealed class Qwen2Model : ITextGenerationModel
     /// </summary>
     internal T RunDirect<T>(Func<IDecoderExecutor, T> work)
     {
+        RejectExecutionCallback();
         lock (_executionGate)
         {
+            ObjectDisposedException.ThrowIf(_disposed, this);
             _direct.Clear();
             return work(_executor);
         }
     }
 
     /// <summary>Digest of the first <paramref name="count"/> vocabulary entries and every merge (ADR-020).</summary>
-    internal string VocabularyDigest(int count) => TokenIdentity.Digest(_file, count);
+    internal string VocabularyDigest(int count)
+    {
+        lock (_executionGate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return TokenIdentity.Digest(_file, count);
+        }
+    }
 
     private ContinuousBatchScheduler RequireScheduler() => _scheduler
         ?? throw new NotSupportedException("The reference backend serializes requests and has no batching scheduler.");
 
-    private void ValidatePrompt(IReadOnlyList<int> promptTokens, int maximumNewTokens, bool allowEmptyOutput) =>
+    private void RejectExecutionCallback()
+    {
+        if (IsExecutionCallback)
+        {
+            throw new InvalidOperationException("A model cannot start nested direct execution from its own execution callback.");
+        }
+    }
+
+    private void ValidatePrompt(IReadOnlyList<int> promptTokens, int maximumNewTokens, bool allowEmptyOutput)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         PromptLimits.Validate(promptTokens, maximumNewTokens, allowEmptyOutput, ContextSize, VocabularySize);
+    }
 }

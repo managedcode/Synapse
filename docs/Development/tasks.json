@@ -2,6 +2,24 @@
   "schemaVersion": 1,
   "tasks": [
     {
+      "id": "TASK-CTX-010",
+      "requirement": "REQ-CTX-010",
+      "slice": "LongContext",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-CTX-007", "TASK-CTX-008", "TASK-CTX-009"],
+      "tests": ["TEST-CTX-010-1", "TEST-CTX-010-2", "TEST-CTX-010-3", "TEST-CTX-010-4"]
+    },
+    {
+      "id": "TASK-CTX-009",
+      "requirement": "REQ-CTX-009",
+      "slice": "LongContext",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-CTX-004", "TASK-CTX-005", "TASK-CTX-008"],
+      "tests": ["TEST-CTX-009-1", "TEST-CTX-009-2", "TEST-CTX-009-3", "TEST-CTX-009-4", "TEST-CTX-009-5"]
+    },
+    {
       "id": "TASK-CNV-001",
       "requirement": "REQ-CNV-001",
       "slice": "ModelConversion",
@@ -349,15 +367,6 @@
       "status": "in_progress",
       "dependsOn": ["TASK-SPC-001", "TASK-LDP-004"],
       "tests": ["TEST-SPC-003-1"]
-    },
-    {
-      "id": "TASK-QNT-006",
-      "requirement": "REQ-QNT-006",
-      "slice": "Quantization",
-      "stage": "D1",
-      "status": "in_progress",
-      "dependsOn": ["TASK-QNT-005"],
-      "tests": ["TEST-QNT-006-1", "TEST-QNT-006-2", "TEST-QNT-006-3", "TEST-QNT-006-4", "TEST-QNT-006-5", "TEST-QNT-006-6", "TEST-QNT-006-7", "TEST-QNT-006-8", "TEST-QNT-006-9"]
     },
     {
       "id": "TASK-QNT-005",

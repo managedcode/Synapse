@@ -162,7 +162,11 @@ internal static class ScoreCommand
             (double)run.Matches / run.Count,
             load.TotalMilliseconds,
             run.ChunkMilliseconds,
-            run.ChunkMilliseconds.Sum());
+            run.ChunkMilliseconds.Sum())
+        {
+            RequestedOptimization = options.Optimization,
+            RuntimeProfile = model.RuntimeProfile,
+        };
     }
 
     private sealed class ScoreRun
@@ -227,7 +231,13 @@ internal sealed record ScoreOutput(
     double GreedyAccuracy,
     double LoadMilliseconds,
     IReadOnlyList<double> ChunkMilliseconds,
-    double ScoringMilliseconds);
+    double ScoringMilliseconds)
+{
+    public string RequestedOptimization { get; init; } = "custom";
+
+    public string RuntimeProfile { get; init; } = string.Empty;
+
+}
 
 internal sealed record ChunkTrace(int Chunk, IReadOnlyList<double> NegativeLogLikelihoods, IReadOnlyList<int> GreedyTokens);
 

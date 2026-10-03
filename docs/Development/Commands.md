@@ -87,7 +87,4 @@ synthetic probe vectors do not establish model quality):
 dotnet experiments/Synapse.ReferenceBenchmarks/bin/Release/net10.0/Synapse.ReferenceBenchmarks.dll source-decode \
   --model artifacts/models/smollm2-135m-instruct-bf16/model.safetensors \
   --tensor model.layers.0.self_attn.q_proj.weight --samples 30
-dotnet experiments/Synapse.ReferenceBenchmarks/bin/Release/net10.0/Synapse.ReferenceBenchmarks.dll weight-study \
-  --model artifacts/models/smollm2-135m-instruct-bf16/model.safetensors \
-  --tensor model.layers.0.self_attn.q_proj.weight --samples 30
 ```

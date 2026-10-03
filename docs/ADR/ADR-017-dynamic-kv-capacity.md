@@ -55,6 +55,60 @@ preallocates `-c` tokens, while MLX grows its cache in steps.
 
 ## Consequences
 
+### 2026-10-03 amendment: contraction and release (`REQ-CTX-010`)
+
+Profiling and the long→short behavior test expose growing-only retention: a
+completed long request leaves its full allocation resident for a later short
+request. CPU executor disposal also retained arrays while the disposed model
+object remained reachable. Both are allocator issues, independent of model math.
+
+`Reserve` now computes the request rounded up to the same growth unit. It grows
+as before, and contracts when that rounded need is at most one quarter of the
+current capacity. Otherwise it keeps the allocation. This hysteresis avoids
+reallocating for small request-size changes. The instance context remains the
+hard limit; no active token or layer is discarded. The new request fits in the
+new capacity, including every prefix position claimed for exact reuse.
+
+CPU resizing preserves the surviving position bytes. Metal copies the smaller
+of old/new position ranges per layer/head for K and V with their respective
+strides and waits for the transfer before executing. Native CUDA retains its
+existing full-context policy until real hardware qualification; no contraction
+or missing-device test is claimed there.
+
+Continuous batching reserves the prompt-plus-output bound of each newly
+assigned slot under the model execution gate before its first step. An active
+slot is never contracted by another request. Direct generation and scoring
+already reserve under that same gate. Disposal joins the scheduler, takes the
+gate and releases CPU arrays/slots and native resources; allocated KV is zero
+even when the disposed managed model remains referenced.
+
+Closing the model rejects new direct, asynchronous, tokenizer and digest work
+before touching released storage. Asynchronous admission rechecks the closed
+state under the execution gate, so it cannot enqueue into a joined scheduler.
+Concurrent disposal is serialized and idempotent. Reentrant disposal from a
+direct execution/progress callback fails with `InvalidOperationException`
+before closing the owner: joining a scheduler from inside that gate could
+deadlock, and releasing its active native mapping would invalidate the caller.
+Scheduler-thread callbacks receive the same rejection before any state change,
+because joining the current thread would deadlock. Reentrant direct generation,
+scoring and internal direct math fail with `InvalidOperationException`; a nested
+request cannot contract or overwrite the outer operation's active KV. Metadata,
+tokenizer and allocation reads stay available to progress callbacks. Enqueuing
+asynchronous work is allowed; its math executes after the active gate is released.
+
+The existing `AllocatedKvBytes` diagnostic becomes public. This is allocator
+memory, not process RSS or the total mapped model footprint. The local
+`memory-eval` command consumes an already prepared package and records
+load→short→long→short→dispose allocation, timings, same-backend cold numerical
+comparators and real process observations. It never forces a GC to claim OS
+release. `TASK-CTX-010` stays in progress until its focused/full gates and real
+short→long→short measurements are recorded.
+
+Acceptance: `AC/TEST-CTX-010-1` contraction/hysteresis preserves bytes;
+`-2` direct cold numerical and prefix-reuse parity; `-3` batch slot contraction
+and disposal; `-4` prepared-only phase measurement with truthful provenance,
+quality, cancellation/failure handling and immutable output publication.
+
 - A large `ContextSize` costs memory only when it is used, so the CLI and
   SDK can offer long contexts without a memory penalty on short prompts.
 - A growth step costs one extra command buffer and a copy of the used KV,

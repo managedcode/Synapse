@@ -75,6 +75,8 @@ internal sealed class Qwen2CpuExecutor : IDecoderExecutor, IBatchDecoder
 
     public void Reserve(int positions) => _slots[0].Reserve(positions);
 
+    public void Reserve(int slot, int positions) => _slots[slot].Reserve(positions);
+
     public ReadOnlyMemory<float> PrefillFrom(IReadOnlyList<int> tokens, int first, Action<int>? evaluated)
     {
         for (var start = first; start < tokens.Count; start += _prefillTokens)
@@ -127,7 +129,11 @@ internal sealed class Qwen2CpuExecutor : IDecoderExecutor, IBatchDecoder
 
     public ReadOnlySpan<float> GetLogits(int row) => LogitsRow(row).Span;
 
-    public void Dispose() => _pool.Dispose();
+    public void Dispose()
+    {
+        _pool.Dispose();
+        _slots.Release();
+    }
 
     private ReadOnlyMemory<float> LogitsRow(int row) =>
         new(_scratch.Logits, row * _dimensions.VocabularySize, _dimensions.VocabularySize);

@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using ManagedCode.Synapse.Cli.Features.LayerDrop;
 using ManagedCode.Synapse.Runtime.Features.ModelLoading;
 using ManagedCode.Synapse.Runtime.Features.TextGeneration;
+using ManagedCode.Synapse.Runtime.Features.TextGeneration.Qwen2;
 
 namespace ManagedCode.Synapse.Cli.Features.TextGeneration;
 
@@ -34,6 +35,7 @@ internal static class ConcurrentGenerationCommand
                     MaximumParallelism = options.Threads,
                     KernelBackend = options.Backend,
                     MaximumConcurrentSessions = options.ConcurrentRequests,
+                    ScoringRowsPerStep = 1,
                     RopeScaling = options.RopeScaling,
                     KvCachePrecision = options.KvCachePrecision,
                     KvPageActivation = options.KvPages,
@@ -89,7 +91,12 @@ internal static class ConcurrentGenerationCommand
             [.. results.Select(result => new ConcurrentRequestOutput(
                 result.GeneratedTokens,
                 result.TimeToFirstToken.TotalMilliseconds,
-                result.Elapsed.TotalMilliseconds))]);
+                result.Elapsed.TotalMilliseconds))])
+        {
+            RequestedOptimization = options.Optimization,
+            RuntimeProfile = model.RuntimeProfile,
+            AllocatedKvBytes = model is Qwen2Model qwen ? qwen.AllocatedKvBytes : null,
+        };
     }
 }
 
@@ -114,7 +121,14 @@ internal sealed record ConcurrentGenerationOutput(
     double ProcessCpuMilliseconds,
     double? AverageCpuCores,
     long MaximumObservedWorkingSetBytes,
-    IReadOnlyList<ConcurrentRequestOutput> Requests);
+    IReadOnlyList<ConcurrentRequestOutput> Requests)
+{
+    public string RequestedOptimization { get; init; } = "custom";
+
+    public string RuntimeProfile { get; init; } = string.Empty;
+
+    public long? AllocatedKvBytes { get; init; }
+}
 
 [JsonSerializable(typeof(ConcurrentGenerationOutput))]
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]

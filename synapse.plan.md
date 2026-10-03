@@ -1,5 +1,30 @@
 # Synapse master plan
 
+## 2026-10-03 explicit optimization ablation
+
+- [x] Reject and remove weight averaging, its conversion flags, runtime gates,
+  codec and diagnostic command after the real pilot lost all three answers.
+- [x] Local `TASK-CTX-009` checkpoint: off/dense/custom controls and a strict
+  prepared-only paired runner with cold/repeated turns, quality traces and
+  memory. Broader qualification and the task remain in progress.
+- [x] Run 84 real FP32/FP16 workers on 21 long-context cases, two paired rounds
+  at 4K/8K/16K. All 42 continuations match; KV halves. Correct answers are
+  26/42 for both profiles; this does not qualify general model quality.
+- [x] Complete 24 controlled prefix-reuse children (18 measured samples).
+  All nine pairs match; 16K repeat TTFT is 9224.563 / 15.981 ms, while cold
+  timing stays similar. This is exact repeated-prefix work reuse only.
+- [x] Extend request-driven KV capacity to return oversized/released buffers;
+  49 real owner regressions pass. Real 16K Metal short→long→short KV is
+  FP32 24→384→24 MiB / FP16 12→192→12 MiB, then zero on disposal; all
+  three comparisons per precision have exact fresh IDs/NLL/greedy results.
+  Native FP32 4K is 24→96→24→0 MiB. All nine full-model cold comparisons
+  preserve generated IDs, NLL double bits and greedy IDs exactly.
+- [x] Local TDD, 558/558 full .NET tests, 33 Rust tests, format/build/analyzers,
+  dependency audit, focused coverage and independent architecture/security
+  review. Exact raw evidence and limitations are recorded in
+  `docs/Development/OptimizationAblationEvidence-2026-10-03.md`.
+  ADR-025 is normative; broader tasks and planned automated gates remain open.
+
 ## 2026-10-03 pipeline model parameters
 
 - [x] Local `TASK-BMK-001` / `AC-BMK-001-5`: expose GGUF, MLX and Foundry selection
@@ -51,11 +76,10 @@
   loaded text decoding reuses its tokenizer. Benchmark source/package
   identity is revalidated before each measured child. General model
   compilation and graph scheduling remain open.
-- [x] Isolated `TASK-QNT-006` experiment: ADR-023, block-mean math/validation,
-  direct grouped linear and real-weight speed/distortion diagnostic. Four
-  weights per mean produce relative output error energy 0.7813 on synthetic
-  probes versus 0.01586 for Q4. Runtime use remains unqualified until held-out
-  model quality is proven.
+- Rejected `TASK-QNT-006` experiment: four-weight means produced relative
+  output error energy 0.7813 on synthetic probes versus Q4's 0.01586. The owner
+  subsequently rejected averaging; its implementation and active task were
+  removed. ADR-023 retains the decision and historical evidence.
 - [x] Profile Metal K-quant prefill/decode and test three exact GEMM
   candidates. All were slower in five-pair pilots and were reverted. Retain
   numerical regressions and rejected evidence; no GPU speed win is claimed.

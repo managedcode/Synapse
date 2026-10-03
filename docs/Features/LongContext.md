@@ -1,5 +1,68 @@
 # Long context
 
+## Controlled long-prompt ablation (`REQ-CTX-009`)
+
+ADR-025 adds explicit CLI modes `--optimization off|dense|custom` and an
+`optimization-eval` plan for prepared `.synapse` artifacts. `off` selects the
+scalar reference path with FP32 KV, full layers and dense attention. `dense`
+keeps the requested backend while disabling approximations. `custom` permits
+explicit supported KV/page/layer settings.
+Contradictory options fail. These controls describe executed math; they do not
+assign a quality rating to a profile.
+
+The evaluator pairs identical prompt IDs across profiles and records real
+child-process generation, bounded-tail teacher-forced scoring, answer grades,
+output lengths, TTFT, generation/decode time, actual KV allocation and observed
+process memory. Original weights with FP32 KV, full layers, dense attention and
+reuse disabled are the baseline. Cold and repeated prompts have separate rows;
+the repeated no-reuse baseline is required to measure prefix reuse. Aligned
+greedy agreement and NLL drift diagnose numerical effects; tail perplexity on
+retrieval prompts is not held-out model qualification.
+Paired profiles use the same parsed backend as their named dense baseline.
+Scores retain finite mean NLL and log perplexity. The exponentiated tail
+perplexity is nullable and carries `finite`, `overflow` or `underflow` status;
+paired ratios use log differences and carry the same range status. Nonfinite
+scores fail before entering evidence, preserving earlier generation phases.
+
+`TASK-CTX-009` remains in progress. `AC/TEST-CTX-009-1` maps CLI controls,
+`-2` maps strict plans and prepared-only execution, `-3` maps real generation,
+scoring and provenance, `-4` maps repeat controls, and `-5` maps paired ordering,
+failure/cancellation evidence and absence of implicit conversion/promotion.
+Raw measurements, exact verification commands and limitations are recorded in
+the dated development evidence after execution.
+
+## Dynamic memory workload (`REQ-CTX-010`)
+
+`memory-eval --request <json> --output <new.json>` executes a prepared Qwen2
+package through a real local model. Its version-one request contains
+`modelPath`, `contextSize`, bounded `shortPromptTokens` and `longPromptTokens`,
+`maximumNewTokens`, `threads`, an explicit backend/KV/page/layer/reuse `profile`,
+optional RoPE, and `scoredTailTokens` (zero disables scoring). The long input
+must exceed the short input, and its prompt plus output must fit the context.
+Paths are relative to the request file; `profile.modelPath` is rejected because
+the request supplies the model path. Unknown properties and unsupported
+profiles fail; execution never converts a source model.
+
+The main model runs `loaded`, `short-first`, `long`, `short-after-long`, then
+`disposed`. Separate cold models run `fresh-short` and `fresh-long` with identical
+IDs and the same numerical profile. Generation rows snapshot actual allocated
+KV, current working set, available macOS physical footprint, and managed heap
+before optional scoring. Every scoring row has its own `-score` label because
+scoring can reserve and contract KV too. Each row records its actual runtime,
+kernel and graph identities. The package/source/file identity comes from an
+actual untimed inspection and hash before load timing.
+
+Fresh-model comparisons retain output-ID equality and, when scoring is enabled,
+aligned greedy agreement and NLL drift. These measure the numerical effect of
+capacity changes, not held-out model quality. Five-millisecond process sampling
+records peaks separately from instantaneous checkpoints; no forced collection
+or file-cache flush occurs. Zero owned KV after disposal does not promise an
+immediate drop in process RSS. Partial phases are published atomically and
+retained on failure or cancellation; existing output files are preserved.
+`AC/TEST-CTX-010-4` covers real phases, provenance, quality, bounded failures,
+cancellation and publication. Actual speed/memory claims remain pending paired
+raw measurements and the corresponding quality result.
+
 Decisions are in ADR-013 (context limits and RoPE scaling), ADR-015 (quality
 evaluation), and ADR-012 (GPU execution). The plan is `gpu-kernels.plan.md`.
 
@@ -36,6 +99,11 @@ evaluation), and ADR-012 (GPU execution). The plan is `gpu-kernels.plan.md`.
   of the longest token prefix it already holds (ADR-018). It evaluates only the
   new tokens and reports how many were reused. Any other direct use
   invalidates the remembered tokens.
+- `REQ-CTX-010`: Known requests contract oversized KV allocations when their
+  rounded need is at most a quarter of existing capacity, preserving surviving
+  bytes and prefix reuse (ADR-017 amendment). Each newly assigned batch slot is
+  reserved under the execution gate. Disposal releases CPU and native KV;
+  allocation observations distinguish owned KV from process memory.
 
 ## Acceptance criteria and tests
 

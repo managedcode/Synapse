@@ -52,7 +52,7 @@ internal sealed record SpeculationArguments(string? DraftModel, LayerDropProfile
             return !values.ContainsKey("--draft-tokens");
         }
 
-        speculation = tokens > 0 ? new SpeculationArguments(model, drop, tokens) : null;
+        speculation = tokens is >= 1 and <= 7 ? new SpeculationArguments(model, drop, tokens) : null;
         return speculation is not null;
     }
 
@@ -65,6 +65,8 @@ internal sealed record SpeculationArguments(string? DraftModel, LayerDropProfile
             ContextSize = options.ContextSize,
             MaximumParallelism = options.Threads,
             KernelBackend = options.Backend,
+            MaximumConcurrentSessions = 1,
+            ScoringRowsPerStep = 1,
             RopeScaling = options.RopeScaling,
             KvCachePrecision = options.KvCachePrecision,
             LayerDrop = DraftDrop,

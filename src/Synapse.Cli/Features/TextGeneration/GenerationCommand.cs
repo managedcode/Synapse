@@ -6,6 +6,7 @@ using ManagedCode.Synapse.Cli.Features.LayerDrop;
 using ManagedCode.Synapse.Cli.Features.Speculation;
 using ManagedCode.Synapse.Runtime.Features.ModelLoading;
 using ManagedCode.Synapse.Runtime.Features.TextGeneration;
+using ManagedCode.Synapse.Runtime.Features.TextGeneration.Qwen2;
 
 namespace ManagedCode.Synapse.Cli.Features.TextGeneration;
 
@@ -46,6 +47,8 @@ internal static class GenerationCommand
                     ContextSize = options.ContextSize,
                     MaximumParallelism = options.Threads,
                     KernelBackend = options.Backend,
+                    MaximumConcurrentSessions = 1,
+                    ScoringRowsPerStep = (options.Speculation?.DraftTokens ?? 0) + 1,
                     RopeScaling = options.RopeScaling,
                     KvCachePrecision = options.KvCachePrecision,
                     KvPageActivation = options.KvPages,
@@ -112,7 +115,12 @@ internal static class GenerationCommand
             measurement.MaximumObservedWorkingSet,
             measurement.ManagedHeapAfterLoad,
             measurement.ManagedHeapAfterGeneration,
-            measurement.ManagedAllocated);
+            measurement.ManagedAllocated)
+        {
+            RequestedOptimization = options.Optimization,
+            RuntimeProfile = model.RuntimeProfile,
+            AllocatedKvBytes = model is Qwen2Model qwen ? qwen.AllocatedKvBytes : null,
+        };
     }
 
     /// <summary>Decodes with the loaded model's tokenizer (ADR-014); null when that tokenizer is not implemented.</summary>
@@ -168,6 +176,15 @@ internal sealed record GenerationOutput(
 {
     /// <summary>Draft and acceptance counts of a speculative run (ADR-020), or null.</summary>
     public SpeculationOutput? Speculation { get; init; }
+
+    /// <summary>The explicitly requested control mode, independent of the effective numerical profile.</summary>
+    public string RequestedOptimization { get; init; } = "custom";
+
+    /// <summary>Effective loaded numerical profile.</summary>
+    public string RuntimeProfile { get; init; } = string.Empty;
+
+    /// <summary>KV bytes actually retained by the loaded executor after generation, when available.</summary>
+    public long? AllocatedKvBytes { get; init; }
 }
 
 [JsonSerializable(typeof(GenerationOutput))]

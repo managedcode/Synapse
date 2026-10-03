@@ -169,8 +169,8 @@ impl MetalDecoder {
         }
 
         let current = self.slots[slot].as_ref().map_or(0, |kv| kv.capacity);
-        if positions > current {
-            let capacity = self.plan.shape.reserve_capacity(positions);
+        let capacity = self.plan.shape.reserve_capacity(positions);
+        if positions > current || (capacity < current && capacity <= current / 4) {
             let grown = self.allocate_slot(capacity, self.slots[slot].as_ref())?;
             self.slots[slot] = Some(grown);
         }
@@ -241,8 +241,8 @@ impl MetalDecoder {
     }
 }
 
-/// `(source, target, length)` byte ranges that move every (K or V, layer, KV head) region of `from` positions
-/// to its place in a slot of `to` positions; the layout is `[K|V][layer][KV head][position][head dim]`.
+/// `(source, target, length)` ranges preserving the smaller capacity in every (K or V, layer, KV head) region,
+/// with the old and new strides; the layout is `[K|V][layer][KV head][position][head dim]`.
 fn region_copies(shape: &DecoderShape, from: u32, to: u32) -> Vec<(u64, u64, u64)> {
     let row = u64::from(shape.head_dim) * shape.kv_precision.element_bytes();
     let regions = 2 * u64::from(shape.layer_count) * u64::from(shape.kv_heads);
@@ -251,7 +251,7 @@ fn region_copies(shape: &DecoderShape, from: u32, to: u32) -> Vec<(u64, u64, u64
             (
                 region * u64::from(from) * row,
                 region * u64::from(to) * row,
-                u64::from(from) * row,
+                u64::from(from.min(to)) * row,
             )
         })
         .collect()
@@ -308,4 +308,40 @@ unsafe fn wrap_segments(
 
 const fn bytes_of(values: &[f32]) -> u64 {
     (values.len() * 4) as u64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DecoderShape, region_copies};
+    use crate::gpu_kernels::decoder::KvPrecision;
+
+    #[test]
+    fn contracting_regions_keep_the_prefix_with_old_and_new_strides() {
+        let shape = DecoderShape {
+            layer_count: 2,
+            hidden: 128,
+            feed_forward: 128,
+            heads: 2,
+            kv_heads: 1,
+            head_dim: 64,
+            vocabulary: 64,
+            context: 512,
+            session_slots: 2,
+            step_tokens: 64,
+            logits_rows: 1,
+            rms_epsilon: 1e-6,
+            kv_precision: KvPrecision::F32,
+            kv_growth: 64,
+        };
+        let row = 64 * 4;
+        let actual = region_copies(&shape, 512, 128);
+
+        assert_eq!(actual.len(), 4);
+        for (index, &(source, destination, length)) in actual.iter().enumerate() {
+            let region = index as u64;
+            assert_eq!(source, region * 512 * row);
+            assert_eq!(destination, region * 128 * row);
+            assert_eq!(length, 128 * row);
+        }
+    }
 }

@@ -21,14 +21,15 @@ internal sealed record ScoreOptions(
     string? ScoresOutput,
     KvPageActivation? KvPages = null,
     int? FirstScored = null,
-    LayerDropProfile? LayerDrop = null)
+    LayerDropProfile? LayerDrop = null,
+    string Optimization = "custom")
 {
     public static string Usage =>
         "Usage: synapse score --model <model.synapse> (--text-file <path> | --tokens-file <path>) --context-size <n> " +
         $"[--chunks <n>] [--threads <n>] [--backend <{KernelBackendNames.Usage}>] " +
         "[--rope-scaling yarn:<factor>:<trained-context>] [--kv-precision f32|f16] [--scoring-rows <1..512>] " +
         "[--parse-special] [--scores-output <file.json>] [--kv-pages <budget>:<window>[:p16|p32|p64][:random[:seed]]] " +
-        "[--first-scored <position>] " + LayerDropArguments.Usage;
+        "[--first-scored <position>] " + LayerDropArguments.Usage + " " + RuntimeOptimizationArguments.Usage;
 
     public static ScoreOptions? Parse(IReadOnlyList<string> arguments)
     {
@@ -38,11 +39,19 @@ internal sealed record ScoreOptions(
         {
             if (arguments[index] == "--parse-special")
             {
+                if (parseSpecial)
+                {
+                    return null;
+                }
+
                 parseSpecial = true;
             }
-            else if (index + 1 < arguments.Count && arguments[index].StartsWith("--", StringComparison.Ordinal))
+            else if (index + 1 < arguments.Count && RuntimeOptimizationArguments.IsScoreFlag(arguments[index]))
             {
-                values[arguments[index]] = arguments[++index];
+                if (!values.TryAdd(arguments[index], arguments[++index]))
+                {
+                    return null;
+                }
             }
             else
             {
@@ -53,7 +62,8 @@ internal sealed record ScoreOptions(
         var textFile = values.GetValueOrDefault("--text-file");
         var tokensFile = values.GetValueOrDefault("--tokens-file");
         if (!values.TryGetValue("--model", out var model) || (textFile is null) == (tokensFile is null) ||
-            !File.Exists(textFile ?? tokensFile) || !TryParseRuntime(values, out var backend, out var scaling, out var kv))
+            !File.Exists(textFile ?? tokensFile) || !RuntimeOptimizationArguments.TryParseRuntime(values, out var backend, out var scaling, out var kv) ||
+            !RuntimeOptimizationArguments.TryResolve(values, ref backend, out var optimization))
         {
             return null;
         }
@@ -76,34 +86,7 @@ internal sealed record ScoreOptions(
         var first = values.TryGetValue("--first-scored", out var firstText) ? GenerationOptions.ParsePositive(firstText, -1) : context / 2;
         return context >= 4 && chunks is null or > 0 && threads > 0 && rows is > 0 and <= 512 && first >= 0 && first <= context - 2
             ? new ScoreOptions(model, textFile, tokensFile, context, chunks, threads, backend, scaling, kv, rows,
-                parseSpecial, values.GetValueOrDefault("--scores-output"), pages, first, drop)
+                parseSpecial, values.GetValueOrDefault("--scores-output"), pages, first, drop, optimization)
             : null;
-    }
-
-    private static bool TryParseRuntime(
-        Dictionary<string, string> values,
-        out KernelBackend backend,
-        out RopeScaling? scaling,
-        out KvCachePrecision kvPrecision)
-    {
-        backend = KernelBackend.Managed;
-        scaling = null;
-        kvPrecision = KvCachePrecision.Fp32;
-        if ((values.TryGetValue("--backend", out var name) && !KernelBackendNames.TryParse(name, out backend)) ||
-            (values.TryGetValue("--rope-scaling", out var text) && !GenerationOptions.TryParseScaling(text, out scaling)))
-        {
-            return false;
-        }
-
-        switch (values.GetValueOrDefault("--kv-precision", "f32"))
-        {
-            case "f32":
-                return true;
-            case "f16":
-                kvPrecision = KvCachePrecision.Fp16;
-                return true;
-            default:
-                return false;
-        }
     }
 }

@@ -7,7 +7,7 @@ Synapse graph format. Related plans: `flybrain.plan.md` (regions, residency,
 placement) and `kv-performance.plan.md` (hot KV). Normative scope remains the
 development specification.
 
-## 2026-10-03 preparation and averaging checkpoint
+## 2026-10-03 preparation and memory checkpoint
 
 Preparation is an explicit offline step into `.synapse`, before runtime.
 ADR-022 implements the bounded lossless Qwen2 package and direct mapped tensor
@@ -16,12 +16,10 @@ The loaded model caches its tokenizer so CLI output does not reopen and
 rehash the package. Source F32/F16/BF16 conversion now uses whole-tensor
 validation/decoding with zero scalar allocations and exact decoded bytes.
 
-ADR-023's group-of-four FP32 mean experiment has direct grouped linear math,
-but is excluded from executable precision profiles. The real SmolLM2 BF16
-576x576 query matrix shrinks from 663,552 to 331,776 bytes (Q4: 176,256).
-Sixteen deterministic synthetic probe vectors produce relative output error
-energy 0.781296 for averaging and 0.015860 for Q4. Neither synthetic probes nor
-isolated codec timing qualifies full-model quality or generation performance.
+ADR-023's group-of-four mean experiment was rejected and removed. Sixteen
+synthetic probes produced relative output error energy 0.781296 versus Q4's
+0.015860, and subsequent Q8 mean variants failed real-model retrieval. Focus
+is now measured FP16 KV, exact prefix reuse and request-driven memory release.
 Activation-aware calibration and sealed evaluation remain required before
 an approximation can enter a running model. Raw evidence and verification:
 `benchmarks/results/2026-10-03-performance-preparation-evidence.md`.

@@ -56,9 +56,7 @@ internal sealed class Qwen2ReferenceExecutor : IDecoderExecutor
 
     public ReadOnlyMemory<float> Decode(int token, int position) => Forward(token, position, computeLogits: true);
 
-    public void Dispose()
-    {
-    }
+    public void Dispose() => _cache.Release();
 
     private float[] Forward(int token, int position, bool computeLogits)
     {

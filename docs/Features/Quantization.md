@@ -85,64 +85,9 @@ execution.
 - Decode is 17.4–18.2 tokens/s against llama.cpp's 27.0–29.3.
 - Perplexity is 11.93 against 12.16 for Q8_0 on the same tokens.
 
-## Experimental adjacent-weight averaging (ADR-023)
+## Rejected averaging experiment
 
-`REQ-QNT-006` / `TASK-QNT-006` adds an isolated `BlockMeanCodec`. Its default
-identity is `syn.approx.blockmean.g4.f32.v1`. It replaces four adjacent weights
-in each row by one FP32 arithmetic mean. Configurable groups contain 2 through
-1024 weights; a partial final group averages only its actual elements. The
-encoding stores one little-endian FP32 mean per group without padding.
-
-Four FP32 weights therefore become four bytes: a 4x reduction in stored weight
-bytes for aligned rows. This is an approximate operator. Writing
-`w[i] = mean + residual[i]` gives
-`sum(w[i] * x[i]) = mean * sum(x[i]) + sum(residual[i] * x[i])`.
-The experiment discards the second term. Equal-weight groups have no residual;
-unequal groups can lose substantial output information. The arithmetic mean
-minimizes unweighted squared weight error, while actual output error depends
-on activation covariance. The existing `WeightSensitivity` API measures that
-error when real calibration activations are available.
-
-The direct linear path sums input groups once in FP64 and dots each row of
-stored means with those sums, using SIMD where available. It never expands a
-dense weight matrix. A caller-owned scratch overload enables repeated
-allocation-free measurement; the ordinary entry rents buffers. SIMD may
-reorder FP64 summation, so parity with expanded dense FP64 math uses relative
-tolerance `2e-6` and absolute tolerance `2e-6` near zero.
-
-Every mean and input is validated before output publication. Non-finite
-weights/means/inputs, incompatible shapes, unsupported overlaps, and FP32
-output overflow reject the operation without changing its destination.
-Encode/decode require disjoint source and destination storage. Linear output
-can overlap input or encoded bytes; caller scratch must be disjoint from
-those ranges and other scratch.
-
-The codec is absent from runtime encoding discovery and default profiles. A
-probe on real weight bytes can expose bad reconstruction or measure isolated
-linear speed, but cannot establish perplexity, task quality, or model
-throughput. Model qualification requires separate calibration/held-out data,
-explicit approximation permission, full-model quality checks, and paired
-end-to-end measurements.
-
-| Criterion | Tests |
-|---|---|
-| `TEST-QNT-006-1` explicit experimental identity | `BlockMeanCodecIsAnExplicitExperiment` |
-| `TEST-QNT-006-2` golden means and partial groups | `GoldenMeansAndPartialGroupsMatch` |
-| `TEST-QNT-006-3` sizes, shapes, finite extremes | `ExactSizesAndInvalidShapesAreChecked`, `EqualGroupsRemainExactAndFiniteExtremesDoNotOverflow` |
-| `TEST-QNT-006-4` expanded FP64 direct linear parity | `DirectLinearMatchesExpandedFp64AcrossGroupsAndShapes` |
-| `TEST-QNT-006-5` unchanged output on rejected data | `NonFiniteSourcesLeaveEncodedDestinationUnchanged`, `InvalidMeansAndInputsLeaveLinearAndDecodeOutputUnchanged`, `Fp32LinearOverflowLeavesAllRowsUnchanged` |
-| `TEST-QNT-006-6` source/destination alias contracts | `EncoderAndDecoderRejectOverlappingStorage`, `LinearSupportsInputOutputAndEncodedOutputAliasing` |
-| `TEST-QNT-006-7` reusable scratch contract | `CallerScratchMatchesDefaultAndRejectsShortOrAliasedBuffers`, `RepeatedCallerScratchLinearHasNoManagedAllocations` |
-| `TEST-QNT-006-8` lossy output distortion remains visible | `AveragingIsLossyAndOutputDistortionIsVisible` |
-| `TEST-QNT-006-9` real-weight diagnostic retains raw samples and unqualified model quality | `RealWeightStudyRetainsRawSamplesAndUnqualifiedQualityStatus` |
-
-Pinned ZoneTree 1.9.8's [compression dispatch](https://github.com/ZoneTree/ZoneTree/blob/13ee11e19007301fdea72b9210de62f6257f4929/src/ZoneTree/Compression/DataCompression.cs)
-uses LZ4, Zstd, Brotli, or Gzip for lossless storage. Its
-[disk segment options](https://github.com/ZoneTree/ZoneTree/blob/13ee11e19007301fdea72b9210de62f6257f4929/src/ZoneTree/Options/DiskSegmentOptions.cs)
-expose block size, caches, sparse indexes, and sequential prefetch. Those
-choices can improve chunk I/O and metadata access, but do not reduce the
-network's matrix arithmetic. They are separate from lossy quantization and
-averaging. More expressive research directions include
-[activation-aware scalar quantization](https://arxiv.org/abs/2306.00978),
-[second-order error compensation](https://arxiv.org/abs/2210.17323), and
-[learned additive vector codebooks](https://arxiv.org/abs/2401.06118).
+Adjacent-weight averaging was removed at the owner's request after synthetic
+output distortion and real-model retrieval failures. ADR-023 records the
+rejection; no averaging codec, conversion option or runtime gate remains.
+Measured FP16 KV and exact prefix reuse are evaluated separately in LongContext.

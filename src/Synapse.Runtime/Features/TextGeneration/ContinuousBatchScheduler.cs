@@ -25,6 +25,9 @@ internal sealed class ContinuousBatchScheduler(IBatchDecoder decoder, object exe
 
     public event Action<BatchStepTrace>? StepCompleted;
 
+    /// <summary>Whether the caller is the slot-owner thread, including callbacks after a step.</summary>
+    public bool IsExecutingThread => ReferenceEquals(Thread.CurrentThread, _loop);
+
     public Task<TextGenerationResult> EnqueueAsync(
         IReadOnlyList<int> promptTokens,
         int maximumNewTokens,
@@ -119,6 +122,11 @@ internal sealed class ContinuousBatchScheduler(IBatchDecoder decoder, object exe
     {
         lock (_executionGate)
         {
+            foreach (var request in _active.Where(request => request.Length == 0 && request.StepTokens > 0))
+            {
+                _decoder.Reserve(request.Slot, request.Prompt.Length + request.MaximumNewTokens);
+            }
+
             _decoder.Forward(_step.AsSpan(0, count), promptStart: decodeTokens);
             for (var row = 0; row < logitsRows; row++)
             {

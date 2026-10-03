@@ -1,5 +1,6 @@
 using System.Globalization;
 using ManagedCode.Synapse.Cli.Features.LayerDrop;
+using ManagedCode.Synapse.Cli.Features.LongContext;
 using ManagedCode.Synapse.Cli.Features.Speculation;
 using ManagedCode.Synapse.Contracts.Features.GraphExecution;
 using ManagedCode.Synapse.Runtime.Features.ModelLoading;
@@ -19,14 +20,16 @@ internal sealed record GenerationOptions(
     KvCachePrecision KvCachePrecision = KvCachePrecision.Fp32,
     KvPageActivation? KvPages = null,
     LayerDropProfile? LayerDrop = null,
-    SpeculationArguments? Speculation = null)
+    SpeculationArguments? Speculation = null,
+    string Optimization = "custom")
 {
     public static string Usage =>
         "Usage: synapse generate --model <model.synapse> (--tokens <id,id,...> | --tokens-file <path>) " +
         "[--max-tokens <count>] [--context-size <count>] [--threads <count>] " +
         $"[--backend <{KernelBackendNames.Usage}>] [--concurrent-requests <count>] " +
         "[--rope-scaling yarn:<factor>:<trained-context>] [--kv-precision f32|f16] " +
-        "[--kv-pages <budget>:<window>[:p16|p32|p64][:random[:seed]]] " + LayerDropArguments.Usage + " " + SpeculationArguments.Usage;
+        "[--kv-pages <budget>:<window>[:p16|p32|p64][:random[:seed]]] " + LayerDropArguments.Usage + " " + SpeculationArguments.Usage +
+        " " + RuntimeOptimizationArguments.Usage;
 
     public static GenerationOptions? Parse(IReadOnlyList<string> arguments)
     {
@@ -34,12 +37,11 @@ internal sealed record GenerationOptions(
         for (var index = 0; index < arguments.Count; index += 2)
         {
             if (index + 1 >= arguments.Count ||
-                !arguments[index].StartsWith("--", StringComparison.Ordinal))
+                !RuntimeOptimizationArguments.IsGenerationFlag(arguments[index]) ||
+                !values.TryAdd(arguments[index], arguments[index + 1]))
             {
                 return null;
             }
-
-            values[arguments[index]] = arguments[index + 1];
         }
 
         if (!values.TryGetValue("--model", out var modelPath) || !TryReadTokens(values, out var tokens))
@@ -50,26 +52,8 @@ internal sealed record GenerationOptions(
         var maximumTokens = ParsePositive(values.GetValueOrDefault("--max-tokens"), 1);
         var contextSize = ParsePositive(values.GetValueOrDefault("--context-size"), 512);
         var threads = ParsePositive(values.GetValueOrDefault("--threads"), Environment.ProcessorCount);
-        var backend = KernelBackend.Managed;
-        if (values.TryGetValue("--backend", out var backendName) &&
-            !KernelBackendNames.TryParse(backendName, out backend))
-        {
-            return null;
-        }
-
-        RopeScaling? scaling = null;
-        if (values.TryGetValue("--rope-scaling", out var scalingText) && !TryParseScaling(scalingText, out scaling))
-        {
-            return null;
-        }
-
-        var kvPrecision = values.GetValueOrDefault("--kv-precision", "f32") switch
-        {
-            "f32" => KvCachePrecision.Fp32,
-            "f16" => KvCachePrecision.Fp16,
-            _ => (KvCachePrecision?)null,
-        };
-        if (kvPrecision is null)
+        if (!RuntimeOptimizationArguments.TryParseRuntime(values, out var backend, out var scaling, out var kvPrecision) ||
+            !RuntimeOptimizationArguments.TryResolve(values, ref backend, out var optimization))
         {
             return null;
         }
@@ -87,10 +71,10 @@ internal sealed record GenerationOptions(
 
         var concurrentRequests = ParsePositive(values.GetValueOrDefault("--concurrent-requests"), 1);
         return tokens is { Length: > 0 } && maximumTokens > 0 && contextSize > 0 && threads > 0 &&
-            concurrentRequests is > 0 and <= 64
+            concurrentRequests is > 0 and <= 64 && (concurrentRequests == 1 || speculation is null)
             ? new GenerationOptions(
                 modelPath, tokens, maximumTokens, contextSize, threads, backend, concurrentRequests, scaling,
-                kvPrecision.Value, pages, drop, speculation)
+                kvPrecision, pages, drop, speculation, optimization)
             : null;
     }
 

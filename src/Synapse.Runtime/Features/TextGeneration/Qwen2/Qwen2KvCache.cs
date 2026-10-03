@@ -52,13 +52,35 @@ internal sealed class Qwen2KvCache
         value.CopyTo(_values[layer].AsSpan(position * _kvWidth, _kvWidth));
     }
 
-    /// <summary>Allocates exactly the positions a known request needs, rounded up to the growth unit (ADR-017).</summary>
+    /// <summary>Sizes a known request; fourfold smaller rounded needs contract without discarding its prefix (ADR-017).</summary>
     public void Reserve(int positions)
     {
+        if ((uint)positions > (uint)MaximumPositions)
+        {
+            throw new ArgumentOutOfRangeException(nameof(positions));
+        }
+
+        var rounded = (int)Math.Min(MaximumPositions, ((long)positions + _growthPositions - 1) / _growthPositions * _growthPositions);
         if (positions > AllocatedPositions)
         {
-            Resize((int)Math.Min(MaximumPositions, ((long)positions + _growthPositions - 1) / _growthPositions * _growthPositions));
+            Resize(rounded);
         }
+        else if (rounded < AllocatedPositions && rounded <= AllocatedPositions / 4)
+        {
+            Contract(rounded);
+        }
+    }
+
+    /// <summary>Releases storage even when the disposed executor remains reachable.</summary>
+    public void Release()
+    {
+        for (var layer = 0; layer < _keys.Length; layer++)
+        {
+            _keys[layer] = [];
+            _values[layer] = [];
+        }
+
+        AllocatedPositions = 0;
     }
 
     public ReadOnlySpan<float> GetKey(int layer, int position, int head, int headDimension) => _keys[layer].AsSpan((position * _kvWidth) + (head * headDimension), headDimension);
@@ -85,5 +107,28 @@ internal sealed class Qwen2KvCache
         }
 
         AllocatedPositions = positions;
+    }
+
+    /// <summary>Allocates all surviving ranges before publication: failed contraction leaves the old cache usable.</summary>
+    private void Contract(int positions)
+    {
+        var length = checked(positions * _kvWidth);
+        var keys = Truncate(_keys, length);
+        var values = Truncate(_values, length);
+        keys.CopyTo(_keys, 0);
+        values.CopyTo(_values, 0);
+        AllocatedPositions = positions;
+    }
+
+    private static float[][] Truncate(float[][] source, int length)
+    {
+        var result = new float[source.Length][];
+        for (var layer = 0; layer < source.Length; layer++)
+        {
+            result[layer] = length == 0 ? [] : new float[length];
+            source[layer].AsSpan(0, length).CopyTo(result[layer]);
+        }
+
+        return result;
     }
 }
