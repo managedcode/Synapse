@@ -95,14 +95,5 @@ public sealed class QwenTokenizerTests
         await Assert.That(() => TextTokenizers.RequireSupported("gpt2", "qwen2")).ThrowsNothing();
     }
 
-    private static string ScenarioPath(string name)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Synapse.slnx")))
-        {
-            directory = directory.Parent;
-        }
-
-        return Path.Combine(directory!.FullName, "benchmarks", "scenarios", name);
-    }
+    private static string ScenarioPath(string name) => ReferenceBenchmarkFixture.BenchmarkInputPath("Scenarios", name);
 }

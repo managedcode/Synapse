@@ -38,7 +38,7 @@ dotnet run --project src/Synapse.Cli --configuration Release -- generate \
 dotnet run --project experiments/Synapse.ReferenceBenchmarks --configuration Release -- passkey \
   --synapse-executable src/Synapse.Cli/bin/Release/net10.0/synapse \
   --model artifacts/models/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.gguf \
-  --scenario benchmarks/scenarios/passkey-qwen2.5.json --prompt-tokens 4096,16384 \
+  --scenario experiments/Synapse.ReferenceBenchmarks/Features/Benchmarking/Scenarios/passkey-qwen2.5.json --prompt-tokens 4096,16384 \
   --depths 0.1,0.5,0.9 --backend metal --context-size 32768 --output passkey.json
 ```
 

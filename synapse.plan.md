@@ -1,5 +1,22 @@
 # Synapse master plan
 
+## 2026-10-03 pipeline model parameters
+
+- [x] Local `TASK-BMK-001` / `AC-BMK-001-5`: expose GGUF, MLX and Foundry selection
+  plus model-specific smoke qualification in workflow inputs and repository
+  variables; pass the selection through every consumer and cache key.
+- [x] Local `TASK-BMK-001` / `AC-BMK-001-6`: ignore generated benchmark output while
+  retaining required scenarios/configuration and parser fixtures outside it.
+- [x] Record red/green workflow contracts, real focused regressions and
+  validation from a source export without ignored local files. Hosted runner
+  execution and website publication remain independent delivery checks.
+  The clean source export passed locked restore, Release build/analyzers,
+  format, 44 focused .NET regressions, dependency vulnerability audit and
+  pipeline syntax checks. Rust checks passed with 32 actual tests. Exact
+  commands and limitations: `docs/Development/PipelineModelParametersEvidence-2026-10-03.md`.
+  `TASK-BMK-001` remains `in_progress`; release benchmark work is open.
+
+
 Status reflects executed evidence only. The design specification remains the
 normative product scope.
 

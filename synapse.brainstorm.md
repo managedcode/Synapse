@@ -1,5 +1,14 @@
 # Synapse bootstrap decisions
 
+## 2026-10-03 pipeline model parameters
+
+Expose model IDs/files, model sets and smoke qualification as workflow inputs
+and repository variables. Keep defaults visible in the workflow configuration,
+and carry the selected values through fetch, cache, preparation and execution.
+Ignoring generated `benchmarks/` output requires relocating the small tracked
+scenario/configuration and recorded parser-fixture inputs used by clean CI.
+
+
 Date: 2026-09-27. Status: accepted for the bootstrap slice.
 
 ## Decisions

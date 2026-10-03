@@ -8,17 +8,16 @@ public sealed class HostedArtifactReportTests
     [Test]
     public async Task HostedReportShowsPartialEvidenceAndMissingArtifacts()
     {
-        var root = FindRepositoryRoot();
         var temporary = Path.Combine(Path.GetTempPath(), $"hosted-report-{Guid.NewGuid():N}");
         try
         {
             var artifact = Path.Combine(temporary, "performance-osx-arm64");
             Directory.CreateDirectory(artifact);
-            File.Copy(Path.Combine(root, "benchmarks", "results",
+            File.Copy(RecordedBenchmarkPath(
                 "2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-cpu-kernels-native-2thread-smoke.json"),
                 Path.Combine(artifact, "synapse-benchmark.json"));
 
-            var (exit, error) = await RunReportAsync(root, temporary);
+            var (exit, error) = await RunReportAsync(temporary);
 
             await Assert.That(exit).IsEqualTo(3).Because(error);
             var report = await File.ReadAllTextAsync(Path.Combine(temporary, "summary.md"));
@@ -40,17 +39,16 @@ public sealed class HostedArtifactReportTests
     [Test]
     public async Task HostedReportRejectsMislabeledEvidence()
     {
-        var root = FindRepositoryRoot();
         var temporary = Path.Combine(Path.GetTempPath(), $"hosted-report-{Guid.NewGuid():N}");
         try
         {
             var artifact = Path.Combine(temporary, "foundry-local-ubuntu-24.04-qwen2.5-0.5b");
             Directory.CreateDirectory(artifact);
-            File.Copy(Path.Combine(root, "benchmarks", "results",
+            File.Copy(RecordedBenchmarkPath(
                 "2026-09-28-m2-pro-foundry-local-phi-4-mini-cpu-capitals-single-128-diagnostic.json"),
                 Path.Combine(artifact, "foundry-single.json"));
 
-            var (exit, error) = await RunReportAsync(root, temporary);
+            var (exit, error) = await RunReportAsync(temporary);
 
             await Assert.That(exit).IsEqualTo(3).Because(error);
             var report = await File.ReadAllTextAsync(Path.Combine(temporary, "summary.md"));
@@ -67,7 +65,7 @@ public sealed class HostedArtifactReportTests
         }
     }
 
-    private static async Task<(int ExitCode, string StandardError)> RunReportAsync(string root, string temporary)
+    private static async Task<(int ExitCode, string StandardError)> RunReportAsync(string temporary)
     {
         var start = new ProcessStartInfo("dotnet")
         {
@@ -79,7 +77,7 @@ public sealed class HostedArtifactReportTests
         {
             Path.Combine(AppContext.BaseDirectory, "Synapse.ReferenceBenchmarks.dll"),
             "aggregate", "--artifacts", temporary,
-            "--model-set", Path.Combine(root, "benchmarks", "model-sets", "foundry-local-families.json"),
+            "--model-set", BenchmarkInputPath("ModelSets", "foundry-local-families.json"),
             "--output", Path.Combine(temporary, "summary.md"),
         })
         {

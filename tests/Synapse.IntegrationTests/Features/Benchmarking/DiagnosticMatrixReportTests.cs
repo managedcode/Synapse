@@ -8,8 +8,7 @@ public sealed class DiagnosticMatrixReportTests
     [Test]
     public async Task RawMatrixEvidenceProducesDescriptivePerformanceReport()
     {
-        var root = FindRepositoryRoot();
-        var evidence = Path.Combine(root, "benchmarks", "results",
+        var evidence = RecordedBenchmarkPath(
             "2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-four-subject-memory-clr-smoke.json");
         var start = new ProcessStartInfo("dotnet")
         {
@@ -46,8 +45,7 @@ public sealed class DiagnosticMatrixReportTests
     [Test]
     public async Task IneligibleRawEvidenceFailsPerformanceQualityGate()
     {
-        var root = FindRepositoryRoot();
-        var evidence = Path.Combine(root, "benchmarks", "results",
+        var evidence = RecordedBenchmarkPath(
             "2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-32tok-quality-divergence-final.json");
         var start = new ProcessStartInfo("dotnet")
         {

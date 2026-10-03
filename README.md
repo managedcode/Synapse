@@ -133,7 +133,7 @@ its final GitHub job summary.
   llama.cpp with the same cache type. At 32k this cache is sensitive to heat:
   repeated runs gave 45–73 tokens/s and a 31–37 s first token.
 - Details, every engine and KV cache type, and CPU rows: runs Q–V in
-  [`benchmarks/README.md`](benchmarks/README.md).
+  [`benchmarks/README.md`](https://github.com/managedcode/Synapse/blob/d679cb7580c5bf2060bdc0bd13f9b34bfd7ab69c/benchmarks/README.md).
 
 ### A 7B model, not loaded whole
 
@@ -155,7 +155,7 @@ its final GitHub job summary.
   | 8 | 5,381 MiB | +137% | 51% |
 - **Small drafts, big checks** (ADR-020). The 0.5B proposes 3 tokens and the 7B verifies them in one pass. On
   chat text the 7B Q8_0 decodes at 23 instead of 18 tokens/s, and the output is exactly the 7B's.
-- Details: runs W, X, and Y in [`benchmarks/README.md`](benchmarks/README.md).
+- Details: runs W, X, and Y in [`benchmarks/README.md`](https://github.com/managedcode/Synapse/blob/d679cb7580c5bf2060bdc0bd13f9b34bfd7ab69c/benchmarks/README.md).
 
 ### Microsoft Foundry Local, 6 models
 
@@ -163,7 +163,7 @@ its final GitHub job summary.
 
 - Qwen, Phi, Mistral, and DeepSeek-R1 from Microsoft's Foundry catalog, run
   through the Foundry Local C# SDK. Model list:
-  [`foundry-local-families.json`](benchmarks/model-sets/foundry-local-families.json).
+  [`foundry-local-families.json`](experiments/Synapse.ReferenceBenchmarks/Features/Benchmarking/ModelSets/foundry-local-families.json).
 - Each model and scenario gets its own fresh process. The context is capped at
   1,024 tokens: by default Foundry reserves memory for the whole context window
   up front (Phi-3.5-mini: 98 GiB, 12 s to the first token).
@@ -193,7 +193,7 @@ its final GitHub job summary.
 | 🟡 | Only Qwen2 runs | More model families | `src/Synapse.Runtime/Features/TextGeneration` |
 | 🟢 | Speed, memory, startup | Confirm with the 30-run release gate | `experiments/Synapse.ReferenceBenchmarks` |
 
-All runs and raw data: [`benchmarks/README.md`](benchmarks/README.md).
+All runs and raw data: [`benchmarks/README.md`](https://github.com/managedcode/Synapse/blob/d679cb7580c5bf2060bdc0bd13f9b34bfd7ab69c/benchmarks/README.md).
 
 ## Plans
 

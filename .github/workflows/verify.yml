@@ -5,6 +5,21 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      gguf_model_id: {description: 'GGUF catalog package ID (input overrides repository variable)', type: string, required: false}
+      gguf_model_file: {description: 'GGUF filename within the selected package', type: string, required: false}
+      model_set: {description: 'Functional catalog model set', type: string, required: false}
+      embedding_model_set: {description: 'Embedding catalog model set', type: string, required: false}
+      foundry_model_set: {description: 'Tracked Foundry model-set JSON path', type: string, required: false}
+      foundry_anchor: {description: 'Foundry functional model alias from the selected set', type: string, required: false}
+
+env:
+  SYNAPSE_GGUF_MODEL_ID: ${{ inputs.gguf_model_id || vars.SYNAPSE_GGUF_MODEL_ID || 'qwen2.5-0.5b-instruct-q8_0' }}
+  SYNAPSE_GGUF_MODEL_FILE: ${{ inputs.gguf_model_file || vars.SYNAPSE_GGUF_MODEL_FILE || 'qwen2.5-0.5b-instruct-q8_0.gguf' }}
+  SYNAPSE_MODEL_SET: ${{ inputs.model_set || vars.SYNAPSE_MODEL_SET || 'family-small' }}
+  SYNAPSE_EMBEDDING_MODEL_SET: ${{ inputs.embedding_model_set || vars.SYNAPSE_EMBEDDING_MODEL_SET || 'embedding-small' }}
+  SYNAPSE_FOUNDRY_MODEL_SET: ${{ inputs.foundry_model_set || vars.SYNAPSE_FOUNDRY_MODEL_SET || 'experiments/Synapse.ReferenceBenchmarks/Features/Benchmarking/ModelSets/foundry-local-families.json' }}
+  SYNAPSE_FOUNDRY_ANCHOR: ${{ inputs.foundry_anchor || vars.SYNAPSE_FOUNDRY_ANCHOR || 'qwen2.5-0.5b' }}
 
 permissions:
   contents: read
@@ -83,27 +98,29 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ${{ env.SYNAPSE_MODEL_ROOT }}
-          key: synapse-models-${{ runner.os }}-${{ matrix.runtime_identifier }}-${{ hashFiles('models/catalog.json') }}
+          key: synapse-models-${{ runner.os }}-${{ matrix.runtime_identifier }}-${{ env.SYNAPSE_GGUF_MODEL_ID }}-${{ env.SYNAPSE_GGUF_MODEL_FILE }}-${{ env.SYNAPSE_MODEL_SET }}-${{ env.SYNAPSE_EMBEDDING_MODEL_SET }}-${{ hashFiles('models/catalog.json') }}
 
       - name: Fetch verified small model packages
         shell: bash
         run: |
           dotnet run --project src/Synapse.Cli --configuration Release --no-build -- \
-            model fetch --set family-small --output "${SYNAPSE_MODEL_ROOT}"
+            model fetch --id "${SYNAPSE_GGUF_MODEL_ID}" --output "${SYNAPSE_MODEL_ROOT}"
           dotnet run --project src/Synapse.Cli --configuration Release --no-build -- \
-            model fetch --set embedding-small --output "${SYNAPSE_MODEL_ROOT}"
+            model fetch --set "${SYNAPSE_MODEL_SET}" --output "${SYNAPSE_MODEL_ROOT}"
+          dotnet run --project src/Synapse.Cli --configuration Release --no-build -- \
+            model fetch --set "${SYNAPSE_EMBEDDING_MODEL_SET}" --output "${SYNAPSE_MODEL_ROOT}"
 
       - name: Restore Foundry Local anchor model cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ${{ env.SYNAPSE_FOUNDRY_CACHE }}
-          key: foundry-local-anchor-${{ runner.os }}-${{ hashFiles('benchmarks/model-sets/foundry-local-families.json') }}
+          key: foundry-local-anchor-${{ runner.os }}-${{ env.SYNAPSE_FOUNDRY_ANCHOR }}-${{ env.SYNAPSE_FOUNDRY_MODEL_SET }}-${{ hashFiles(env.SYNAPSE_FOUNDRY_MODEL_SET) }}
 
       - name: Fetch only the Foundry Local anchor model for functional checks
         shell: bash
         run: |
           dotnet experiments/Synapse.FoundryLocalBenchmarks/bin/Release/net10.0/Synapse.FoundryLocalBenchmarks.dll \
-            fetch --set benchmarks/model-sets/foundry-local-families.json --alias qwen2.5-0.5b --cache "${SYNAPSE_FOUNDRY_CACHE}"
+            fetch --set "${SYNAPSE_FOUNDRY_MODEL_SET}" --alias "${SYNAPSE_FOUNDRY_ANCHOR}" --cache "${SYNAPSE_FOUNDRY_CACHE}"
 
       - name: Build pinned dotLLM benchmark subject
         run: dotnet build _external/dotLLM/src/DotLLM.Cli/DotLLM.Cli.csproj --configuration Release

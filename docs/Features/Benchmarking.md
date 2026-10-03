@@ -1,5 +1,13 @@
 # Benchmarking
 
+Versioned model sets and scenario definitions are tracked under
+`experiments/Synapse.ReferenceBenchmarks/Features/Benchmarking/ModelSets/` and
+`experiments/Synapse.ReferenceBenchmarks/Features/Benchmarking/Scenarios/`.
+Recorded JSON used by report regressions is tracked under
+`tests/Synapse.IntegrationTests/Features/Benchmarking/Fixtures/`; these immutable
+samples are test inputs, not newly measured results. Generated runs remain in
+the ignored local `benchmarks/` directory or GitHub Actions artifacts.
+
 The benchmark system launches Synapse, dotLLM, LLamaSharp, and direct llama.cpp as isolated
 processes against a shared pinned GGUF and input-token manifest. A result is
 eligible only when model family/source, tokenizer, template, prompt tokens,
@@ -14,8 +22,7 @@ Initial audited upstream revisions on 2026-09-27:
 | LLamaSharp | `abf614ef899464aced879b19aa5dca53f15e5525` / NuGet 0.27.0 observed | llama.cpp-backed required competitor | MIT wrapper plus native llama.cpp artifacts |
 | ZoneTree | `13ee11e19007301fdea72b9210de62f6257f4929` / NuGet 1.9.8 | Embedded durable metadata/index store | MIT runtime dependency |
 
-The first diagnostic Qwen2.5 result now has raw samples in
-`benchmarks/results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-smoke.json`. It uses
+The first diagnostic Qwen2.5 result has [historical raw samples](https://github.com/managedcode/Synapse/blob/d679cb7580c5bf2060bdc0bd13f9b34bfd7ab69c/benchmarks/results/2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-smoke.json). It uses
 three warm-ups plus five measured, rotated, cold-process samples. That is useful
 engineering evidence, but below the release contract of 30 paired samples and
 therefore carries no formal winner verdict.
@@ -90,8 +97,10 @@ reporting job also runs after a failed measurement job.
 | Criterion | Test |
 |---|---|
 | `AC-BMK-001-4` aggregate real raw evidence into one scoped report without hiding missing or mislabeled artifacts | `TEST-BMK-001-4` `HostedReportShowsPartialEvidenceAndMissingArtifacts`, `HostedReportRejectsMislabeledEvidence` |
+| `AC-BMK-001-5` manual inputs/repository variables select GGUF, MLX, Foundry and smoke qualification through acquisition, cache, preparation and execution; reports preserve actual workload labels | `TEST-BMK-001-5` `WorkflowModelParameterTests`, `ConfiguredFixtureSelectionTests`, configurable smoke/MLX publication regressions |
+| `AC-BMK-001-6` clean checkouts retain versioned model sets, scenario definitions and recorded report fixtures without depending on ignored generated results | `TEST-BMK-001-6` `BenchmarkInputsRemainAvailableOutsideIgnoredResultsDirectory` |
 
-Two 10-turn modes use `benchmarks/scenarios/travel-planner-10-turns.json`:
+Two 10-turn modes use `experiments/Synapse.ReferenceBenchmarks/Features/Benchmarking/Scenarios/travel-planner-10-turns.json`:
 
 - **locked transcript** feeds the same pre-recorded assistant response into
   every next turn. It is the fair growing-context performance comparison.
@@ -131,7 +140,7 @@ GitHub Actions measurement yet.
 ## Longer diagnostics and MLX Metal cohort (2026-09-28)
 
 `dialogue` runs one- or three-turn locked-transcript scenarios from
-`benchmarks/scenarios/`. The single request allows up to 128 output tokens;
+`experiments/Synapse.ReferenceBenchmarks/Features/Benchmarking/Scenarios/`. The single request allows up to 128 output tokens;
 the France/US/UK dialogue allows 64 per turn. It tokenizes each exact CPU
 prompt once with the pinned GGUF tokenizer, then launches all four CPU
 subjects in rotating order and retains actual generated counts, prompt IDs,
@@ -170,7 +179,7 @@ peak RSS, and macOS physical footprint. It also records the SDK and ONNX
 Runtime versions, the variant's execution provider, the package's
 `genai_config.json` search defaults, and the SHA-256 of every model file.
 
-The model set is `benchmarks/model-sets/foundry-local-families.json`:
+The model set is `experiments/Synapse.ReferenceBenchmarks/Features/Benchmarking/ModelSets/foundry-local-families.json`:
 
 | Family | Alias | Catalog CPU variant | File MB | macOS 15 (7 GB) | Ubuntu / Windows (16 GB) |
 |---|---|---|---:|---|---|

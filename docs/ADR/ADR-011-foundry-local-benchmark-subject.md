@@ -80,7 +80,7 @@ and Windows x64/ARM64. A probe on the development Mac showed:
    app data, and logs live under one explicit directory, and non-essential
    telemetry is disabled.
 7. **Pinned model set with a memory rule.**
-   `benchmarks/model-sets/foundry-local-families.json` lists exact catalog
+   `experiments/Synapse.ReferenceBenchmarks/Features/Benchmarking/ModelSets/foundry-local-families.json` lists exact catalog
    variant IDs (the `:N` suffix is the catalog version), their catalog file
    sizes, the context bound, and the GitHub-hosted runners. A model is
    scheduled on a runner only when its file size is at most half of the

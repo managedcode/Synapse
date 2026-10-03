@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using ManagedCode.Synapse.Runtime.Features.ModelPackages.Catalog;
 
 namespace ManagedCode.Synapse.IntegrationTests.Features.Benchmarking;
 
@@ -58,10 +59,22 @@ internal static class ReferenceBenchmarkFixture
         return new SubjectProcessResult(process.ExitCode, await outputTask, await errorTask);
     }
 
-    public static string GetModelPath() => Path.Combine(
-        GetModelRoot(),
-        "qwen2.5-0.5b-instruct-q8_0",
-        "qwen2.5-0.5b-instruct-q8_0.gguf");
+    public static string GetModelPath()
+    {
+        var id = Environment.GetEnvironmentVariable("SYNAPSE_GGUF_MODEL_ID");
+        var file = Environment.GetEnvironmentVariable("SYNAPSE_GGUF_MODEL_FILE");
+        if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(file))
+        {
+            return Path.Combine(GetModelRoot(), id, file);
+        }
+
+        var catalog = ModelPackageCatalog.Load(
+            Path.Combine(FindRepositoryRoot(), "models", "catalog.json"));
+        var package = string.IsNullOrWhiteSpace(id) ? catalog.SelectSet("smoke").Single() : catalog.GetRequired(id);
+        file = string.IsNullOrWhiteSpace(file)
+            ? package.Files.Single(entry => entry.Path.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase)).Path : file;
+        return Path.Combine(GetModelRoot(), package.Id, file);
+    }
 
     public static string RequireEnvironmentFile(string variableName)
     {
@@ -119,6 +132,13 @@ internal static class ReferenceBenchmarkFixture
 
         throw new InvalidOperationException("Could not locate the Synapse repository root.");
     }
+
+    public static string BenchmarkInputPath(string directory, string file) => Path.Combine(
+        FindRepositoryRoot(), "experiments", "Synapse.ReferenceBenchmarks", "Features", "Benchmarking",
+        directory, file);
+
+    public static string RecordedBenchmarkPath(string file) => Path.Combine(
+        FindRepositoryRoot(), "tests", "Synapse.IntegrationTests", "Features", "Benchmarking", "Fixtures", file);
 }
 
 internal sealed record SubjectProcessResult(int ExitCode, string StandardOutput, string StandardError);

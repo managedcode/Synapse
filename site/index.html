@@ -157,7 +157,7 @@
         <p class="unit">whole process · lower is better</p>
       </article>
     </div>
-    <p class="fine reveal">MacBook Pro, Apple M2 Pro, 32 GB. Qwen2.5 0.5B Instruct Q8_0, prompt “The capital of France is”, 8-token answer. Median of 5 runs after 3 warm-ups; all four engines wrote the same 8 tokens. Diagnostic runs, not the final 30-run release gate. <a href="https://github.com/managedcode/Synapse/blob/main/benchmarks/README.md">All runs and raw JSON ↗</a></p>
+    <p class="fine reveal">MacBook Pro, Apple M2 Pro, 32 GB. Qwen2.5 0.5B Instruct Q8_0, prompt “The capital of France is”, 8-token answer. Median of 5 runs after 3 warm-ups; all four engines wrote the same 8 tokens. Diagnostic runs, not the final 30-run release gate. <a href="https://github.com/managedcode/Synapse/blob/d679cb7580c5bf2060bdc0bd13f9b34bfd7ab69c/benchmarks/README.md">All runs and raw JSON ↗</a></p>
     <header class="sec-head reveal ctx-head"><p class="kicker">Long context · Apple GPU</p><h2>Tokens, memory and speed. <span class="soft">From 4k to 32k.</span></h2></header>
     <article class="panel longctx reveal" data-longctx>
       <div class="panel-top">
@@ -203,7 +203,7 @@
       </div>
       <p class="ctx-tokens" data-same>Same tokens: Synapse wrote the same tokens llama.cpp wrote. Right answer: Synapse 2/2, llama.cpp 2/2, MLX 0/2.</p>
     </article>
-    <p class="fine reveal">MacBook Pro, Apple M2 Pro 19-core GPU. Qwen2.5 0.5B Q8_0, one prompt per context: repository text with a hidden number, then “state the number and summarize”, up to 128 tokens. Every engine gets the same text and its token IDs are checked. Median of 2 runs after a warm-up, one engine at a time. MLX runs its own 8-bit weights and cache format; Synapse and llama.cpp also map the 644 MiB model file. Perplexity on identical tokens matches llama.cpp within 0.01% at 4k–32k. <a href="https://github.com/managedcode/Synapse/blob/main/benchmarks/README.md">Run T and raw JSON ↗</a></p>
+    <p class="fine reveal">MacBook Pro, Apple M2 Pro 19-core GPU. Qwen2.5 0.5B Q8_0, one prompt per context: repository text with a hidden number, then “state the number and summarize”, up to 128 tokens. Every engine gets the same text and its token IDs are checked. Median of 2 runs after a warm-up, one engine at a time. MLX runs its own 8-bit weights and cache format; Synapse and llama.cpp also map the 644 MiB model file. Perplexity on identical tokens matches llama.cpp within 0.01% at 4k–32k. <a href="https://github.com/managedcode/Synapse/blob/d679cb7580c5bf2060bdc0bd13f9b34bfd7ab69c/benchmarks/README.md">Run T and raw JSON ↗</a></p>
     <div class="ctx-duo">
       <article class="panel reveal">
         <div class="panel-top"><h3>A big window, small memory</h3></div>
@@ -224,7 +224,7 @@
         <p class="unit">30,000-token document · Metal, FP16 KV · the same answer either way</p>
       </article>
     </div>
-    <p class="fine reveal">One run per row, a fresh process each; diagnostics, not a paired verdict. <a href="https://github.com/managedcode/Synapse/blob/main/benchmarks/README.md">Runs U and V ↗</a></p>
+    <p class="fine reveal">One run per row, a fresh process each; diagnostics, not a paired verdict. <a href="https://github.com/managedcode/Synapse/blob/d679cb7580c5bf2060bdc0bd13f9b34bfd7ab69c/benchmarks/README.md">Runs U and V ↗</a></p>
     <header class="sec-head reveal ctx-head"><p class="kicker">7B model · Apple GPU</p><h2>A 7B model, not loaded whole. <span class="soft">Same text as llama.cpp.</span></h2></header>
     <div class="bench big7">
       <article class="panel reveal"><div class="panel-top"><h3>Peak memory</h3></div>
@@ -262,7 +262,7 @@
         <li class="me off"><span>8 dropped</span><i><b style="--w:74.2%"></b></i><em>5,381 MiB · +137%</em></li>
       </ul>
       <p class="unit">peak memory · perplexity on the test text · a dropped layer's weights are never mapped for the GPU and its KV is never allocated · only the 2-layer drop passes the quality gate</p></article>
-    <p class="fine reveal">MacBook Pro, Apple M2 Pro 19-core GPU. Qwen2.5-7B-Instruct-1M, the same Q8_0 and Q4_K_M GGUF files for both engines, 3,528-token prompt, 128 new tokens, FP16 KV, one fresh process per row. For the pinned prompt Synapse writes llama.cpp's text with both files; Q4_K_M perplexity is 11.93 against 12.16 for Q8_0. Diagnostics, not a paired release verdict. <a href="https://github.com/managedcode/Synapse/blob/main/benchmarks/README.md">Runs W, X and Y ↗</a></p>
+    <p class="fine reveal">MacBook Pro, Apple M2 Pro 19-core GPU. Qwen2.5-7B-Instruct-1M, the same Q8_0 and Q4_K_M GGUF files for both engines, 3,528-token prompt, 128 new tokens, FP16 KV, one fresh process per row. For the pinned prompt Synapse writes llama.cpp's text with both files; Q4_K_M perplexity is 11.93 against 12.16 for Q8_0. Diagnostics, not a paired release verdict. <a href="https://github.com/managedcode/Synapse/blob/d679cb7580c5bf2060bdc0bd13f9b34bfd7ab69c/benchmarks/README.md">Runs W, X and Y ↗</a></p>
     <article class="panel foundry reveal">
       <div class="panel-top"><h3>Also measured · Microsoft Foundry Local · 6 models</h3></div>
       <p class="panel-big">231<small>tokens/s, Qwen2.5 0.5B on the Mac CPU</small></p>
@@ -383,7 +383,7 @@
     <p class="foot-mark" aria-hidden="true">Synapse</p>
     <div class="foot-row">
       <span>© 2026 <a href="https://www.managed-code.com">Managed Code</a> · <a href="https://github.com/managedcode/Synapse/blob/main/LICENSE">MIT License</a></span>
-      <span class="foot-links"><a href="https://github.com/managedcode/Synapse">GitHub</a><a href="https://github.com/managedcode/Synapse/blob/main/docs/Architecture.md">Architecture</a><a href="https://github.com/managedcode/Synapse/blob/main/benchmarks/README.md">Benchmarks</a></span>
+      <span class="foot-links"><a href="https://github.com/managedcode/Synapse">GitHub</a><a href="https://github.com/managedcode/Synapse/blob/main/docs/Architecture.md">Architecture</a><a href="https://github.com/managedcode/Synapse/blob/main/docs/Features/Benchmarking.md">Benchmarks</a></span>
     </div>
   </div>
 </footer>

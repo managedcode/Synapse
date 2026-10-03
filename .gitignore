@@ -9,3 +9,4 @@ artifacts/
 native/target/
 .synapse/
 _external/
+/benchmarks/

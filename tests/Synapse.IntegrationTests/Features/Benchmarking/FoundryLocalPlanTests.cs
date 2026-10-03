@@ -10,15 +10,16 @@ public sealed class FoundryLocalPlanTests
     [Test]
     public async Task FoundryPlanSchedulesOneIsolatedJobPerRunnerAndModel()
     {
+        var pinnedSet = ReferenceBenchmarkFixture.BenchmarkInputPath("ModelSets", "foundry-local-families.json");
         var summary = Path.Combine(Path.GetTempPath(), $"foundry-plan-{Guid.NewGuid():N}.md");
         try
         {
-            var result = await RunAsync("plan", "--set", ModelSetPath, "--summary", summary);
+            var result = await RunAsync("plan", "--set", pinnedSet, "--summary", summary);
 
             await Assert.That(result.ExitCode).IsEqualTo(0).Because(result.StandardError);
             await Assert.That(result.StandardOutput.Trim()).DoesNotContain('\n');
             using var matrix = JsonDocument.Parse(result.StandardOutput);
-            using var set = JsonDocument.Parse(await File.ReadAllTextAsync(ModelSetPath));
+            using var set = JsonDocument.Parse(await File.ReadAllTextAsync(pinnedSet));
             var expected = FittingPairs(set.RootElement);
             var scheduled = matrix.RootElement.GetProperty("include").EnumerateArray()
                 .Select(entry => (Runner: entry.GetProperty("runner").GetString()!,
@@ -82,12 +83,12 @@ public sealed class FoundryLocalPlanTests
         await Assert.That(performance).Contains("foundry-local-plan:");
         await Assert.That(performance).Contains("matrix: ${{ fromJSON(needs.foundry-local-plan.outputs.matrix) }}");
         await Assert.That(performance).Contains("runs-on: ${{ matrix.runner }}");
-        await Assert.That(performance).Contains("fetch --set benchmarks/model-sets/foundry-local-families.json --alias \"${{ matrix.alias }}\"");
+        await Assert.That(performance).Contains("fetch --set \"${SYNAPSE_FOUNDRY_MODEL_SET}\" --alias \"${{ matrix.alias }}\"");
         await Assert.That(performance).Contains("name: foundry-local-${{ matrix.runner }}-${{ matrix.alias }}");
         await Assert.That(performance).Contains("dotnet restore experiments/Synapse.FoundryLocalBenchmarks --locked-mode");
         await Assert.That(performance).Contains("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1");
         await Assert.That(performance).DoesNotContain("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
-        await Assert.That(verify).Contains("--alias qwen2.5-0.5b");
+        await Assert.That(verify).Contains("--alias \"${SYNAPSE_FOUNDRY_ANCHOR}\"");
         await Assert.That(verify).Contains("SYNAPSE_FOUNDRY_CACHE:");
         await Assert.That(verify).DoesNotContain("--alias deepseek-r1-7b");
     }

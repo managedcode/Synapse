@@ -37,7 +37,7 @@ public sealed class DialogueReportTests
 
     private static async Task<string> RenderAsync(string file)
     {
-        var evidence = Path.Combine(FindRepositoryRoot(), "benchmarks", "results", file);
+        var evidence = RecordedBenchmarkPath(file);
         var start = new ProcessStartInfo("dotnet")
         {
             RedirectStandardOutput = true,

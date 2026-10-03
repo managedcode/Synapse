@@ -1,17 +1,32 @@
 using System.Diagnostics;
 using System.Reflection;
+using System.Text.Json;
 
 namespace ManagedCode.Synapse.IntegrationTests.Features.Benchmarking;
 
 internal static class FoundryLocalFixture
 {
-    public const string AnchorAlias = "qwen2.5-0.5b";
+    public static string AnchorAlias
+    {
+        get
+        {
+            var configured = Environment.GetEnvironmentVariable("SYNAPSE_FOUNDRY_ANCHOR");
+            if (!string.IsNullOrWhiteSpace(configured))
+            {
+                return configured;
+            }
 
-    public static string ModelSetPath => Path.Combine(
-        ReferenceBenchmarkFixture.FindRepositoryRoot(), "benchmarks", "model-sets", "foundry-local-families.json");
+            using var definition = JsonDocument.Parse(File.ReadAllText(ModelSetPath));
+            return definition.RootElement.GetProperty("models")[0].GetProperty("alias").GetString()
+                ?? throw new InvalidDataException("The local model set has no default anchor alias.");
+        }
+    }
 
-    public static string ScenarioPath(string name) => Path.Combine(
-        ReferenceBenchmarkFixture.FindRepositoryRoot(), "benchmarks", "scenarios", name);
+    public static string ModelSetPath => Environment.GetEnvironmentVariable("SYNAPSE_FOUNDRY_MODEL_SET") is { Length: > 0 } configured
+        ? Path.GetFullPath(configured, ReferenceBenchmarkFixture.FindRepositoryRoot())
+        : ReferenceBenchmarkFixture.BenchmarkInputPath("ModelSets", "foundry-local-families.json");
+
+    public static string ScenarioPath(string name) => ReferenceBenchmarkFixture.BenchmarkInputPath("Scenarios", name);
 
     public static string CacheDirectory
     {

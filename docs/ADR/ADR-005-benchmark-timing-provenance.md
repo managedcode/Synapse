@@ -46,6 +46,23 @@ writing the report, while the raw artifact is still uploaded. Hosted runners
 are variable hardware, so their results are never pooled across OSes or
 compared to the owner's Mac as a release winner verdict.
 
+Model selection is a workflow parameter. Manual runs accept catalog package
+IDs, the GGUF file within its package, an MLX package ID, and the Foundry
+model-set path; automatic runs use repository variables with documented
+workflow defaults. Fetch, cache identity, explicit preparation, execution and
+functional fixture lookup use the same selection. Commands do not embed a
+model name or derive a filename from an assumed naming convention. The smoke
+prompt, prompt token IDs, expected continuation IDs/text and output limit are
+parameters too: changing weights does not qualify the old continuation for
+the new model. Unsupported packages or mismatched expected outputs fail.
+
+Generated benchmark output lives under the ignored root `benchmarks/` or
+`artifacts/`. Required scenario/model-set definitions remain tracked under
+`experiments/Synapse.ReferenceBenchmarks/Features/Benchmarking/`; recorded
+report-parser regression inputs remain tracked under the integration tests'
+`Features/Benchmarking/Fixtures/`. A clean checkout must not rely on ignored
+local evidence. Historical output is not newly measured by migrating a fixture.
+
 After the measurement jobs finish, a final reporting job downloads every raw
 artifact from that run and writes one Markdown report and Actions summary.
 The report groups GGUF CPU, MLX Metal, and Foundry Local separately, computes

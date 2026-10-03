@@ -6,7 +6,7 @@ namespace ManagedCode.Synapse.IntegrationTests.Features.Benchmarking;
 [NotInParallel("foundry-local")]
 public sealed class FoundryLocalRunTests
 {
-    private const string AnchorVariant = "qwen2.5-0.5b-instruct-generic-cpu:4";
+    private const string RecordedVariant = "qwen2.5-0.5b-instruct-generic-cpu:4";
     private const string RecordedEvidence =
         "2026-09-28-m2-pro-foundry-local-qwen2.5-0.5b-cpu-capitals-3turn-diagnostic.json";
 
@@ -22,7 +22,7 @@ public sealed class FoundryLocalRunTests
                 "--output", output);
 
             await Assert.That(result.ExitCode).IsEqualTo(4).Because(result.StandardError);
-            await Assert.That(result.StandardError).Contains($"'{AnchorVariant}' is not cached");
+            await Assert.That(result.StandardError).Contains($"'{SelectedAnchor().VariantId}' is not cached");
             await Assert.That(File.Exists(output)).IsFalse();
             await Assert.That(Directory.EnumerateFiles(cache.FullName, "*.onnx*", SearchOption.AllDirectories))
                 .IsEmpty();
@@ -59,14 +59,13 @@ public sealed class FoundryLocalRunTests
     [Test]
     public async Task FoundryReportRendersSeparateCohortFromRecordedEvidence()
     {
-        var input = Path.Combine(ReferenceBenchmarkFixture.FindRepositoryRoot(), "benchmarks", "results",
-            RecordedEvidence);
+        var input = ReferenceBenchmarkFixture.RecordedBenchmarkPath(RecordedEvidence);
 
         var result = await RunAsync("report", "--input", input);
 
         await Assert.That(result.ExitCode).IsEqualTo(0).Because(result.StandardError);
         await Assert.That(result.StandardOutput).Contains("Foundry Local");
-        await Assert.That(result.StandardOutput).Contains(AnchorVariant);
+        await Assert.That(result.StandardOutput).Contains(RecordedVariant);
         await Assert.That(result.StandardOutput).Contains("CPUExecutionProvider");
         await Assert.That(result.StandardOutput).Contains("|3|");
         await Assert.That(result.StandardOutput).Contains("Peak RSS MiB");
@@ -75,11 +74,13 @@ public sealed class FoundryLocalRunTests
 
     private static async Task AssertProvenanceAsync(JsonElement root)
     {
+        var (variantId, family, device, contextTokens) = SelectedAnchor();
         await Assert.That(root.GetProperty("status").GetString())
             .IsEqualTo("measured_foundry_local_separate_onnx_cohort_quality_unreviewed");
-        await Assert.That(root.GetProperty("variant_id").GetString()).IsEqualTo(AnchorVariant);
-        await Assert.That(root.GetProperty("family").GetString()).IsEqualTo("qwen");
-        await Assert.That(root.GetProperty("device").GetString()).IsEqualTo("cpu");
+        await Assert.That(root.GetProperty("variant_id").GetString()).IsEqualTo(variantId);
+        await Assert.That(root.GetProperty("alias").GetString()).IsEqualTo(AnchorAlias);
+        await Assert.That(root.GetProperty("family").GetString()).IsEqualTo(family);
+        await Assert.That(root.GetProperty("device").GetString()).IsEqualTo(device);
         await Assert.That(root.GetProperty("execution_provider").GetString()).IsEqualTo("CPUExecutionProvider");
         await Assert.That(root.GetProperty("sdk_version").GetString()).StartsWith("2.0.1");
         await Assert.That(root.GetProperty("thread_policy").GetString())
@@ -87,9 +88,11 @@ public sealed class FoundryLocalRunTests
         await Assert.That(root.GetProperty("context_mode").GetString())
             .Contains("fresh_chat_session_per_request");
         await Assert.That(root.GetProperty("runner_label").GetString()).IsEqualTo("tunit");
-        await Assert.That(root.GetProperty("context_tokens").GetInt32()).IsEqualTo(1024);
-        await Assert.That(root.GetProperty("original_max_length").GetInt32()).IsEqualTo(32768);
-        await Assert.That(root.GetProperty("genai_search").GetProperty("max_length").GetInt32()).IsEqualTo(1024)
+        var originalContext = root.GetProperty("original_max_length").GetInt32();
+        await Assert.That(originalContext).IsGreaterThan(0);
+        var effectiveContext = Math.Min(contextTokens, originalContext);
+        await Assert.That(root.GetProperty("context_tokens").GetInt32()).IsEqualTo(effectiveContext);
+        await Assert.That(root.GetProperty("genai_search").GetProperty("max_length").GetInt32()).IsEqualTo(effectiveContext)
             .Because("ONNX Runtime GenAI preallocates KV for max_length, so the bound must be effective");
         await Assert.That(root.GetProperty("load_milliseconds").GetDouble()).IsGreaterThan(0);
         await Assert.That(root.GetProperty("peak_resident_bytes").GetInt64()).IsGreaterThan(0);
@@ -101,6 +104,17 @@ public sealed class FoundryLocalRunTests
             await Assert.That(file.GetProperty("sha256").GetString()!.Length).IsEqualTo(64);
             await Assert.That(file.GetProperty("size_bytes").GetInt64()).IsGreaterThan(0);
         }
+    }
+
+    private static (string VariantId, string Family, string Device, int ContextTokens) SelectedAnchor()
+    {
+        using var set = JsonDocument.Parse(File.ReadAllText(ModelSetPath));
+        var model = set.RootElement.GetProperty("models").EnumerateArray()
+            .Single(entry => entry.GetProperty("alias").GetString() == AnchorAlias);
+        var variant = model.GetProperty("variants").EnumerateArray()
+            .Single(entry => entry.GetProperty("device").GetString() == "cpu");
+        return (variant.GetProperty("id").GetString()!, model.GetProperty("family").GetString()!,
+            variant.GetProperty("device").GetString()!, set.RootElement.GetProperty("contextTokens").GetInt32());
     }
 
     private static async Task AssertSamplesAsync(JsonElement samples)

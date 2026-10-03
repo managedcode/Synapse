@@ -1,13 +1,30 @@
 name: performance-diagnostic
-
 on:
   push:
     branches: [main]
   workflow_dispatch:
-
+    inputs:
+      gguf_model_id: {description: 'GGUF catalog package ID (input overrides repository variable)', type: string, required: false}
+      gguf_model_file: {description: 'GGUF filename within the selected package', type: string, required: false}
+      mlx_model_id: {description: 'MLX catalog package ID', type: string, required: false}
+      foundry_model_set: {description: 'Tracked Foundry model-set JSON path', type: string, required: false}
+      smoke_prompt: {description: 'Exact smoke prompt for the selected GGUF', type: string, required: false}
+      smoke_prompt_token_ids: {description: 'Comma-separated prompt token IDs for the selected GGUF', type: string, required: false}
+      smoke_expected_token_ids: {description: 'Comma-separated qualified continuation token IDs', type: string, required: false}
+      smoke_expected_text: {description: 'Exact qualified continuation text including initial spaces', type: string, required: false}
+      smoke_max_tokens: {description: 'Smoke output token limit', type: string, required: false}
+env:
+  SYNAPSE_GGUF_MODEL_ID: ${{ inputs.gguf_model_id || vars.SYNAPSE_GGUF_MODEL_ID || 'qwen2.5-0.5b-instruct-q8_0' }}
+  SYNAPSE_GGUF_MODEL_FILE: ${{ inputs.gguf_model_file || vars.SYNAPSE_GGUF_MODEL_FILE || 'qwen2.5-0.5b-instruct-q8_0.gguf' }}
+  SYNAPSE_MLX_MODEL_ID: ${{ inputs.mlx_model_id || vars.SYNAPSE_MLX_MODEL_ID || 'qwen2.5-0.5b-instruct-mlx-8bit' }}
+  SYNAPSE_FOUNDRY_MODEL_SET: ${{ inputs.foundry_model_set || vars.SYNAPSE_FOUNDRY_MODEL_SET || 'experiments/Synapse.ReferenceBenchmarks/Features/Benchmarking/ModelSets/foundry-local-families.json' }}
+  SYNAPSE_SMOKE_PROMPT: ${{ inputs.smoke_prompt || vars.SYNAPSE_SMOKE_PROMPT || 'The capital of France is' }}
+  SYNAPSE_SMOKE_PROMPT_TOKEN_IDS: ${{ inputs.smoke_prompt_token_ids || vars.SYNAPSE_SMOKE_PROMPT_TOKEN_IDS || '785,6722,315,9625,374' }}
+  SYNAPSE_SMOKE_EXPECTED_TOKEN_IDS: ${{ inputs.smoke_expected_token_ids || vars.SYNAPSE_SMOKE_EXPECTED_TOKEN_IDS || '12095,13,1084,374,279,7772,3283,304' }}
+  SYNAPSE_SMOKE_EXPECTED_TEXT: ${{ inputs.smoke_expected_text || vars.SYNAPSE_SMOKE_EXPECTED_TEXT || ' Paris. It is the largest city in' }}
+  SYNAPSE_SMOKE_MAX_TOKENS: ${{ inputs.smoke_max_tokens || vars.SYNAPSE_SMOKE_MAX_TOKENS || '8' }}
 permissions:
   contents: read
-
 jobs:
   four-subject-matrix:
     name: ${{ matrix.name }}
@@ -40,7 +57,6 @@ jobs:
     steps:
       - name: Checkout Synapse
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
       - name: Checkout pinned dotLLM
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -48,7 +64,6 @@ jobs:
           ref: d88040451d7db56e5dfef9d5754ad0955b0f7fe5
           path: _external/dotLLM
           persist-credentials: false
-
       - name: Checkout pinned llama.cpp
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -56,33 +71,26 @@ jobs:
           ref: b29c606e28a01b1bc8c1351026a0fa6e616bf6c4
           path: _external/llama.cpp
           persist-credentials: false
-
       - name: Install pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
-
       - name: Install pinned Rust toolchain for the native kernel
         run: rustup toolchain install 1.98.1 --profile minimal
-
       - name: Build Synapse benchmark and CLI
         run: |
           dotnet restore Synapse.slnx --locked-mode
           dotnet build Synapse.slnx --configuration Release --no-restore
-
       - name: Restore verified model cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ${{ env.SYNAPSE_MODEL_ROOT }}
-          key: synapse-models-${{ runner.os }}-${{ matrix.runtime_identifier }}-${{ hashFiles('models/catalog.json') }}
-
-      - name: Fetch pinned Qwen smoke model
+          key: synapse-models-${{ runner.os }}-${{ matrix.runtime_identifier }}-${{ env.SYNAPSE_GGUF_MODEL_ID }}-${{ env.SYNAPSE_GGUF_MODEL_FILE }}-${{ hashFiles('models/catalog.json') }}
+      - name: Fetch selected verified GGUF model
         shell: bash
-        run: dotnet run --project src/Synapse.Cli --configuration Release --no-build -- model fetch --id qwen2.5-0.5b-instruct-q8_0 --output "${SYNAPSE_MODEL_ROOT}"
-
+        run: dotnet run --project src/Synapse.Cli --configuration Release --no-build -- model fetch --id "${SYNAPSE_GGUF_MODEL_ID}" --output "${SYNAPSE_MODEL_ROOT}"
       - name: Build pinned dotLLM
         run: dotnet build _external/dotLLM/src/DotLLM.Cli/DotLLM.Cli.csproj --configuration Release
-
       - name: Build pinned CPU llama.cpp
         shell: bash
         run: |
@@ -91,37 +99,34 @@ jobs:
             -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_SERVER=OFF
           cmake --build _external/llama.cpp/build --config Release --parallel 4 \
             --target llama-completion
-
       - name: Run isolated four-subject performance matrix
         shell: bash
         run: |
           dotnet experiments/Synapse.ReferenceBenchmarks/bin/Release/net10.0/Synapse.ReferenceBenchmarks.dll matrix \
-            --model "${SYNAPSE_MODEL_ROOT}/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.gguf" \
-            --prompt "The capital of France is" \
-            --prompt-token-ids "785,6722,315,9625,374" \
-            --expected-token-ids "12095,13,1084,374,279,7772,3283,304" \
-            --expected-text " Paris. It is the largest city in" \
+            --model "${SYNAPSE_MODEL_ROOT}/${SYNAPSE_GGUF_MODEL_ID}/${SYNAPSE_GGUF_MODEL_FILE}" \
+            --prompt "${SYNAPSE_SMOKE_PROMPT}" \
+            --prompt-token-ids "${SYNAPSE_SMOKE_PROMPT_TOKEN_IDS}" \
+            --expected-token-ids "${SYNAPSE_SMOKE_EXPECTED_TOKEN_IDS}" \
+            --expected-text "${SYNAPSE_SMOKE_EXPECTED_TEXT}" \
             --synapse-executable "${GITHUB_WORKSPACE}/src/Synapse.Cli/bin/Release/net10.0/synapse${{ matrix.executable_suffix }}" \
             --synapse-backend native \
             --dotllm-executable "${GITHUB_WORKSPACE}/_external/dotLLM/src/DotLLM.Cli/bin/Release/net10.0/DotLLM.Cli${{ matrix.executable_suffix }}" \
             --dotllm-version d88040451d7db56e5dfef9d5754ad0955b0f7fe5 \
             --llamacpp-executable "${GITHUB_WORKSPACE}/_external/llama.cpp/${{ matrix.llama_binary_directory }}/llama-completion${{ matrix.executable_suffix }}" \
             --llamacpp-version b29c606e28a01b1bc8c1351026a0fa6e616bf6c4 \
-            --max-tokens 8 --threads 2 --warmups 3 --measurements 5 \
+            --max-tokens "${SYNAPSE_SMOKE_MAX_TOKENS}" --threads 2 --warmups 3 --measurements 5 \
             --output "${RUNNER_TEMP}/synapse-benchmark.json"
-
       - name: Summarize measured performance and workload
         shell: bash
         run: |
           dotnet experiments/Synapse.ReferenceBenchmarks/bin/Release/net10.0/Synapse.ReferenceBenchmarks.dll report \
             --input "${RUNNER_TEMP}/synapse-benchmark.json" \
             --summary "${GITHUB_STEP_SUMMARY}" --require-quality
-
       - name: Run longer single-request and three-turn CPU diagnostics
         shell: bash
         run: |
           common=(
-            --model "${SYNAPSE_MODEL_ROOT}/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.gguf"
+            --model "${SYNAPSE_MODEL_ROOT}/${SYNAPSE_GGUF_MODEL_ID}/${SYNAPSE_GGUF_MODEL_FILE}"
             --synapse-executable "${GITHUB_WORKSPACE}/src/Synapse.Cli/bin/Release/net10.0/synapse${{ matrix.executable_suffix }}"
             --dotllm-executable "${GITHUB_WORKSPACE}/_external/dotLLM/src/DotLLM.Cli/bin/Release/net10.0/DotLLM.Cli${{ matrix.executable_suffix }}"
             --dotllm-version d88040451d7db56e5dfef9d5754ad0955b0f7fe5
@@ -131,19 +136,17 @@ jobs:
           )
           runner="experiments/Synapse.ReferenceBenchmarks/bin/Release/net10.0/Synapse.ReferenceBenchmarks.dll"
           dotnet "$runner" dialogue "${common[@]}" \
-            --scenario benchmarks/scenarios/capitals-single-long.json \
+            --scenario experiments/Synapse.ReferenceBenchmarks/Features/Benchmarking/Scenarios/capitals-single-long.json \
             --max-tokens 128 --output "${RUNNER_TEMP}/synapse-single.json"
           dotnet "$runner" dialogue "${common[@]}" \
-            --scenario benchmarks/scenarios/capitals-france-us-uk-3-turns.json \
+            --scenario experiments/Synapse.ReferenceBenchmarks/Features/Benchmarking/Scenarios/capitals-france-us-uk-3-turns.json \
             --max-tokens 64 --output "${RUNNER_TEMP}/synapse-dialogue.json"
-
       - name: Summarize longer CPU diagnostics
         shell: bash
         run: |
           runner="experiments/Synapse.ReferenceBenchmarks/bin/Release/net10.0/Synapse.ReferenceBenchmarks.dll"
           dotnet "$runner" report-dialogue --input "${RUNNER_TEMP}/synapse-single.json" --summary "${GITHUB_STEP_SUMMARY}"
           dotnet "$runner" report-dialogue --input "${RUNNER_TEMP}/synapse-dialogue.json" --summary "${GITHUB_STEP_SUMMARY}"
-
       - name: Preserve raw per-round evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -152,7 +155,6 @@ jobs:
           path: ${{ runner.temp }}/synapse-benchmark.json
           if-no-files-found: error
           retention-days: 30
-
       - name: Preserve longer CPU raw evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -163,7 +165,6 @@ jobs:
             ${{ runner.temp }}/synapse-dialogue.json
           if-no-files-found: warn
           retention-days: 30
-
   mlx-metal:
     name: macOS 15 ARM64 MLX Metal (separate cohort)
     runs-on: macos-15
@@ -175,30 +176,24 @@ jobs:
     steps:
       - name: Checkout Synapse
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
       - name: Install pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
-
       - name: Install pinned Rust toolchain for the native kernel
         run: rustup toolchain install 1.98.1 --profile minimal
-
       - name: Build C# benchmark runner and model fetcher
         run: |
           dotnet restore Synapse.slnx --locked-mode
           dotnet build Synapse.slnx --configuration Release --no-restore
-
       - name: Restore verified MLX model cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ${{ env.SYNAPSE_MODEL_ROOT }}
-          key: synapse-mlx-model-macos-arm64-${{ hashFiles('models/catalog.json') }}
-
-      - name: Fetch pinned MLX 8-bit Qwen model
+          key: synapse-mlx-model-macos-arm64-${{ env.SYNAPSE_MLX_MODEL_ID }}-${{ hashFiles('models/catalog.json') }}
+      - name: Fetch selected verified MLX model
         shell: bash
-        run: dotnet run --project src/Synapse.Cli --configuration Release --no-build -- model fetch --id qwen2.5-0.5b-instruct-mlx-8bit --output "${SYNAPSE_MODEL_ROOT}"
-
+        run: dotnet run --project src/Synapse.Cli --configuration Release --no-build -- model fetch --id "${SYNAPSE_MLX_MODEL_ID}" --output "${SYNAPSE_MODEL_ROOT}"
       - name: Download verified prebuilt SwiftLM MLX binary
         shell: bash
         run: |
@@ -210,30 +205,27 @@ jobs:
             '2ed6b5539b24c5267931d46ea9973775b7d2a9b5ee2f82109afab60f9603675e' \
             "${RUNNER_TEMP}/SwiftLM-b795-macos-arm64.tar.gz" | shasum -a 256 -c -
           tar -xzf "${RUNNER_TEMP}/SwiftLM-b795-macos-arm64.tar.gz" -C "${RUNNER_TEMP}/swiftlm"
-
       - name: Run isolated MLX Metal single-request and three-turn diagnostics
         shell: bash
         run: |
           runner="experiments/Synapse.ReferenceBenchmarks/bin/Release/net10.0/Synapse.ReferenceBenchmarks.dll"
           common=(
             --binary "${RUNNER_TEMP}/swiftlm/SwiftLM" --binary-version b795
-            --model "${SYNAPSE_MODEL_ROOT}/qwen2.5-0.5b-instruct-mlx-8bit"
+            --model "${SYNAPSE_MODEL_ROOT}/${SYNAPSE_MLX_MODEL_ID}"
             --warmups 1 --measurements 3
           )
           dotnet "$runner" mlx "${common[@]}" --port 15414 \
-            --scenario benchmarks/scenarios/capitals-single-long.json \
+            --scenario experiments/Synapse.ReferenceBenchmarks/Features/Benchmarking/Scenarios/capitals-single-long.json \
             --max-tokens 128 --output "${RUNNER_TEMP}/mlx-single.json"
           dotnet "$runner" mlx "${common[@]}" --port 15414 \
-            --scenario benchmarks/scenarios/capitals-france-us-uk-3-turns.json \
+            --scenario experiments/Synapse.ReferenceBenchmarks/Features/Benchmarking/Scenarios/capitals-france-us-uk-3-turns.json \
             --max-tokens 64 --output "${RUNNER_TEMP}/mlx-dialogue.json"
-
       - name: Summarize MLX Metal diagnostics
         shell: bash
         run: |
           runner="experiments/Synapse.ReferenceBenchmarks/bin/Release/net10.0/Synapse.ReferenceBenchmarks.dll"
           dotnet "$runner" report-dialogue --input "${RUNNER_TEMP}/mlx-single.json" --summary "${GITHUB_STEP_SUMMARY}"
           dotnet "$runner" report-dialogue --input "${RUNNER_TEMP}/mlx-dialogue.json" --summary "${GITHUB_STEP_SUMMARY}"
-
       - name: Preserve MLX Metal raw evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -244,7 +236,6 @@ jobs:
             ${{ runner.temp }}/mlx-dialogue.json
           if-no-files-found: warn
           retention-days: 30
-
   foundry-local-plan:
     name: Foundry Local plan (models that fit each runner)
     runs-on: ubuntu-24.04
@@ -257,25 +248,21 @@ jobs:
     steps:
       - name: Checkout Synapse
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
       - name: Install pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
-
       - name: Build the isolated Foundry Local runner
         run: |
           dotnet restore experiments/Synapse.FoundryLocalBenchmarks --locked-mode
           dotnet build experiments/Synapse.FoundryLocalBenchmarks --configuration Release --no-restore
-
       - name: Expand the model set into one job per runner and model
         id: plan
         shell: bash
         run: |
           matrix="$(dotnet experiments/Synapse.FoundryLocalBenchmarks/bin/Release/net10.0/Synapse.FoundryLocalBenchmarks.dll plan \
-            --set benchmarks/model-sets/foundry-local-families.json --summary "${GITHUB_STEP_SUMMARY}")"
+            --set "${SYNAPSE_FOUNDRY_MODEL_SET}" --summary "${GITHUB_STEP_SUMMARY}")"
           echo "matrix=${matrix}" >> "${GITHUB_OUTPUT}"
-
   foundry-local:
     name: Foundry Local · ${{ matrix.runner_name }} · ${{ matrix.alias }}
     needs: foundry-local-plan
@@ -292,42 +279,36 @@ jobs:
     steps:
       - name: Checkout Synapse
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
       - name: Install pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
-
       - name: Build the isolated Foundry Local runner
         run: |
           dotnet restore experiments/Synapse.FoundryLocalBenchmarks --locked-mode
           dotnet build experiments/Synapse.FoundryLocalBenchmarks --configuration Release --no-restore
-
       - name: Download only this job's model
         shell: bash
-        run: dotnet "${FOUNDRY_RUNNER}" fetch --set benchmarks/model-sets/foundry-local-families.json --alias "${{ matrix.alias }}" --cache "${FOUNDRY_CACHE}"
-
+        run: dotnet "${FOUNDRY_RUNNER}" fetch --set "${SYNAPSE_FOUNDRY_MODEL_SET}" --alias "${{ matrix.alias }}" --cache "${FOUNDRY_CACHE}"
       - name: Measure single-request and three-turn scenarios in one fresh process each
         shell: bash
         run: |
           common=(
-            --set benchmarks/model-sets/foundry-local-families.json
+            --set "${SYNAPSE_FOUNDRY_MODEL_SET}"
             --alias "${{ matrix.alias }}" --cache "${FOUNDRY_CACHE}"
             --runner-label "${{ matrix.runner_name }}" --warmups 1 --measurements 3
           )
           dotnet "${FOUNDRY_RUNNER}" run "${common[@]}" \
-            --scenario benchmarks/scenarios/capitals-single-long.json \
+            --scenario experiments/Synapse.ReferenceBenchmarks/Features/Benchmarking/Scenarios/capitals-single-long.json \
             --max-tokens 128 --output "${RUNNER_TEMP}/foundry-single.json"
           dotnet "${FOUNDRY_RUNNER}" run "${common[@]}" \
-            --scenario benchmarks/scenarios/capitals-france-us-uk-3-turns.json \
+            --scenario experiments/Synapse.ReferenceBenchmarks/Features/Benchmarking/Scenarios/capitals-france-us-uk-3-turns.json \
             --max-tokens 64 --output "${RUNNER_TEMP}/foundry-dialogue.json"
-
       - name: Summarize Foundry Local diagnostics
         shell: bash
         run: |
           dotnet "${FOUNDRY_RUNNER}" report --input "${RUNNER_TEMP}/foundry-single.json" --summary "${GITHUB_STEP_SUMMARY}"
           dotnet "${FOUNDRY_RUNNER}" report --input "${RUNNER_TEMP}/foundry-dialogue.json" --summary "${GITHUB_STEP_SUMMARY}"
-
       - name: Preserve Foundry Local raw evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -338,7 +319,6 @@ jobs:
             ${{ runner.temp }}/foundry-dialogue.json
           if-no-files-found: warn
           retention-days: 30
-
   combined-report:
     name: Combined performance results
     if: always()
@@ -351,34 +331,29 @@ jobs:
     steps:
       - name: Checkout Synapse
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
       - name: Install pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
-
       - name: Download this run's raw artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         continue-on-error: true
         with:
           path: ${{ runner.temp }}/performance-artifacts
           merge-multiple: false
-
       - name: Build C# artifact reporter
         run: |
           dotnet restore experiments/Synapse.ReferenceBenchmarks/Synapse.ReferenceBenchmarks.csproj --locked-mode
           dotnet build experiments/Synapse.ReferenceBenchmarks/Synapse.ReferenceBenchmarks.csproj --configuration Release --no-restore
-
       - name: Assemble the combined results table
         shell: bash
         run: |
           dotnet experiments/Synapse.ReferenceBenchmarks/bin/Release/net10.0/Synapse.ReferenceBenchmarks.dll aggregate \
             --artifacts "${RUNNER_TEMP}/performance-artifacts" \
-            --model-set benchmarks/model-sets/foundry-local-families.json \
+            --model-set "${SYNAPSE_FOUNDRY_MODEL_SET}" \
             --output "${RUNNER_TEMP}/performance-summary.md" \
             --json "${RUNNER_TEMP}/performance-results.json" \
             --summary "${GITHUB_STEP_SUMMARY}"
-
       - name: Preserve combined results table
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

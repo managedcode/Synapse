@@ -60,7 +60,7 @@ public sealed class PasskeyCommandTests
             "passkey",
             "--synapse-executable", Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "synapse.exe" : "synapse"),
             "--model", ReferenceBenchmarkFixture.GetModelPath(),
-            "--scenario", Path.Combine(RepositoryRoot(), "benchmarks", "scenarios", "passkey-qwen2.5.json"),
+            "--scenario", ReferenceBenchmarkFixture.BenchmarkInputPath("Scenarios", "passkey-qwen2.5.json"),
             "--threads", "4",
             .. extra,
         ];
@@ -77,14 +77,4 @@ public sealed class PasskeyCommandTests
         return (process.ExitCode, await error);
     }
 
-    private static string RepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Synapse.slnx")))
-        {
-            directory = directory.Parent;
-        }
-
-        return directory?.FullName ?? throw new DirectoryNotFoundException("Synapse.slnx was not found above the test output.");
-    }
 }

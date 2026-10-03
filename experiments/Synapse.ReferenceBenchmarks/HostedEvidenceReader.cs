@@ -10,9 +10,9 @@ internal static class HostedEvidenceReader
         var smoke = artifact.Kind == "smoke";
         var dialogue = file.Contains("dialogue", StringComparison.Ordinal);
         var turns = dialogue ? 3 : 1;
-        var maxTokens = smoke ? 8 : dialogue ? 64 : 128;
-        if (root.GetProperty("max_tokens").GetInt32() != maxTokens ||
-            (!smoke && root.GetProperty("turns").GetArrayLength() != turns))
+        var maxTokens = root.GetProperty("max_tokens").GetInt32();
+        if (maxTokens <= 0 || (!smoke &&
+            (maxTokens != (dialogue ? 64 : 128) || root.GetProperty("turns").GetArrayLength() != turns)))
         {
             throw new InvalidDataException("scenario or output-token limit mismatch");
         }
@@ -54,7 +54,7 @@ internal static class HostedEvidenceReader
             Turn: smoke ? 1 : sample.GetProperty("turn").GetInt32(),
             Subject: artifact.Kind is "smoke" or "cpu"
                 ? sample.GetProperty("subject").GetString() ?? string.Empty
-                : artifact.Kind == "foundry" ? artifact.Alias! : "SwiftLM Qwen2.5 0.5B"));
+                : artifact.Kind == "foundry" ? artifact.Alias! : "SwiftLM/MLX"));
         var grouped = groups.ToArray();
         if (grouped.Length != turns * subjectCount || grouped.Any(group =>
                 group.Count() != measurements || group.Key.Turn is < 1 or > 3 ||
@@ -78,7 +78,9 @@ internal static class HostedEvidenceReader
                 ? "macOS 15 ARM64"
                 : artifact.Name.EndsWith("linux-x64", StringComparison.Ordinal)
                     ? "Ubuntu 24.04 x64" : "Windows Server 2025 x64";
-        var scenario = smoke ? "8-token smoke" : dialogue ? "3-turn dialogue" : "128-token answer";
+        var scenario = smoke
+            ? root.GetProperty("max_tokens").GetInt32().ToString(CultureInfo.InvariantCulture) + "-token smoke"
+            : dialogue ? "3-turn dialogue" : "128-token answer";
         var state = smoke
             ? samples.All(sample => sample.GetProperty("quality_matched").GetBoolean())
                 ? "matched" : "mismatch"

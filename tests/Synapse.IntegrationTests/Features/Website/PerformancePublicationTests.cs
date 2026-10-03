@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using static ManagedCode.Synapse.IntegrationTests.Features.Benchmarking.ReferenceBenchmarkFixture;
 
 namespace ManagedCode.Synapse.IntegrationTests.Features.Website;
@@ -61,6 +62,67 @@ public sealed class PerformancePublicationTests
     }
 
     [Test]
+    public async Task PerformancePublicationLabelsConfiguredSmokeLimitFromRawEvidence()
+    {
+        using var fixture = new PublicationFixture();
+        fixture.CopySmoke();
+        var input = Path.Combine(fixture.DirectoryPath, "artifacts", "performance-osx-arm64",
+            "synapse-benchmark.json");
+        var raw = JsonNode.Parse(await File.ReadAllTextAsync(input))!.AsObject();
+        raw["max_tokens"] = 16;
+        foreach (var sample in raw["samples"]!.AsArray())
+        {
+            sample!["quality_matched"] = false;
+            var subject = sample!["subject_result"]!.AsObject();
+            if (subject.ContainsKey("max_tokens"))
+            {
+                subject["max_tokens"] = 16;
+            }
+        }
+
+        await File.WriteAllTextAsync(input, raw.ToJsonString());
+
+        var (exit, error) = await fixture.RunAsync();
+
+        await Assert.That(exit).IsEqualTo(3).Because(error);
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(fixture.JsonPath));
+        var result = document.RootElement;
+        await Assert.That(result.GetProperty("complete_artifacts").GetInt32()).IsEqualTo(1);
+        await Assert.That(result.GetProperty("invalid_artifacts").GetArrayLength()).IsEqualTo(0);
+        await Assert.That(result.GetProperty("rows").GetArrayLength()).IsEqualTo(4);
+        foreach (var row in result.GetProperty("rows").EnumerateArray())
+        {
+            await Assert.That(row.GetProperty("scenario").GetString()).IsEqualTo("16-token smoke");
+            await Assert.That(row.GetProperty("output_tokens").GetDouble()).IsEqualTo(8);
+            await Assert.That(row.GetProperty("output_state").GetString()).IsEqualTo("mismatch");
+        }
+
+        await Assert.That(await File.ReadAllTextAsync(Path.Combine(fixture.DirectoryPath, "summary.md")))
+            .Contains("|16-token smoke|");
+    }
+
+    [Test]
+    public async Task PerformancePublicationKeepsMlxSubjectIndependentOfModelSelection()
+    {
+        using var fixture = new PublicationFixture();
+        fixture.CopyEvidence("performance-mlx-osx-arm64", "mlx-dialogue.json",
+            "2026-09-28-m2-pro-mlx-qwen2.5-0.5b-8bit-capitals-3turn-diagnostic.json");
+
+        var (exit, error) = await fixture.RunAsync();
+
+        await Assert.That(exit).IsEqualTo(3).Because(error);
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(fixture.JsonPath));
+        var result = document.RootElement;
+        await Assert.That(result.GetProperty("invalid_artifacts").GetArrayLength()).IsEqualTo(0);
+        await Assert.That(result.GetProperty("rows").GetArrayLength()).IsEqualTo(3);
+        foreach (var row in result.GetProperty("rows").EnumerateArray())
+        {
+            await Assert.That(row.GetProperty("subject").GetString()).IsEqualTo("SwiftLM/MLX");
+            await Assert.That(row.GetProperty("wall_metric_scope").GetString()).IsEqualTo("request");
+        }
+    }
+
+    [Test]
     public async Task PerformancePublicationRejectsMislabeledArtifacts()
     {
         using var fixture = new PublicationFixture();
@@ -112,7 +174,7 @@ public sealed class PerformancePublicationTests
         {
             var directory = Path.Combine(DirectoryPath, "artifacts", artifact);
             Directory.CreateDirectory(directory);
-            File.Copy(Path.Combine(FindRepositoryRoot(), "benchmarks", "results", source),
+            File.Copy(RecordedBenchmarkPath(source),
                 Path.Combine(directory, name));
         }
 
@@ -128,8 +190,7 @@ public sealed class PerformancePublicationTests
             {
                 Path.Combine(AppContext.BaseDirectory, "Synapse.ReferenceBenchmarks.dll"),
                 "aggregate", "--artifacts", Path.Combine(DirectoryPath, "artifacts"),
-                "--model-set", Path.Combine(FindRepositoryRoot(), "benchmarks", "model-sets",
-                    "foundry-local-families.json"),
+                "--model-set", BenchmarkInputPath("ModelSets", "foundry-local-families.json"),
                 "--output", Path.Combine(DirectoryPath, "summary.md"), "--json", JsonPath,
             })
             {

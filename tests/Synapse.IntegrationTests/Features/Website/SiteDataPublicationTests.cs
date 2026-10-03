@@ -12,13 +12,13 @@ public sealed class SiteDataPublicationTests
         using var fixture = new SiteFixture();
         var raw = Path.Combine(fixture.Root, "raw", "performance-osx-arm64");
         Directory.CreateDirectory(raw);
-        File.Copy(Path.Combine(FindRepositoryRoot(), "benchmarks", "results",
+        File.Copy(RecordedBenchmarkPath(
             "2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-cpu-kernels-native-2thread-smoke.json"),
             Path.Combine(raw, "synapse-benchmark.json"));
         var reportDirectory = Path.Combine(fixture.Root, "performance", "performance-summary");
         Directory.CreateDirectory(reportDirectory);
         await Assert.That(await RunAsync("aggregate", "--artifacts", Path.Combine(fixture.Root, "raw"),
-            "--model-set", Path.Combine(FindRepositoryRoot(), "benchmarks/model-sets/foundry-local-families.json"),
+            "--model-set", BenchmarkInputPath("ModelSets", "foundry-local-families.json"),
             "--output", Path.Combine(fixture.Root, "summary.md"), "--json",
             Path.Combine(reportDirectory, "performance-results.json"))).IsEqualTo(3);
         using var realTests = await TestPublicationFixture.CreateAsync();
