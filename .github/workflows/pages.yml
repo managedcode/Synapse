@@ -13,7 +13,7 @@ on:
       - experiments/Synapse.ReferenceBenchmarks/Program.cs
   workflow_dispatch:
   workflow_run:
-    workflows: [verify, performance]
+    workflows: [verify, performance-diagnostic]
     types: [completed]
 
 permissions:

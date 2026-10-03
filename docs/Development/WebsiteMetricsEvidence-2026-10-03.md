@@ -82,3 +82,17 @@ because the dependency-repair authorization does not cover this feature. No
 commit or push occurred during that attempt. On 2026-10-03 the user explicitly
 authorized pushing these prepared changes to `main`; publication proceeds
 under that authorization.
+
+## Workflow name regression after publication
+
+Commit `00567dbba63f217ba8387829bb67131c877b5731` reached `origin/main` and
+created Pages run `37128235031`, verification run `37128235060`, and performance
+run `37128235064`. Run discovery exposed the actual performance workflow name
+`performance-diagnostic`, while the Pages subscription used `performance`.
+The improved source contract derives each upstream name from its real workflow
+file. It failed first (1/1, exit 2) before correcting the subscription.
+These run IDs establish dispatch, not completed test or deployment evidence.
+After the correction, Release test-project build passed with zero warnings
+or errors, the 19-case Website suite passed (exit 0, 13.971s), scoped format
+verification passed, and actionlint/diff checks passed. Sandbox IPC-denied
+attempts were rerun with required permissions and are not counted as passes.

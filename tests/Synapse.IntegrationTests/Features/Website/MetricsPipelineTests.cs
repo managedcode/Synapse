@@ -25,19 +25,21 @@ public sealed class MetricsPipelineTests
     {
         var root = FindRepositoryRoot();
         var pages = await File.ReadAllTextAsync(Path.Combine(root, ".github/workflows/pages.yml"));
+        var verify = await File.ReadAllTextAsync(Path.Combine(root, ".github/workflows/verify.yml"));
+        var performance = await File.ReadAllTextAsync(Path.Combine(root, ".github/workflows/performance.yml"));
+        var verifyName = verify.Split('\n').First(line => line.StartsWith("name:", StringComparison.Ordinal))[5..].Trim();
+        var performanceName = performance.Split('\n').First(line => line.StartsWith("name:", StringComparison.Ordinal))[5..].Trim();
         await Assert.That(pages).Contains("workflow_run:");
-        await Assert.That(pages).Contains("workflows: [verify, performance]");
+        await Assert.That(pages).Contains($"workflows: [{verifyName}, {performanceName}]");
         await Assert.That(pages).Contains("github.event.workflow_run.head_branch == 'main'");
         await Assert.That(pages).Contains("github.event.workflow_run.event == 'push'");
         await Assert.That(pages).Contains("actions: read");
         await Assert.That(pages).Contains("collect-site-results.sh");
         await Assert.That(pages).Contains("site-data");
-        var verify = await File.ReadAllTextAsync(Path.Combine(root, ".github/workflows/verify.yml"));
         await Assert.That(verify).Contains("--report-trx");
         await Assert.That(verify).Contains("--minimum-expected-tests 1");
         await Assert.That(verify).Contains("test-report");
         await Assert.That(verify).Contains("test-results-${{ matrix.runtime_identifier }}");
-        var performance = await File.ReadAllTextAsync(Path.Combine(root, ".github/workflows/performance.yml"));
         await Assert.That(performance).Contains("--json \"${RUNNER_TEMP}/performance-results.json\"");
         var collector = await File.ReadAllTextAsync(Path.Combine(root, ".github/scripts/collect-site-results.sh"));
         await Assert.That(collector).Contains("run_attempt");
