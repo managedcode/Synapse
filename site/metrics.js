@@ -1,4 +1,5 @@
-// REQ-WEB-002: render published reports without combining benchmark cohorts.
+import { renderComparisons } from "./comparisons.js";
+// REQ-WEB-002: render published reports without combining benchmark phases.
 const repository = "https://github.com/managedcode/Synapse";
 const labels = { passed: "Passed", failed: "Failed", success: "Succeeded", failure: "Failed",
   cancelled: "Cancelled", skipped: "Skipped", not_run_missing_hardware: "Not run: hardware unavailable" };
@@ -48,6 +49,7 @@ function validRow(row) {
   requireValue(numeric.every(key => row[key] === null || validNumber(row[key])));
   requireValue(["native_eval", "reported_decode"].includes(row.decode_metric_scope));
   requireValue(["fresh_process", "request"].includes(row.wall_metric_scope));
+  if (row.model != null) requireValue(["family", "label", "weights_sha256", "scenario_sha256", "execution", "hardware"].every(key => validText(row.model[key])));
 }
 
 function validate(data) {
@@ -122,51 +124,6 @@ function renderTests(stream) {
   diagnostics(notes, "Missing test artifacts", stream.missing_artifacts);
 }
 
-function populateFilter(id, rows, field) {
-  const select = byId(id);
-  select.replaceChildren();
-  const all = element("option", `All ${field === "cohort" ? "cohorts" : `${field}s`}`);
-  all.value = "";
-  select.append(all);
-  [...new Set(rows.map(row => row[field]))].sort().forEach(value => {
-    const option = element("option", value);
-    option.value = value;
-    select.append(option);
-  });
-}
-
-function cell(row, value, note) {
-  const container = element("td", value);
-  if (note) container.append(element("small", note));
-  row.append(container);
-}
-
-function renderRow(item) {
-  const row = element("tr");
-  const subject = element("th", item.subject);
-  subject.scope = "row";
-  subject.append(element("small", item.source_artifact));
-  row.append(subject);
-  cell(row, item.cohort);
-  cell(row, item.runner);
-  cell(row, item.scenario, item.turn === null ? undefined : `Turn ${item.turn}`);
-  cell(row, format(item.samples));
-  cell(row, format(item.output_tokens), statusLabel(item.output_state));
-  cell(row, format(item.ttft_milliseconds));
-  cell(row, format(item.decode_tokens_per_second), item.decode_metric_scope === "native_eval" ? "Native evaluation" : "Reported decode");
-  cell(row, format(item.wall_milliseconds), item.wall_metric_scope === "fresh_process" ? "Fresh process" : "Request");
-  cell(row, format(item.peak_rss_mib));
-  return row;
-}
-
-function filterRows(rows) {
-  const filters = ["cohort", "runner", "scenario"].map(field => [field, byId(`metric-${field}`).value]);
-  const selected = rows.filter(row => filters.every(([field, value]) => !value || row[field] === value));
-  byId("metric-rows").replaceChildren(...selected.map(renderRow));
-  byId("metric-selection").textContent = selected.length ? `${selected.length} of ${rows.length} measurements shown. No cross-cohort ranking is applied.`
-    : "No measurements match these filters.";
-}
-
 function renderPerformance(stream) {
   renderRun("performance-run", stream.run);
   const notes = byId("performance-diagnostics");
@@ -182,13 +139,9 @@ function renderPerformance(stream) {
   }
   diagnostics(notes, "Missing benchmark artifacts", report.missing_artifacts);
   diagnostics(notes, "Invalid benchmark artifacts", report.invalid_artifacts);
+  diagnostics(notes, "Model evidence unavailable", stream.missing_artifacts ?? []);
   if (!report.rows.length) { notes.append(element("p", "This report contains no measured rows.")); return; }
-  for (const field of ["cohort", "runner", "scenario"]) populateFilter(`metric-${field}`, report.rows, field);
-  byId("metric-filters").hidden = false;
-  byId("metrics-table-wrap").hidden = false;
-  byId("metric-filters").addEventListener("change", () => filterRows(report.rows));
-  byId("metric-filters").addEventListener("submit", event => event.preventDefault());
-  filterRows(report.rows);
+  renderComparisons(report.rows, stream.run);
 }
 
 async function loadMetrics() {

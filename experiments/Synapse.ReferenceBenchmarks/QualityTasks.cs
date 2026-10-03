@@ -28,7 +28,8 @@ internal sealed class QualityTaskFactory
     public QualityTaskFactory(ITextTokenizer tokenizer, string haystack)
     {
         _tokenizer = tokenizer;
-        _blocks = haystack.Split("\n\n", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        _blocks = haystack.ReplaceLineEndings("\n").Split("\n\n",
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         _blockTokens = [.. _blocks.Select(block => tokenizer.Encode(block + "\n\n", parseSpecialTokens: false).Count)];
     }
 

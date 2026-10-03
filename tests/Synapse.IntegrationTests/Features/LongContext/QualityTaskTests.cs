@@ -53,6 +53,24 @@ public sealed class QualityTaskTests
         await Assert.That(() => factory.Create("needle", 3_000, 0.5, seed: 1)).Throws<InvalidDataException>();
     }
 
+    [Test]
+    [Arguments("needle")]
+    [Arguments("multikey")]
+    [Arguments("vartrack")]
+    public async Task CorpusLineEndingsDoNotChangeQualityCases(string task)
+    {
+        var docs = Path.Combine(ReferenceBenchmarkFixture.FindRepositoryRoot(), "docs");
+        var haystack = string.Join("\n\n", Directory.GetFiles(docs, "*.md", SearchOption.AllDirectories)
+            .Order(StringComparer.Ordinal).Select(File.ReadAllText)).ReplaceLineEndings("\n");
+        var tokenizer = Tokenizer();
+        var expected = new QualityTaskFactory(tokenizer, haystack).Create(task, 3_000, 0.3, 7);
+        var windows = new QualityTaskFactory(tokenizer, haystack.ReplaceLineEndings("\r\n"))
+            .Create(task, 3_000, 0.3, 7);
+        await Assert.That(windows.Prompt).IsEqualTo(expected.Prompt);
+        await Assert.That(windows.Tokens).IsEquivalentTo(expected.Tokens);
+        await Assert.That(windows.Tokens.Length).IsBetween(2_000, 3_000);
+    }
+
     private static QualityTaskFactory CreateFactory()
     {
         var docs = Path.Combine(ReferenceBenchmarkFixture.FindRepositoryRoot(), "docs");

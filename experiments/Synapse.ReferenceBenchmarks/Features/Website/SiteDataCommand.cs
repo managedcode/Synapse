@@ -104,6 +104,7 @@ internal static class SiteDataCommand
             {
                 report = await SitePublicationValidation.ReadAsync(path).ConfigureAwait(false);
                 SitePublicationValidation.Performance(report);
+                await PerformanceModelEnrichment.EnrichAsync(root, report, missing).ConfigureAwait(false);
             }
             else
             {

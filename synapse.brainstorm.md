@@ -1,5 +1,15 @@
 # Synapse bootstrap decisions
 
+## 2026-10-03 understandable website metrics
+
+Replace the overwhelming measurement table with comparisons centered on
+Synapse. Choose model, runner class and scenario once; explain units and
+whether higher or lower is better. Surface source model identities instead
+of assuming the default workflow model. Compare Foundry Local with Synapse
+where both families were measured, and display the missing Synapse series
+for other families. Separate incompatible phases and memory scopes. Keep
+historical Apple GPU diagnostics dated, with model and quality limitations.
+
 ## 2026-10-03 generation effects and user controls
 
 The preparation-only speedup does not answer whether generation improves.

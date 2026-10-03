@@ -85,6 +85,66 @@ public sealed class SiteDataPublicationTests
         await Assert.That(File.Exists(fixture.Output)).IsFalse();
     }
 
+    [Test]
+    [Arguments(false, false)]
+    [Arguments(true, false)]
+    [Arguments(false, true)]
+    public async Task LegacyModelEnrichmentRequiresIdenticalMeasuredRows(bool changedMetric, bool unsafeArtifact)
+    {
+        using var fixture = new SiteFixture();
+        var raw = Path.Combine(fixture.Root, "performance", "performance-osx-arm64");
+        Directory.CreateDirectory(raw);
+        File.Copy(RecordedBenchmarkPath(
+            "2026-09-28-m2-pro-qwen2.5-0.5b-q8_0-cpu-kernels-native-2thread-smoke.json"),
+            Path.Combine(raw, "synapse-benchmark.json"));
+        var summary = Path.Combine(fixture.Root, "performance", "performance-summary");
+        Directory.CreateDirectory(summary);
+        var reportPath = Path.Combine(summary, "performance-results.json");
+        await Assert.That(await RunAsync("aggregate", "--artifacts", Path.Combine(fixture.Root, "performance"),
+            "--model-set", BenchmarkInputPath("ModelSets", "foundry-local-families.json"),
+            "--output", Path.Combine(fixture.Root, "summary.md"), "--json", reportPath)).IsEqualTo(3);
+        var report = JsonNode.Parse(await File.ReadAllTextAsync(reportPath))!;
+        foreach (var row in report["rows"]!.AsArray())
+        {
+            row!.AsObject().Remove("model");
+        }
+
+        var original = report["rows"]!.AsArray().Single(row => row!["subject"]!.GetValue<string>() == "synapse")!;
+        if (changedMetric)
+        {
+            original["wall_milliseconds"] = original["wall_milliseconds"]!.GetValue<double>() + 1;
+        }
+        if (unsafeArtifact)
+        {
+            original["source_artifact"] = "..";
+        }
+
+        await File.WriteAllTextAsync(reportPath, report.ToJsonString());
+        await fixture.WriteRunsAsync(null, RunMetadata(36547564346,
+            "7a219c6cb6fdb851962a3f23a2f141abde20679d"));
+        await Assert.That(await fixture.PublishAsync()).IsEqualTo(0);
+        var published = JsonNode.Parse(await File.ReadAllTextAsync(fixture.Output))!;
+        var synapse = published["performance"]!["report"]!["rows"]!.AsArray()
+            .Single(row => row!["subject"]!.GetValue<string>() == "synapse")!;
+        await Assert.That(synapse["model"] is not null).IsEqualTo(!changedMetric && !unsafeArtifact);
+        foreach (var property in original.AsObject())
+        {
+            await Assert.That(JsonNode.DeepEquals(property.Value, synapse[property.Key])).IsTrue()
+                .Because($"Enrichment must not change {property.Key}.");
+        }
+
+        if (changedMetric)
+        {
+            await Assert.That(published["performance"]!["missing_artifacts"]!.ToJsonString())
+                .Contains("raw metrics do not match summary");
+        }
+        if (unsafeArtifact)
+        {
+            await Assert.That(published["performance"]!["missing_artifacts"]!.ToJsonString())
+                .Contains("invalid artifact name");
+        }
+    }
+
     private static JsonObject RunMetadata(long id, string sha) => new()
     {
         ["id"] = id,

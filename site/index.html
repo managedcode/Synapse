@@ -9,7 +9,7 @@
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Synapse">
   <meta property="og:title" content="Synapse — run LLMs like a fly brain">
-  <meta property="og:description" content="Large language models on your own machine, in pure C#. Already keeps pace with llama.cpp on the CPU.">
+  <meta property="og:description" content="Large language models on your own machine, in pure C#. Published CPU and Apple GPU measurements with model and run provenance.">
   <meta property="og:url" content="https://synapse.managed-code.com/">
   <meta name="twitter:card" content="summary">
   <link rel="canonical" href="https://synapse.managed-code.com/">
@@ -19,6 +19,7 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@300..800&family=JetBrains+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="comparisons.css">
   <script>document.documentElement.classList.add("js")</script>
   <script type="module" src="site.js"></script>
   <script type="module" src="metrics.js"></script>
@@ -61,7 +62,7 @@
           <a class="btn btn-glass" href="https://github.com/managedcode/Synapse">Star on GitHub <span aria-hidden="true">↗</span></a>
         </div>
         <ul class="proof">
-          <li><b>114%</b><span>of llama.cpp speed on the CPU</span></li>
+          <li><b>190.6</b><span>tokens/s on the local CPU</span></li>
           <li><b>3.2×</b><span>faster short request</span></li>
           <li><b>2.3×</b><span>less memory</span></li>
         </ul>
@@ -105,18 +106,36 @@
 <section class="section" id="proof">
   <div class="wrap">
     <article class="ci-metrics" id="metrics" aria-labelledby="metrics-title">
-      <header class="sec-head"><p class="kicker">Metrics · GitHub Actions</p><h2 id="metrics-title">Every run.<br><span class="soft">In the open.</span></h2><p>Published test results and benchmark measurements, with the source revision and run behind each number. Compare measurements within the same cohort, runner and scenario; these diagnostics do not establish a performance winner.</p></header>
+      <header class="sec-head"><p class="kicker">Latest measurements · GitHub Actions</p><h2 id="metrics-title">How does Synapse compare?<br><span class="soft">Pick a model. See the difference.</span></h2><p>Green is Synapse. Choose a model, a runner class and an answer length. Each chart names its unit and timing scope; missing measurements stay visible. These short diagnostic runs do not establish a quality or release winner.</p></header>
       <div class="metric-links"><a href="data/latest.json">Download latest JSON <span aria-hidden="true">↗</span></a><a href="https://github.com/managedcode/Synapse/actions">All GitHub runs <span aria-hidden="true">↗</span></a></div>
+      <nav class="metric-links" aria-label="Measurement sections"><a href="#performance-title">CPU engines</a><a href="#foundry-comparison">Synapse vs Foundry Local</a><a href="#local-models">Local Apple GPU</a><a href="#model-7b">7B model</a></nav>
       <p class="metric-status" id="metrics-status" role="status" aria-live="polite">Results load from the published JSON. Open the links above to inspect the original runs.</p>
-      <noscript><p class="metric-note">JavaScript is required for the tables. The latest JSON and GitHub run links above remain available.</p></noscript>
+      <noscript><p class="metric-note">JavaScript is required for the interactive charts. The latest JSON and GitHub run links above remain available.</p></noscript>
       <div class="metric-stream" aria-labelledby="verification-title"><div class="metric-stream-head"><h3 id="verification-title">Tests</h3><p id="verification-run" class="metric-run">No run loaded.</p></div><div id="verification-results" class="verification-results"></div><div id="verification-diagnostics" class="metric-note"></div></div>
       <div class="metric-stream" aria-labelledby="performance-title"><div class="metric-stream-head"><h3 id="performance-title">Performance</h3><p id="performance-run" class="metric-run">No run loaded.</p></div><div id="performance-diagnostics" class="metric-note"></div>
-        <form class="metric-filters" id="metric-filters" hidden aria-label="Filter benchmark measurements"><label>Cohort<select id="metric-cohort" name="cohort"></select></label><label>Runner<select id="metric-runner" name="runner"></select></label><label>Scenario<select id="metric-scenario" name="scenario"></select></label></form>
+        <form class="metric-filters" id="metric-filters" hidden aria-label="Choose CPU comparison"><label>Model<select id="metric-model" name="model"></select></label><label>Runner class<select id="metric-runner" name="runner"></select></label><label>Answer / turn<select id="metric-scenario" name="scenario"></select></label></form>
         <p id="metric-selection" class="metric-note" aria-live="polite"></p>
-        <div class="metric-scroll" id="metrics-table-wrap" hidden tabindex="0" role="region" aria-label="Benchmark measurements; scroll horizontally for every metric"><table class="metrics-table" id="metrics-table"><caption>Measured diagnostics. A dash means that the source did not report a value.</caption><thead><tr><th scope="col">Subject / source</th><th scope="col">Cohort</th><th scope="col">Runner</th><th scope="col">Scenario / turn</th><th scope="col">Samples</th><th scope="col">Output</th><th scope="col">TTFT <small>ms</small></th><th scope="col">Decode <small>tokens/s · scope per row</small></th><th scope="col">Wall <small>ms · scope per row</small></th><th scope="col">Peak RSS <small>MiB</small></th></tr></thead><tbody id="metric-rows"></tbody></table></div>
+        <div class="comparison-grid" id="metric-charts" aria-live="polite"></div>
+        <div id="metric-evidence"></div>
+      </div>
+      <div class="metric-stream" id="foundry-comparison" aria-labelledby="foundry-title">
+        <h3 id="foundry-title">Synapse vs Microsoft Foundry Local</h3>
+        <p class="metric-note">Foundry Local runs downloaded ONNX models on the runner. This is local inference, not the Azure AI Foundry cloud service. Compare the same model family below; GGUF and ONNX weights, threads and cache policies differ.</p>
+        <form class="metric-filters" id="foundry-filters" hidden aria-label="Choose Foundry comparison"><label>Foundry model<select id="foundry-model"></select></label><label>Foundry runner class<select id="foundry-runner"></select></label><label>Foundry answer / turn<select id="foundry-scenario"></select></label></form>
+        <p id="foundry-selection" class="metric-note" aria-live="polite">Waiting for measured evidence.</p>
+        <div class="comparison-grid" id="foundry-charts" aria-live="polite"></div>
+        <div id="foundry-evidence"></div>
+      </div>
+      <div class="metric-stream" aria-labelledby="mlx-title">
+        <h3 id="mlx-title">Synapse CPU and MLX on Apple GPU</h3>
+        <p class="metric-note">Current hosted measurements use different devices and weights. For Synapse Metal vs llama.cpp Metal on the same local Mac, see the Apple GPU charts below.</p>
+        <form class="metric-filters" id="mlx-filters" hidden aria-label="Choose MLX comparison"><label>MLX model<select id="mlx-model"></select></label><label>MLX runner class<select id="mlx-runner"></select></label><label>MLX answer / turn<select id="mlx-scenario"></select></label></form>
+        <p id="mlx-selection" class="metric-note" aria-live="polite">Waiting for measured evidence.</p>
+        <div class="comparison-grid" id="mlx-charts" aria-live="polite"></div>
+        <div id="mlx-evidence"></div>
       </div>
     </article>
-    <header class="sec-head reveal"><p class="kicker">Recorded local measurements</p><h2>Already keeps pace with llama.cpp. <span class="soft">On a plain CPU.</span></h2></header>
+    <header class="sec-head reveal" id="local-models"><p class="kicker">Recorded local measurements · September 2026 · Apple M2 Pro</p><h2>Our models on Apple silicon.<br><span class="soft">Synapse beside the other engines.</span></h2><p>These earlier local diagnostics use different hardware from GitHub Actions above. The runnable decoder models shown here are Qwen2.5 0.5B and Qwen2.5 7B. Green is Synapse, blue is llama.cpp, purple is MLX. Check the answer-quality note as well as speed.</p></header>
     <div class="bench">
       <article class="panel reveal">
         <div class="panel-top">
@@ -125,14 +144,14 @@
             <button type="button" data-threads="2" aria-pressed="false">2 threads</button><button type="button" data-threads="8" aria-pressed="true">8 threads</button>
           </div>
         </div>
-        <p class="panel-big"><span data-ratio>114%</span><small>of llama.cpp</small></p>
+        <p class="panel-big"><span data-ratio>190.6</span><small>tokens/s, Synapse</small></p>
         <ul class="bars" data-chart="speed">
           <li class="me"><span>Synapse</span><i><b style="--w:100%"></b></i><em data-v2="136.6" data-v8="190.6">190.6</em></li>
           <li class="c1"><span>llama.cpp</span><i><b style="--w:87.7%"></b></i><em data-v2="133.7" data-v8="167.2">167.2</em></li>
           <li class="c2"><span>LLamaSharp</span><i><b style="--w:77.1%"></b></i><em data-v2="97.1" data-v8="147.0">147.0</em></li>
           <li class="c3"><span>dotLLM</span><i><b style="--w:16.6%"></b></i><em data-v2="9.7" data-v8="31.7">31.7</em></li>
         </ul>
-        <p class="unit">tokens per second · higher is better</p>
+        <p class="unit">Model: Qwen2.5 0.5B · Q8_0 · tokens/s · higher is better · Synapse reported decode vs llama.cpp native evaluation: phase definitions differ</p>
       </article>
       <article class="panel reveal">
         <div class="panel-top"><h3>Whole short request</h3></div>
@@ -158,7 +177,7 @@
       </article>
     </div>
     <p class="fine reveal">MacBook Pro, Apple M2 Pro, 32 GB. Qwen2.5 0.5B Instruct Q8_0, prompt “The capital of France is”, 8-token answer. Median of 5 runs after 3 warm-ups; all four engines wrote the same 8 tokens. Diagnostic runs, not the final 30-run release gate. <a href="https://github.com/managedcode/Synapse/blob/d679cb7580c5bf2060bdc0bd13f9b34bfd7ab69c/benchmarks/README.md">All runs and raw JSON ↗</a></p>
-    <header class="sec-head reveal ctx-head"><p class="kicker">Long context · Apple GPU</p><h2>Tokens, memory and speed. <span class="soft">From 4k to 32k.</span></h2></header>
+    <header class="sec-head reveal ctx-head"><p class="kicker">Qwen2.5 0.5B · Apple M2 Pro GPU · September 2026</p><h2>Tokens, memory and speed. <span class="soft">From 4k to 32k.</span></h2><p>Synapse and llama.cpp use the same Q8_0 file and selected KV precision. MLX uses its own 8-bit weights. Memory is peak physical footprint; it differs from the peak RSS charts above. Correct answers and matching token IDs appear below the charts.</p></header>
     <article class="panel longctx reveal" data-longctx>
       <div class="panel-top">
         <h3>Pick a context and a KV cache</h3>
@@ -225,26 +244,22 @@
       </article>
     </div>
     <p class="fine reveal">One run per row, a fresh process each; diagnostics, not a paired verdict. <a href="https://github.com/managedcode/Synapse/blob/d679cb7580c5bf2060bdc0bd13f9b34bfd7ab69c/benchmarks/README.md">Runs U and V ↗</a></p>
-    <header class="sec-head reveal ctx-head"><p class="kicker">7B model · Apple GPU</p><h2>A 7B model, not loaded whole. <span class="soft">Same text as llama.cpp.</span></h2></header>
-    <div class="bench big7">
+    <header class="sec-head reveal ctx-head" id="model-7b"><p class="kicker">Qwen2.5-7B-Instruct-1M · Apple M2 Pro GPU · 29 September 2026</p><h2>One model. Two engines.<br><span class="soft">Compare the same weight format.</span></h2><div class="seg" role="group" aria-label="7B weight format"><button type="button" data-seven-model="q4" aria-pressed="true">Q4_K_M</button><button type="button" data-seven-model="q8" aria-pressed="false">Q8_0</button></div></header>
+    <div class="bench big7" data-seven-charts>
       <article class="panel reveal"><div class="panel-top"><h3>Peak memory</h3></div>
-        <p class="panel-big"><span>13%</span><small>less than llama.cpp, Q4_K_M</small></p>
-        <ul class="bars">
-          <li class="me"><span>Synapse Q4</span><i><b style="--w:52.2%"></b></i><em>4,233 MiB</em></li>
-          <li class="c1"><span>llama.cpp Q4</span><i><b style="--w:59.8%"></b></i><em>4,846 MiB</em></li>
-          <li class="me"><span>Synapse Q8</span><i><b style="--w:89.4%"></b></i><em>7,252 MiB</em></li>
-          <li class="c1"><span>llama.cpp Q8</span><i><b style="--w:100%"></b></i><em>8,109 MiB</em></li>
+        <p class="panel-big"><span data-seven-memory>4,241</span><small>MiB, Synapse Q4_K_M</small></p>
+        <ul class="bars" data-seven-metric="memory">
+          <li class="me"><span>Synapse</span><i><b style="--w:87.5%"></b></i><em>4,241 MiB</em></li>
+          <li class="c1"><span>llama.cpp</span><i><b style="--w:100%"></b></i><em>4,849 MiB</em></li>
         </ul>
-        <p class="unit">whole process, mapped weights included · lower is better</p></article>
+        <p class="unit">peak RSS, mapped weights included · median of 2 alternating rounds · lower is better</p></article>
       <article class="panel reveal"><div class="panel-top"><h3>Writing speed</h3></div>
-        <p class="panel-big"><span>1.01×</span><small>llama.cpp at Q8_0</small></p>
-        <ul class="bars">
-          <li class="me"><span>Synapse Q8</span><i><b style="--w:61.1%"></b></i><em>17.9</em></li>
-          <li class="c1"><span>llama.cpp Q8</span><i><b style="--w:60.4%"></b></i><em>17.7</em></li>
-          <li class="me"><span>Synapse Q4</span><i><b style="--w:62.1%"></b></i><em>18.2</em></li>
-          <li class="c1"><span>llama.cpp Q4</span><i><b style="--w:100%"></b></i><em>29.3</em></li>
+        <p class="panel-big"><span data-seven-speed>17.8</span><small>tokens/s, Synapse Q4_K_M</small></p>
+        <ul class="bars" data-seven-metric="speed">
+          <li class="me"><span>Synapse</span><i><b style="--w:63.2%"></b></i><em>17.8</em></li>
+          <li class="c1"><span>llama.cpp</span><i><b style="--w:100%"></b></i><em>28.2</em></li>
         </ul>
-        <p class="unit">tokens per second, one run · Q4_K_M is 0.64× across runs</p></article>
+        <p class="unit">tokens/s · median of 2 alternating rounds · higher is better · Synapse reported decode vs llama.cpp native evaluation: phase definitions differ</p></article>
       <article class="panel reveal"><div class="panel-top"><h3>Small draft, big check</h3></div>
         <p class="panel-big"><span>1.35×</span><small>faster, same output</small></p>
         <ul class="bars">
@@ -262,25 +277,12 @@
         <li class="me off"><span>8 dropped</span><i><b style="--w:74.2%"></b></i><em>5,381 MiB · +137%</em></li>
       </ul>
       <p class="unit">peak memory · perplexity on the test text · a dropped layer's weights are never mapped for the GPU and its KV is never allocated · only the 2-layer drop passes the quality gate</p></article>
-    <p class="fine reveal">MacBook Pro, Apple M2 Pro 19-core GPU. Qwen2.5-7B-Instruct-1M, the same Q8_0 and Q4_K_M GGUF files for both engines, 3,528-token prompt, 128 new tokens, FP16 KV, one fresh process per row. For the pinned prompt Synapse writes llama.cpp's text with both files; Q4_K_M perplexity is 11.93 against 12.16 for Q8_0. Diagnostics, not a paired release verdict. <a href="https://github.com/managedcode/Synapse/blob/d679cb7580c5bf2060bdc0bd13f9b34bfd7ab69c/benchmarks/README.md">Runs W, X and Y ↗</a></p>
-    <article class="panel foundry reveal">
-      <div class="panel-top"><h3>Also measured · Microsoft Foundry Local · 6 models</h3></div>
-      <p class="panel-big">231<small>tokens/s, Qwen2.5 0.5B on the Mac CPU</small></p>
-      <ul class="bars">
-        <li class="fl"><span>Qwen2.5 0.5B</span><i><b style="--w:100%"></b></i><em>231.4</em></li>
-        <li class="fl"><span>Qwen3 0.6B</span><i><b style="--w:53.7%"></b></i><em>124.3</em></li>
-        <li class="fl"><span>Phi-3.5-mini</span><i><b style="--w:18.2%"></b></i><em>42.1</em></li>
-        <li class="fl"><span>Phi-4-mini</span><i><b style="--w:12.4%"></b></i><em>28.6</em></li>
-        <li class="fl"><span>Mistral 7B</span><i><b style="--w:10.9%"></b></i><em>25.2</em></li>
-        <li class="fl"><span>DeepSeek-R1 7B</span><i><b style="--w:9.5%"></b></i><em>22.0</em></li>
-      </ul>
-      <p class="unit">tokens per second · 128-token answer · a separate test: Microsoft's own ONNX weights on about 6 cores, not a head-to-head with the engines above · on GitHub each runner and model is its own job (15 planned, not run yet)</p>
-    </article>
+    <p class="fine reveal">Apple M2 Pro 19-core GPU, Qwen2.5-7B-Instruct-1M. The two selected-format engines use the same GGUF file, 3,528-token prompt, 128-token limit and FP16 KV; medians of 2 alternating fresh-process rounds. Exact text parity was checked separately on the pinned 16-token “The capital of France is” prompt; it is not a quality verdict for the long answer. Q4_K_M perplexity is 11.93 vs 12.16 for Q8_0 on 2,048 scored tokens. Diagnostics, not a release verdict. <a href="https://github.com/managedcode/Synapse/blob/d679cb7580c5bf2060bdc0bd13f9b34bfd7ab69c/benchmarks/results/2026-09-29-m2-pro-qwen2.5-7b-1m-k-quant-diagnostic.json">7B measurements and quality source ↗</a></p>
     <div class="notyet reveal">
       <h3>Not there yet. We say so.</h3>
       <ul>
-        <li><b>First token</b><span>On the Apple GPU the first token takes 1.5× llama.cpp's time for the 0.5B at 4k, 1.04× at 32k, and 1.6× for the 7B on a 3.5k prompt (16.9 s vs 10.8 s). The prompt matrix multiply is the gap.</span></li>
-        <li><b>Q4 writing speed</b><span>The 7B in Q4_K_M already uses less memory than llama.cpp, but writes at 0.64× its speed (17.4–18.2 vs 27.0–29.3 tokens/s). That kernel is next.</span></li>
+        <li><b>Prompt processing</b><span>The local 0.5B first-token charts show the long-prompt gap. For 7B, Synapse records 16.9–17.3 s to its first token; llama.cpp records 10.8–11.2 s of native prompt evaluation. Those 7B phase definitions differ, so they do not establish a first-token speedup.</span></li>
+        <li><b>Q4 writing speed</b><span>The 7B in Q4_K_M uses less peak RSS than llama.cpp in these two rounds. Synapse reports 17.4–18.2 decode tokens/s; llama.cpp reports 27.0–29.3 native-evaluation tokens/s. The phase definitions differ; faster Q4 kernels are next.</span></li>
         <li><b>Past 32k</b><span>The 7B-1M model and head size 128 kernels run now. Windows past 32k have not been measured yet.</span></li>
         <li><b>Smart context on CPU only</b><span>Reading only the relevant KV pages costs +3.4% perplexity while reading 30% of an 8k context. The GPU kernels are next.</span></li>
         <li><b>CUDA untested</b><span>Metal runs. The CUDA backend is written but has not run on an NVIDIA GPU yet; it rejects Q4_K_M files for now.</span></li>
@@ -344,15 +346,18 @@
 <section class="section" id="start">
   <div class="wrap">
     <div class="start reveal">
-      <header class="sec-head"><p class="kicker">Get started</p><h2>Two commands to the first tokens.</h2></header>
+      <header class="sec-head"><p class="kicker">Get started</p><h2>Fetch. Prepare. Generate.</h2></header>
       <div class="term">
         <div class="term-bar"><span class="term-dots"><i></i><i></i><i></i></span><span class="term-title">1 · Fetch the smoke-test model</span><button class="copy" type="button">Copy</button></div>
         <pre><code>dotnet run --project src/Synapse.Cli -- model fetch --set smoke</code></pre>
       </div>
       <div class="term">
-        <div class="term-bar"><span class="term-dots"><i></i><i></i><i></i></span><span class="term-title">2 · Generate 8 tokens</span><button class="copy" type="button">Copy</button></div>
+        <div class="term-bar"><span class="term-dots"><i></i><i></i><i></i></span><span class="term-title">2 · Prepare the model once</span><button class="copy" type="button">Copy</button></div>
+        <pre><code>dotnet run --project src/Synapse.Cli --configuration Release -- model compile --source artifacts/models/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.gguf --output artifacts/models/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.synapse</code></pre>
+      </div>
+      <div class="term"><div class="term-bar"><span class="term-dots"><i></i><i></i><i></i></span><span class="term-title">3 · Generate 8 tokens from .synapse</span><button class="copy" type="button">Copy</button></div>
         <pre><code>dotnet run --project src/Synapse.Cli --configuration Release -- generate \
-  --model artifacts/models/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.gguf \
+  --model artifacts/models/qwen2.5-0.5b-instruct-q8_0/qwen2.5-0.5b-instruct-q8_0.synapse \
   --tokens 785,6722,315,9625,374 --max-tokens 8</code></pre>
       </div>
       <p class="needs">Needs <span class="tag">.NET SDK 10.0.401</span> and <span class="tag">Rust 1.98.1</span>. Every command is in <a href="https://github.com/managedcode/Synapse/blob/main/AGENTS.md#canonical-commands">AGENTS.md</a>.</p>

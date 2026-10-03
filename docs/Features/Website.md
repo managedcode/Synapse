@@ -27,7 +27,7 @@ Pages runs after trusted `main` push/manual workflows complete, downloads the
 latest completed verification and performance artifacts by authenticated run
 and artifact ID, and publishes `data/latest.json`. The two streams retain
 independent commit/run/attempt/time provenance. Failed and partial runs remain
-visible. Public CI tables never imply a cross-hardware performance verdict or
+visible. Public CI charts never imply a cross-hardware performance verdict or
 replace the dated M2 Pro diagnostics.
 
 | Acceptance criterion | Evidence |
@@ -35,4 +35,13 @@ replace the dated M2 Pro diagnostics.
 | `AC-WEB-002-1` real nonzero TRX results export immutable JSON; failed, missing, zero and malformed results cannot pass | `TEST-WEB-002-1` `TestResultsPublicationTests` |
 | `AC-WEB-002-2` numerical benchmark JSON retains sample counts, nullable metrics, phase scopes and invalid/missing evidence | `TEST-WEB-002-2` `PerformancePublicationTests` |
 | `AC-WEB-002-3` trusted completed runs trigger a confined artifact-to-Pages build with independently attributable streams | `TEST-WEB-002-3` `MetricsPipelineTests`, remote Actions evidence |
-| `AC-WEB-002-4` the responsive site displays current test counts and filterable scoped benchmark rows, with provenance and honest unavailable states | `TEST-WEB-002-4` rendered desktop/mobile review and public JSON response |
+| `AC-WEB-002-4` the responsive site displays current test counts and scoped benchmark charts, with provenance and honest unavailable states | `TEST-WEB-002-4` rendered desktop/mobile review and public JSON response |
+
+## Understandable comparisons (`REQ-WEB-003`, ADR-010)
+
+| Acceptance criterion | Evidence |
+|---|---|
+| `AC-WEB-003-1` charts replace the measurement table; Synapse is highlighted and units/directions are explicit | `TEST-WEB-003-1` shell contract and real desktop/mobile browser review |
+| `AC-WEB-003-2` model identities come from raw measurements; legacy enrichment preserves every measured value | `TEST-WEB-003-2` real aggregate and site-data regressions |
+| `AC-WEB-003-3` Foundry Local compares with available Synapse data for the selected family/runner/scenario, shows missing series, and separates unlike metric scopes | `TEST-WEB-003-3` rendered selection, missing-model and scope review |
+| `AC-WEB-003-4` local Apple GPU charts name their models, sources and limited quality evidence separately from current CI | `TEST-WEB-003-4` rendered local chart review and live Pages revision |

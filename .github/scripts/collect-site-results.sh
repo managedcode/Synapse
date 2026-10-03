@@ -70,6 +70,26 @@ for stream in verification performance; do
     done
   else
     collect_artifact "$stream" performance-summary performance-results.json "$metadata" "$started"
+    # Model identity is recovered from raw evidence, not inferred from current defaults.
+    while IFS= read -r name; do
+      case "$name" in
+        performance-osx-arm64|performance-linux-x64|performance-win-x64)
+          collect_artifact "$stream" "$name" synapse-benchmark.json "$metadata" "$started" ;;
+        performance-long-osx-arm64|performance-long-linux-x64|performance-long-win-x64)
+          for file in synapse-single.json synapse-dialogue.json; do
+            collect_artifact "$stream" "$name" "$file" "$metadata" "$started"
+          done ;;
+        performance-mlx-osx-arm64)
+          for file in mlx-single.json mlx-dialogue.json; do
+            collect_artifact "$stream" "$name" "$file" "$metadata" "$started"
+          done ;;
+        foundry-local-*)
+          [[ "$name" =~ ^foundry-local-(macos-15|ubuntu-24\.04|windows-2025)-[a-z0-9][a-z0-9.-]{0,80}$ ]] || continue
+          for file in foundry-single.json foundry-dialogue.json; do
+            collect_artifact "$stream" "$name" "$file" "$metadata" "$started"
+          done ;;
+      esac
+    done < <(jq -r '.artifacts[].name' "$metadata" | sort -u)
   fi
   # A rerun may begin during collection; never attribute its artifacts to an old attempt.
   [[ "$(gh api "repos/$repository/actions/runs/$run_id" | jq -r \

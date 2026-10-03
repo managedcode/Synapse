@@ -31,7 +31,6 @@ for (const button of document.querySelectorAll(".copy")) {
   });
 }
 
-const speedLlama = { 2: 133.7, 8: 167.2 };
 for (const button of document.querySelectorAll("[data-threads]")) {
   button.addEventListener("click", () => {
     const t = button.dataset.threads;
@@ -40,7 +39,7 @@ for (const button of document.querySelectorAll("[data-threads]")) {
     const values = cells.map((c) => Number(c.dataset[`v${t}`]));
     const max = Math.max(...values);
     cells.forEach((c, i) => { c.textContent = values[i].toFixed(1); c.parentElement.querySelector("b").style.setProperty("--w", `${(values[i] / max) * 100}%`); });
-    document.querySelector("[data-ratio]").textContent = `${Math.round((values[0] / speedLlama[t]) * 100)}%`;
+    document.querySelector("[data-ratio]").textContent = values[0].toFixed(1);
   });
 }
 
@@ -86,9 +85,8 @@ function renderLong() {
   longctx.querySelector("[data-tokens]").textContent = me[4] === c4[4]
     ? `all three write ${me[4]} tokens`
     : `Synapse and llama.cpp stop after ${me[4]} tokens, MLX writes ${c4[4]}`;
-  const same = me[6] === c1[6] ? "the same tokens llama.cpp wrote" : `${me[6]} of llama.cpp's tokens`;
   longctx.querySelector("[data-same]").textContent =
-    `Same tokens: Synapse wrote ${same}. Right answer: Synapse ${me[5]}/2, llama.cpp ${c1[5]}/2, MLX ${c4[5]}/2.`;
+    `Synapse: ${me[6]} of ${me[4]} token IDs match the llama.cpp reference. Correct answers: Synapse ${me[5]}/2, llama.cpp ${c1[5]}/2, MLX ${c4[5]}/2. Only two measured runs per engine; output length and quality matter as well as time.`;
 }
 
 if (longctx) {
@@ -103,6 +101,28 @@ if (longctx) {
 }
 
 // ---------- 3D scene ----------
+// Run Y, 2026-09-29: medians of both alternating rounds, not the fastest row.
+const sevenValues = {
+  q4: { memory: [4240.9609375, 4848.703125], speed: [17.783821337387096, 28.15], name: "Q4_K_M" },
+  q8: { memory: [7231.7265625, 7987.671875], speed: [16.846200565965113, 17.495], name: "Q8_0" }
+};
+for (const button of document.querySelectorAll("[data-seven-model]")) {
+  button.addEventListener("click", () => {
+    const data = sevenValues[button.dataset.sevenModel];
+    document.querySelectorAll("[data-seven-model]").forEach(b => b.setAttribute("aria-pressed", String(b === button)));
+    for (const metric of ["memory", "speed"]) {
+      const max = Math.max(...data[metric]);
+      document.querySelectorAll(`[data-seven-metric="${metric}"] li`).forEach((li, index) => {
+        li.querySelector("b").style.setProperty("--w", `${data[metric][index] / max * 100}%`);
+        li.querySelector("em").textContent = `${data[metric][index].toLocaleString("en", { maximumFractionDigits: metric === "memory" ? 0 : 1 })}${metric === "memory" ? " MiB" : ""}`;
+      });
+      const headline = document.querySelector(`[data-seven-${metric}]`);
+      headline.textContent = data[metric][0].toLocaleString("en", { maximumFractionDigits: metric === "memory" ? 0 : 1 });
+      headline.nextElementSibling.textContent = `${metric === "memory" ? "MiB" : "tokens/s"}, Synapse ${data.name}`;
+    }
+  });
+}
+
 const LAYERS = 12;                         // transformer blocks, plus one output head
 const STATES = {
   hero: { wall: 0, cold: 0, split: 0, yaw: -0.5, zoom: 1 },

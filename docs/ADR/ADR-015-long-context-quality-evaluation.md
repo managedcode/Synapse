@@ -69,3 +69,14 @@ answer that. One pass key per length cannot separate three causes:
 - Tests: `ScoreMatchesIncrementalLogits`, `ScoreIsBackendConsistent`,
   `ScoringRowsOptionIsValidated`, `CliScoreReportsPerplexity`, and the quality
   task generator determinism tests.
+
+## 2026-10-04: canonical corpus line endings
+
+Normalize documentation haystacks to LF before paragraph splitting and
+tokenization. CRLF checkout text previously collapsed paragraphs and could
+produce a much shorter request than the specified budget on Windows. LF
+inputs retain their existing bytes and token IDs. Equivalent LF/CRLF corpora
+must now generate identical prompts, token IDs and answer placements for each
+seed/task. This is a benchmark-input repair, not a new model-quality result.
+`CorpusLineEndingsDoNotChangeQualityCases` exercises all three task families
+using the real tokenizer (`TEST-CTX-005-1`, `TASK-CTX-005`).

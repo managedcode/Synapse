@@ -27,9 +27,11 @@ public sealed class GitHubPagesContractTests
         await Assert.That(workflow).Contains(
             "cp site/index.html site/styles.css site/site.js site/favicon.svg _site/");
         await Assert.That(workflow).Contains("cp docs/images/*.svg _site/images/");
+        await Assert.That(workflow).Contains("cp site/metrics.js site/comparisons.js site/comparisons.css _site/");
         await Assert.That(workflow).Contains("path: ./_site");
 
         var index = await File.ReadAllTextAsync(Path.Combine(root, "site", "index.html"));
+        await Assert.That(index).Contains("href=\"comparisons.css\"");
         foreach (var image in ExtractLocalImages(index))
         {
             await Assert.That(File.Exists(Path.Combine(root, "docs", image))).IsTrue()

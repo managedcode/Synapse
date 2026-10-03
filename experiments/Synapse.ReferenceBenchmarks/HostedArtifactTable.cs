@@ -68,4 +68,5 @@ internal static class HostedArtifactTable
 internal sealed record HostedResultRow(int CohortOrder, string Cohort, string Runner,
     int ScenarioOrder, string Scenario, int Turn, string Subject, string SourceArtifact, int Samples,
     string OutputTokens, string TtftMilliseconds, string DecodeTokensPerSecond,
-    string WallMilliseconds, string PeakRssMiB, string OutputState);
+    string WallMilliseconds, string PeakRssMiB, string OutputState,
+    PerformanceModelDescriptor? Model = null);

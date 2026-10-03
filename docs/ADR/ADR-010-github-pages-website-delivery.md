@@ -62,3 +62,22 @@ The collector uses authenticated API artifact IDs from the selected run and
 attempt, expected names only, bounded downloads and a confined extraction
 directory. Artifact paths, schemas and runner identities are checked before
 publication. Only deployment receives Pages/OIDC write privileges.
+
+## 2026-10-03: understandable comparison charts (`TASK-WEB-003`)
+
+Replace the public row table with model/runner/scenario comparison charts.
+Version-1 rows gain an optional model descriptor: family, file/catalog label,
+weight fingerprint, execution policy, scenario fingerprint and runner label.
+Absent descriptors stay explicitly unknown. Pages also collects the expected
+raw JSON members from authenticated bounded artifacts. Legacy summaries may
+be enriched only when reprojecting the validated raw file reproduces every
+existing row field exactly; enrichment cannot change measured values.
+
+Synapse has a fixed visible position and color. Foundry Local comparisons use
+the same model family, runner class, scenario and turn, with separate weights,
+threads and cache policies disclosed. Runner classes do not prove identical
+physical hosts. Native evaluation rates and reported decode rates, resident
+request and fresh-process wall time, and resident and peak RSS remain separate
+charts. Missing Synapse measurements stay visible; no speedup or quality
+verdict is inferred from unlike formats or unreviewed answers. Dated local
+Apple GPU charts remain clearly separate from current hosted CI.

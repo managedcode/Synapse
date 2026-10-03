@@ -70,6 +70,17 @@ internal static class SitePublicationValidation
             Require(Count(row, "samples") > 0 && Count(row, "turn") > 0);
             Require(Text(row, "decode_metric_scope") is "native_eval" or "reported_decode");
             Require(Text(row, "wall_metric_scope") is "fresh_process" or "request");
+            if (row["model"] is JsonObject model)
+            {
+                foreach (var field in new[] { "family", "label", "weights_sha256", "scenario_sha256", "execution", "hardware" })
+                {
+                    _ = Text(model, field);
+                }
+            }
+            else
+            {
+                Require(row["model"] is null);
+            }
             foreach (var field in new[] { "output_tokens", "ttft_milliseconds", "decode_tokens_per_second",
                 "wall_milliseconds", "peak_rss_mib" })
             {

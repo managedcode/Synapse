@@ -111,7 +111,7 @@ internal static class HostedEvidenceReader
             Median(samples, sample => Number(sample, artifact.Kind == "foundry"
                 ? "resident_bytes" : "peak_resident_bytes") is { } bytes
                 ? bytes / 1048576d : null),
-            state);
+            state, PerformanceModelDescriptor.Read(root, artifact.Kind, subject));
     }
 
     private static double? OutputTokens(JsonElement sample, bool smoke)

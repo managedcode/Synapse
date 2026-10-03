@@ -78,7 +78,7 @@ public sealed class FoundryLocalPlanTests
         var performance = await File.ReadAllTextAsync(Path.Combine(workflows, "performance.yml"));
         var verify = await File.ReadAllTextAsync(Path.Combine(workflows, "verify.yml"));
 
-        await Assert.That(performance).Contains("push:\n    branches: [main]");
+        await Assert.That(performance.ReplaceLineEndings("\n")).Contains("push:\n    branches: [main]");
         await Assert.That(performance).Contains("workflow_dispatch:");
         await Assert.That(performance).Contains("foundry-local-plan:");
         await Assert.That(performance).Contains("matrix: ${{ fromJSON(needs.foundry-local-plan.outputs.matrix) }}");

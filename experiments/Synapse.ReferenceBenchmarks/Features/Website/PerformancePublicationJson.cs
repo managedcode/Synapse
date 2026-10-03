@@ -38,12 +38,12 @@ internal static class PerformancePublicationJson
         }
     }
 
-    private static PerformancePublicationRow Project(HostedResultRow row) => new(
+    internal static PerformancePublicationRow Project(HostedResultRow row) => new(
         row.Cohort, row.Runner, row.Scenario, row.Turn, row.Subject, row.SourceArtifact, row.Samples,
         row.OutputState, Metric(row.OutputTokens), Metric(row.TtftMilliseconds),
         Metric(row.DecodeTokensPerSecond), Metric(row.WallMilliseconds), Metric(row.PeakRssMiB),
         row.Subject == "llamacpp" ? "native_eval" : "reported_decode",
-        row.CohortOrder == 0 ? "fresh_process" : "request");
+        row.CohortOrder == 0 ? "fresh_process" : "request", row.Model);
 
     private static double? Metric(string value)
     {
@@ -65,7 +65,8 @@ internal sealed record PerformancePublicationSnapshot(int SchemaVersion, DateTim
 internal sealed record PerformancePublicationRow(string Cohort, string Runner, string Scenario,
     int Turn, string Subject, string SourceArtifact, int Samples, string OutputState,
     double? OutputTokens, double? TtftMilliseconds, double? DecodeTokensPerSecond,
-    double? WallMilliseconds, double? PeakRssMib, string DecodeMetricScope, string WallMetricScope);
+    double? WallMilliseconds, double? PeakRssMib, string DecodeMetricScope, string WallMetricScope,
+    PerformanceModelDescriptor? Model);
 
 [JsonSerializable(typeof(PerformancePublicationSnapshot))]
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,

@@ -14,6 +14,12 @@ public sealed class MetricsPipelineTests
         await Assert.That(html).Contains("id=\"metrics\"");
         await Assert.That(html).Contains("Recorded local measurements");
         await Assert.That(html).Contains("src=\"metrics.js\"");
+        await Assert.That(html).DoesNotContain("<table");
+        await Assert.That(html).Contains("id=\"metric-charts\"");
+        await Assert.That(html).Contains("id=\"foundry-charts\"");
+        await Assert.That(html).Contains("data-seven-model");
+        await Assert.That(html).Contains("Model: Qwen2.5 0.5B");
+        await Assert.That(html).DoesNotContain("15 planned, not run yet");
         var script = await File.ReadAllTextAsync(Path.Combine(root, "site", "metrics.js"));
         await Assert.That(script).Contains("data/latest.json");
         await Assert.That(script).Contains("textContent");

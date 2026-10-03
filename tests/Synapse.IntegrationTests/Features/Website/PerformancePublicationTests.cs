@@ -29,6 +29,14 @@ public sealed class PerformancePublicationTests
         await Assert.That(rows.Length).IsEqualTo(4);
         var synapse = rows.Single(row => row.GetProperty("subject").GetString() == "synapse");
         await Assert.That(synapse.GetProperty("samples").GetInt32()).IsEqualTo(5);
+        var model = synapse.GetProperty("model");
+        await Assert.That(model.GetProperty("family").GetString()).IsEqualTo("qwen2.5-0.5b");
+        await Assert.That(model.GetProperty("label").GetString())
+            .IsEqualTo("qwen2.5-0.5b-instruct-q8_0.gguf");
+        await Assert.That(model.GetProperty("weights_sha256").GetString())
+            .IsEqualTo("ca59ca7f13d0e15a8cfa77bd17e65d24f6844b554a7b6c12e07a5f89ff76844e");
+        await Assert.That(model.GetProperty("execution").GetString()).DoesNotContain("prepared .synapse")
+            .Because("The recorded September fixture executed GGUF directly; provenance must retain that fact.");
         await Assert.That(synapse.GetProperty("output_tokens").GetDouble()).IsEqualTo(8);
         await Assert.That(synapse.GetProperty("source_artifact").GetString())
             .IsEqualTo("performance-osx-arm64");

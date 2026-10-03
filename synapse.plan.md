@@ -1,5 +1,21 @@
 # Synapse master plan
 
+## 2026-10-03 website comparison charts (`TASK-WEB-003`)
+
+- [x] Red regressions for model provenance and chart-only publication.
+- [x] Add validated model descriptors and legacy raw-artifact enrichment.
+- [x] Replace the table and standalone Foundry model ranking with selectable
+  Synapse comparisons; explain phase, memory, sample and quality scopes.
+- [x] Qualify rendered desktop/mobile filters, missing series and failures.
+- [x] Complete local checks: 564/564 full .NET, 33 Rust, and final 24/24 Website
+  regressions after the metadata-only provenance correction. Format/build,
+  scoped coverage, audit and manual architecture/security review are recorded
+  in `docs/Development/WebsiteComparisonEvidence-2026-10-04.md`.
+- [ ] Commit/push and verify live Pages revision; this source snapshot precedes
+  deployment. The site exposes independent current run/commit provenance.
+- [x] Repair the observed Windows CRLF workflow assertion and short quality
+  corpus input; require LF/CRLF token parity before publication.
+
 ## 2026-10-03 explicit optimization ablation
 
 - [x] Reject and remove weight averaging, its conversion flags, runtime gates,
