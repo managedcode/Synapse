@@ -7,10 +7,18 @@ on:
       - docs/images/**
       - site/**
       - .github/workflows/pages.yml
+      - .github/scripts/collect-site-results.sh
+      - experiments/Synapse.ReferenceBenchmarks/Features/Website/**
+      - experiments/Synapse.ReferenceBenchmarks/HostedArtifactReportCommand.cs
+      - experiments/Synapse.ReferenceBenchmarks/Program.cs
   workflow_dispatch:
+  workflow_run:
+    workflows: [verify, performance]
+    types: [completed]
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: github-pages
@@ -19,10 +27,40 @@ concurrency:
 jobs:
   build:
     name: Build public site
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name != 'workflow_run' ||
+       (github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == github.repository &&
+        (github.event.workflow_run.event == 'push' ||
+         github.event.workflow_run.event == 'workflow_dispatch')))
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Install pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Install pinned Rust toolchain required by the reporter build
+        run: rustup toolchain install 1.98.1 --profile minimal
+
+      - name: Collect latest completed main CI result artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/collect-site-results.sh "${RUNNER_TEMP}/site-results"
+
+      - name: Build C# result validator
+        run: |
+          dotnet restore experiments/Synapse.ReferenceBenchmarks/Synapse.ReferenceBenchmarks.csproj --locked-mode
+          dotnet build experiments/Synapse.ReferenceBenchmarks/Synapse.ReferenceBenchmarks.csproj --configuration Release --no-restore
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
@@ -32,8 +70,12 @@ jobs:
         run: |
           mkdir -p _site/images
           cp site/index.html site/styles.css site/site.js site/favicon.svg _site/
+          cp site/metrics.js _site/
           cp docs/images/*.svg _site/images/
           touch _site/.nojekyll
+          dotnet experiments/Synapse.ReferenceBenchmarks/bin/Release/net10.0/Synapse.ReferenceBenchmarks.dll site-data \
+            --artifacts "${RUNNER_TEMP}/site-results" --runs "${RUNNER_TEMP}/site-results/runs.json" \
+            --output _site/data/latest.json
 
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0

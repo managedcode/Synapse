@@ -31,3 +31,34 @@ The repository does not maintain a generated `gh-pages` branch. A successful
 local source check or push is insufficient evidence: publication is complete
 only after the remote Pages workflow succeeds and the canonical HTTPS URL
 serves that revision.
+
+## 2026-10-03: CI result publication (`TASK-WEB-002`)
+
+Completed trusted `main` runs of `verify` and `performance` also trigger the
+Pages workflow. Pull-request and fork runs cannot publish. The build checks
+out trusted `main` source, reads Actions artifacts as data only, and selects
+the latest completed push/manual run of each workflow. Both streams retain
+their own run ID, attempt, source SHA, conclusion and time; they may describe
+different commits. Serialized deployments select current runs when building,
+so an older queued completion cannot deliberately republish its old snapshot.
+
+Each verification runner exports a version-1 JSON projection of real .NET TRX
+results. Zero tests, absent reports, malformed reports and failing tests never
+become a passing result. Rust remains part of the workflow conclusion; .NET
+counts explicitly name their scope. Performance aggregation exports a
+version-1 JSON projection of the validated raw benchmark artifacts, including
+missing/invalid evidence, nullable metrics and measured sample counts. Native
+eval and reported decode rates, and request and fresh-process wall times,
+retain distinct scopes. These diagnostics confer no statistical winner verdict.
+
+A C# command assembles `data/latest.json` with independent run provenance,
+validated test reports and performance rows. The public site displays these
+CI results separately from dated local Apple M2 Pro measurements. JSON and
+upstream run links are public; raw artifacts remain on GitHub Actions. Missing
+or expired artifacts are shown explicitly. No generated Git commits, runtime
+backend changes, Node.js or Python tooling are introduced.
+
+The collector uses authenticated API artifact IDs from the selected run and
+attempt, expected names only, bounded downloads and a confined extraction
+directory. Artifact paths, schemas and runner identities are checked before
+publication. Only deployment receives Pages/OIDC write privileges.

@@ -126,7 +126,36 @@ jobs:
         run: echo "SYNAPSE_LLAMACPP_EXECUTABLE=${GITHUB_WORKSPACE}/_external/llama.cpp/${{ matrix.llama_binary_directory }}/llama-completion${{ matrix.executable_suffix }}" >> "${GITHUB_ENV}"
 
       - name: Test .NET
-        run: dotnet test Synapse.slnx --configuration Release --no-build
+        run: >-
+          dotnet test Synapse.slnx --configuration Release --no-build --
+          --report-trx --results-directory "${{ runner.temp }}/test-results"
+          --minimum-expected-tests 1 --zero-tests-policy strict
+
+      - name: Export real .NET test results as JSON
+        if: always()
+        shell: bash
+        run: |
+          dotnet experiments/Synapse.ReferenceBenchmarks/bin/Release/net10.0/Synapse.ReferenceBenchmarks.dll test-report \
+            --results "${RUNNER_TEMP}/test-results" --runner "${{ matrix.runtime_identifier }}" \
+            --output "${RUNNER_TEMP}/test-results.json"
+
+      - name: Publish .NET test JSON
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-results-${{ matrix.runtime_identifier }}
+          path: ${{ runner.temp }}/test-results.json
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Preserve raw .NET TRX evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-trx-${{ matrix.runtime_identifier }}
+          path: ${{ runner.temp }}/test-results/*.trx
+          if-no-files-found: warn
+          retention-days: 90
 
       - name: Check Rust formatting
         run: cargo fmt --manifest-path native/Cargo.toml --all --check

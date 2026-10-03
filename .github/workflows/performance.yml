@@ -376,6 +376,7 @@ jobs:
             --artifacts "${RUNNER_TEMP}/performance-artifacts" \
             --model-set benchmarks/model-sets/foundry-local-families.json \
             --output "${RUNNER_TEMP}/performance-summary.md" \
+            --json "${RUNNER_TEMP}/performance-results.json" \
             --summary "${GITHUB_STEP_SUMMARY}"
 
       - name: Preserve combined results table
@@ -383,6 +384,8 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: performance-summary
-          path: ${{ runner.temp }}/performance-summary.md
+          path: |
+            ${{ runner.temp }}/performance-summary.md
+            ${{ runner.temp }}/performance-results.json
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 90

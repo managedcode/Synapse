@@ -112,6 +112,50 @@ code, pre { font-family: var(--mono); }
 .js .reveal.in { opacity: 1; transform: none; }
 
 /* Proof */
+.ci-metrics { margin-bottom: 84px; scroll-margin-top: 92px; }
+.ci-metrics .sec-head { margin-bottom: 26px; }
+.ci-metrics .sec-head p:last-child { max-width: 65ch; color: var(--ink-2); }
+.metric-links { display: flex; flex-wrap: wrap; gap: 12px 28px; font-size: 14px; font-weight: 600; }
+.metric-status { margin-top: 20px; padding: 16px 20px; border: 1px solid var(--line); border-radius: 12px; font-size: 14px; color: var(--ink-2); }
+.metric-stream { margin-top: 36px; }
+.metric-stream-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px 24px; margin-bottom: 18px; }
+.metric-stream-head h3 { font-size: 27px; font-weight: 650; letter-spacing: -.025em; }
+.metric-run { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--ink-2); }
+.metric-run a { color: var(--ink); }
+.metric-run time { flex-basis: 100%; text-align: right; }
+.metric-run-status { text-transform: capitalize; }
+.metric-commit { font-family: var(--mono); }
+.verification-results { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 12px; }
+.verification-card { padding: 24px; border-radius: var(--r); background: var(--tile); }
+.verification-card h4 { margin: 0; font: 600 17px var(--mono); }
+.metric-scope { margin-top: 6px; font-size: 14px; color: var(--ink-2); overflow-wrap: anywhere; }
+.metric-test-status { margin-top: 18px; font-size: 14px; font-weight: 600; text-transform: capitalize; }
+.metric-counts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 14px 0; }
+.metric-counts dt { font-size: 11px; color: var(--ink-2); text-transform: uppercase; letter-spacing: .05em; }
+.metric-counts dd { margin: 3px 0 0; font: 600 24px var(--sans); letter-spacing: -.04em; }
+.metric-note { margin-top: 12px; color: var(--ink-2); font-size: 13px; }
+.metric-diagnostics { margin-top: 12px; font-size: 13px; color: var(--ink-2); }
+.metric-diagnostics summary { cursor: pointer; font-weight: 600; color: var(--ink); }
+.metric-diagnostics ul { display: grid; gap: 6px; margin: 10px 0 0 16px; list-style: disc; }
+.metric-diagnostics li { overflow-wrap: anywhere; }
+.metric-filters { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+.metric-filters label { display: grid; gap: 7px; min-width: 170px; flex: 1; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.metric-filters select { max-width: 100%; width: 100%; padding: 11px 34px 11px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--ink); font: 400 14px var(--sans); }
+.metric-scroll { margin-top: 18px; overflow-x: auto; border: 1px solid var(--line); border-radius: 16px; background: var(--tile); }
+.metric-filters[hidden], .metric-scroll[hidden] { display: none; }
+.metrics-table { width: 100%; min-width: 1080px; border-collapse: collapse; font-size: 13px; text-align: left; }
+.metrics-table caption { padding: 16px; font-size: 12px; color: var(--ink-2); text-align: left; caption-side: bottom; }
+.metrics-table th, .metrics-table td { max-width: 220px; padding: 16px 12px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+.metrics-table thead th { font-size: 12px; font-weight: 600; background: var(--tile-2); }
+.metrics-table tbody th { min-width: 170px; font-weight: 600; }
+.metrics-table td:nth-child(n+5) { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.metrics-table small { display: block; margin-top: 5px; font: 400 11px/1.5 var(--sans); color: var(--ink-2); }
+.metrics-table tbody tr:last-child th, .metrics-table tbody tr:last-child td { border-bottom: 0; }
+@media (max-width: 760px) {
+  .metric-run time { text-align: left; }
+  .metric-filters label { min-width: 100%; }
+  .ci-metrics { margin-bottom: 64px; }
+}
 .bench { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 12px; }
 .panel { display: flex; flex-direction: column; gap: 18px; padding: 28px; border-radius: var(--r); background: var(--tile); }
 .panel:first-child { background: var(--ink); color: var(--snow); }

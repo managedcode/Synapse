@@ -128,6 +128,15 @@
       "tests": ["TEST-WEB-001-1"]
     },
     {
+      "id": "TASK-WEB-002",
+      "requirement": "REQ-WEB-002",
+      "slice": "Website",
+      "stage": "D0",
+      "status": "in_progress",
+      "dependsOn": ["TASK-WEB-001"],
+      "tests": ["TEST-WEB-002-1", "TEST-WEB-002-2", "TEST-WEB-002-3", "TEST-WEB-002-4"]
+    },
+    {
       "id": "TASK-CTX-001",
       "requirement": "REQ-CTX-001",
       "slice": "LongContext",

@@ -21,11 +21,11 @@
   <link rel="stylesheet" href="styles.css">
   <script>document.documentElement.classList.add("js")</script>
   <script type="module" src="site.js"></script>
+  <script type="module" src="metrics.js"></script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"Synapse","url":"https://synapse.managed-code.com/","codeRepository":"https://github.com/managedcode/Synapse","programmingLanguage":["C#","Rust"],"license":"https://opensource.org/license/mit"}</script>
 </head>
 <body>
 <a class="skip" href="#proof">Skip to content</a>
-
 <header class="nav" data-theme="dark">
   <div class="wrap nav-row">
     <a class="brand" href="#top" aria-label="Synapse home">
@@ -33,12 +33,11 @@
       <span>Synapse</span>
     </a>
     <nav class="nav-links" aria-label="Sections">
-      <a href="#idea">Idea</a><a href="#proof">Proof</a><a href="#why">Why</a><a href="#architecture">Architecture</a><a href="#roadmap">Roadmap</a><a href="#start">Start</a>
+      <a href="#idea">Idea</a><a href="#metrics">Metrics</a><a href="#proof">Proof</a><a href="#why">Why</a><a href="#architecture">Architecture</a><a href="#roadmap">Roadmap</a><a href="#start">Start</a>
     </nav>
     <a class="pill" href="https://github.com/managedcode/Synapse">GitHub <span aria-hidden="true">↗</span></a>
   </div>
 </header>
-
 <main>
 <section class="scrolly" id="top">
   <div class="stage" data-state="hero">
@@ -51,7 +50,6 @@
     </div>
     <ol class="stage-dots" aria-hidden="true"><li data-for="hero"></li><li data-for="wall"></li><li data-for="wave"></li><li data-for="cold"></li><li data-for="split"></li></ol>
   </div>
-
   <div class="story">
     <div class="step step-hero" data-state="hero">
       <div class="wrap">
@@ -67,11 +65,10 @@
           <li><b>3.2×</b><span>faster short request</span></li>
           <li><b>2.3×</b><span>less memory</span></li>
         </ul>
-        <p class="fine">MacBook Pro M2 Pro · Qwen2.5 0.5B · median of 5 runs · <a href="#proof">how we measured</a></p>
+        <p class="fine">Recorded local measurements · MacBook Pro M2 Pro · Qwen2.5 0.5B · median of 5 runs · <a href="#proof">how we measured</a></p>
       </div>
       <a class="scroll-hint" href="#idea"><span>Scroll to see the idea</span><i aria-hidden="true"></i></a>
     </div>
-
     <div class="step" data-state="wall" id="idea">
       <div class="wrap"><div class="step-card">
         <p class="kicker"><span class="n">01</span>The problem <em class="tag">How engines work today</em></p>
@@ -79,7 +76,6 @@
         <p>LLM engines run every block for every token and keep every weight in memory. A wall of compute, whether the token needs it or not.</p>
       </div></div>
     </div>
-
     <div class="step" data-state="wave">
       <div class="wrap"><div class="step-card">
         <p class="kicker"><span class="n">02</span>The idea <em class="tag tag-next">Next</em></p>
@@ -87,7 +83,6 @@
         <p>A fly's brain sends a signal through only the few regions it needs (<a href="https://doi.org/10.1038/s41586-024-07558-y">FlyWire connectome</a>). Synapse does the same with a model: dense attention always runs, the model's own router picks the expert, and a region is skipped only with proof.</p>
       </div></div>
     </div>
-
     <div class="step" data-state="cold">
       <div class="wrap"><div class="step-card">
         <p class="kicker"><span class="n">03</span>Memory <em class="tag tag-built">Built · layer drop</em></p>
@@ -96,7 +91,6 @@
         <p class="step-big"><b>240 MiB</b><span>per dropped layer, Qwen2.5-7B</span></p>
       </div></div>
     </div>
-
     <div class="step" data-state="split">
       <div class="wrap"><div class="step-card">
         <p class="kicker"><span class="n">04</span>Scale <em class="tag tag-built">Built · wiring in next</em></p>
@@ -107,11 +101,22 @@
     </div>
   </div>
 </section>
-
 <div class="sheet">
 <section class="section" id="proof">
   <div class="wrap">
-    <header class="sec-head reveal"><p class="kicker">Proof</p><h2>Already keeps pace with llama.cpp. <span class="soft">On a plain CPU.</span></h2></header>
+    <article class="ci-metrics" id="metrics" aria-labelledby="metrics-title">
+      <header class="sec-head"><p class="kicker">Metrics · GitHub Actions</p><h2 id="metrics-title">Every run.<br><span class="soft">In the open.</span></h2><p>Published test results and benchmark measurements, with the source revision and run behind each number. Compare measurements within the same cohort, runner and scenario; these diagnostics do not establish a performance winner.</p></header>
+      <div class="metric-links"><a href="data/latest.json">Download latest JSON <span aria-hidden="true">↗</span></a><a href="https://github.com/managedcode/Synapse/actions">All GitHub runs <span aria-hidden="true">↗</span></a></div>
+      <p class="metric-status" id="metrics-status" role="status" aria-live="polite">Results load from the published JSON. Open the links above to inspect the original runs.</p>
+      <noscript><p class="metric-note">JavaScript is required for the tables. The latest JSON and GitHub run links above remain available.</p></noscript>
+      <div class="metric-stream" aria-labelledby="verification-title"><div class="metric-stream-head"><h3 id="verification-title">Tests</h3><p id="verification-run" class="metric-run">No run loaded.</p></div><div id="verification-results" class="verification-results"></div><div id="verification-diagnostics" class="metric-note"></div></div>
+      <div class="metric-stream" aria-labelledby="performance-title"><div class="metric-stream-head"><h3 id="performance-title">Performance</h3><p id="performance-run" class="metric-run">No run loaded.</p></div><div id="performance-diagnostics" class="metric-note"></div>
+        <form class="metric-filters" id="metric-filters" hidden aria-label="Filter benchmark measurements"><label>Cohort<select id="metric-cohort" name="cohort"></select></label><label>Runner<select id="metric-runner" name="runner"></select></label><label>Scenario<select id="metric-scenario" name="scenario"></select></label></form>
+        <p id="metric-selection" class="metric-note" aria-live="polite"></p>
+        <div class="metric-scroll" id="metrics-table-wrap" hidden tabindex="0" role="region" aria-label="Benchmark measurements; scroll horizontally for every metric"><table class="metrics-table" id="metrics-table"><caption>Measured diagnostics. A dash means that the source did not report a value.</caption><thead><tr><th scope="col">Subject / source</th><th scope="col">Cohort</th><th scope="col">Runner</th><th scope="col">Scenario / turn</th><th scope="col">Samples</th><th scope="col">Output</th><th scope="col">TTFT <small>ms</small></th><th scope="col">Decode <small>tokens/s · scope per row</small></th><th scope="col">Wall <small>ms · scope per row</small></th><th scope="col">Peak RSS <small>MiB</small></th></tr></thead><tbody id="metric-rows"></tbody></table></div>
+      </div>
+    </article>
+    <header class="sec-head reveal"><p class="kicker">Recorded local measurements</p><h2>Already keeps pace with llama.cpp. <span class="soft">On a plain CPU.</span></h2></header>
     <div class="bench">
       <article class="panel reveal">
         <div class="panel-top">
@@ -153,7 +158,6 @@
       </article>
     </div>
     <p class="fine reveal">MacBook Pro, Apple M2 Pro, 32 GB. Qwen2.5 0.5B Instruct Q8_0, prompt “The capital of France is”, 8-token answer. Median of 5 runs after 3 warm-ups; all four engines wrote the same 8 tokens. Diagnostic runs, not the final 30-run release gate. <a href="https://github.com/managedcode/Synapse/blob/main/benchmarks/README.md">All runs and raw JSON ↗</a></p>
-
     <header class="sec-head reveal ctx-head"><p class="kicker">Long context · Apple GPU</p><h2>Tokens, memory and speed. <span class="soft">From 4k to 32k.</span></h2></header>
     <article class="panel longctx reveal" data-longctx>
       <div class="panel-top">
@@ -200,7 +204,6 @@
       <p class="ctx-tokens" data-same>Same tokens: Synapse wrote the same tokens llama.cpp wrote. Right answer: Synapse 2/2, llama.cpp 2/2, MLX 0/2.</p>
     </article>
     <p class="fine reveal">MacBook Pro, Apple M2 Pro 19-core GPU. Qwen2.5 0.5B Q8_0, one prompt per context: repository text with a hidden number, then “state the number and summarize”, up to 128 tokens. Every engine gets the same text and its token IDs are checked. Median of 2 runs after a warm-up, one engine at a time. MLX runs its own 8-bit weights and cache format; Synapse and llama.cpp also map the 644 MiB model file. Perplexity on identical tokens matches llama.cpp within 0.01% at 4k–32k. <a href="https://github.com/managedcode/Synapse/blob/main/benchmarks/README.md">Run T and raw JSON ↗</a></p>
-
     <div class="ctx-duo">
       <article class="panel reveal">
         <div class="panel-top"><h3>A big window, small memory</h3></div>
@@ -260,7 +263,6 @@
       </ul>
       <p class="unit">peak memory · perplexity on the test text · a dropped layer's weights are never mapped for the GPU and its KV is never allocated · only the 2-layer drop passes the quality gate</p></article>
     <p class="fine reveal">MacBook Pro, Apple M2 Pro 19-core GPU. Qwen2.5-7B-Instruct-1M, the same Q8_0 and Q4_K_M GGUF files for both engines, 3,528-token prompt, 128 new tokens, FP16 KV, one fresh process per row. For the pinned prompt Synapse writes llama.cpp's text with both files; Q4_K_M perplexity is 11.93 against 12.16 for Q8_0. Diagnostics, not a paired release verdict. <a href="https://github.com/managedcode/Synapse/blob/main/benchmarks/README.md">Runs W, X and Y ↗</a></p>
-
     <article class="panel foundry reveal">
       <div class="panel-top"><h3>Also measured · Microsoft Foundry Local · 6 models</h3></div>
       <p class="panel-big">231<small>tokens/s, Qwen2.5 0.5B on the Mac CPU</small></p>
@@ -274,7 +276,6 @@
       </ul>
       <p class="unit">tokens per second · 128-token answer · a separate test: Microsoft's own ONNX weights on about 6 cores, not a head-to-head with the engines above · on GitHub each runner and model is its own job (15 planned, not run yet)</p>
     </article>
-
     <div class="notyet reveal">
       <h3>Not there yet. We say so.</h3>
       <ul>
@@ -288,7 +289,6 @@
     </div>
   </div>
 </section>
-
 <section class="section" id="why">
   <div class="wrap">
     <header class="sec-head reveal"><p class="kicker">Why Synapse</p><h2>Built for .NET, from the kernels up.</h2></header>
@@ -302,7 +302,6 @@
     </div>
   </div>
 </section>
-
 <section class="section" id="architecture">
   <div class="wrap">
     <header class="sec-head reveal"><p class="kicker">Architecture</p><h2>Decide what, how and where. <span class="soft">Then run the wave.</span></h2></header>
@@ -325,7 +324,6 @@
     <a class="more reveal" href="https://github.com/managedcode/Synapse/blob/main/docs/Architecture.md">Read the architecture <span aria-hidden="true">→</span></a>
   </div>
 </section>
-
 <section class="section" id="roadmap">
   <div class="wrap">
     <header class="sec-head reveal"><p class="kicker">Roadmap</p><h2>18% → 102% of llama.cpp. <span class="soft">And climbing.</span></h2></header>
@@ -343,7 +341,6 @@
     </div>
   </div>
 </section>
-
 <section class="section" id="start">
   <div class="wrap">
     <div class="start reveal">
@@ -362,7 +359,6 @@
     </div>
   </div>
 </section>
-
 <section class="section">
   <div class="wrap">
     <div class="cta-band reveal">
@@ -375,7 +371,6 @@
     </div>
   </div>
 </section>
-
 <section class="section credits-sec" id="credits">
   <div class="wrap credits">
     <div><h3>Compared against</h3><p><a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a>, <a href="https://github.com/microsoft/Foundry-Local">Microsoft Foundry Local</a>, <a href="https://github.com/ml-explore/mlx-swift-lm">MLX</a> via <a href="https://github.com/SharpAI/SwiftLM">SwiftLM</a>, <a href="https://github.com/SciSharp/LLamaSharp">LLamaSharp</a>, <a href="https://github.com/kkokosa/dotLLM">dotLLM</a> (GPL-3.0, run as a separate process only).</p></div>
@@ -383,7 +378,6 @@
     <div><h3>Ideas from</h3><p><a href="https://doi.org/10.1038/s41586-024-07558-y">FlyWire connectome</a>, <a href="https://arxiv.org/abs/2404.02258">Mixture-of-Depths</a>, <a href="https://github.com/facebookresearch/LayerSkip">LayerSkip</a>, <a href="https://arxiv.org/abs/2312.17238">MoE offloading</a>, <a href="https://arxiv.org/abs/2402.17764">BitNet b1.58</a>, <a href="https://arxiv.org/abs/2402.04291">BiLLM</a>, <a href="https://arxiv.org/abs/2306.03078">SpQR</a>, <a href="https://arxiv.org/abs/2502.13179">PTQ1.61</a>, <a href="https://arxiv.org/abs/2410.11305">QSpec</a>.</p></div>
   </div>
 </section>
-
 <footer class="foot">
   <div class="wrap">
     <p class="foot-mark" aria-hidden="true">Synapse</p>

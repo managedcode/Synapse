@@ -10,7 +10,7 @@ internal static class HostedArtifactReportCommand
         if (!TryParse(args, out var options))
         {
             Console.Error.WriteLine("Usage: aggregate --artifacts <directory> --model-set <set.json> " +
-                "--output <new.md> [--summary <github-step-summary>]");
+                "--output <new.md> [--summary <github-step-summary>] [--json <new.json>]");
             return 2;
         }
 
@@ -54,6 +54,12 @@ internal static class HostedArtifactReportCommand
             if (options.Summary is not null)
             {
                 await File.AppendAllTextAsync(options.Summary, report).ConfigureAwait(false);
+            }
+
+            if (options.Json is not null)
+            {
+                await PerformancePublicationJson.WriteAsync(options.Json, rows, complete,
+                    expected.Count, missing, invalid).ConfigureAwait(false);
             }
 
             Console.WriteLine($"Combined report: {Path.GetFullPath(options.Output)} " +
@@ -147,8 +153,8 @@ internal static class HostedArtifactReportCommand
 
     private static bool TryParse(string[] args, out HostedReportOptions options)
     {
-        options = new HostedReportOptions(string.Empty, string.Empty, string.Empty, null);
-        if (args.Length is not (6 or 8) || args.Length % 2 != 0)
+        options = new HostedReportOptions(string.Empty, string.Empty, string.Empty, null, null);
+        if (args.Length is not (6 or 8 or 10) || args.Length % 2 != 0)
         {
             return false;
         }
@@ -156,7 +162,7 @@ internal static class HostedArtifactReportCommand
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
         for (var index = 0; index < args.Length; index += 2)
         {
-            if (args[index] is not ("--artifacts" or "--model-set" or "--output" or "--summary") ||
+            if (args[index] is not ("--artifacts" or "--model-set" or "--output" or "--summary" or "--json") ||
                 string.IsNullOrWhiteSpace(args[index + 1]) || !values.TryAdd(args[index], args[index + 1]))
             {
                 return false;
@@ -171,12 +177,13 @@ internal static class HostedArtifactReportCommand
         }
 
         options = new HostedReportOptions(artifacts, modelSet, output,
-            values.GetValueOrDefault("--summary"));
+            values.GetValueOrDefault("--summary"), values.GetValueOrDefault("--json"));
         return true;
     }
 }
 
-internal sealed record HostedReportOptions(string Artifacts, string ModelSet, string Output, string? Summary);
+internal sealed record HostedReportOptions(string Artifacts, string ModelSet, string Output,
+    string? Summary, string? Json);
 
 internal sealed record HostedArtifactSpec(string Name, string Kind, string[] Files,
     string? Alias = null, string? ModelSetId = null);

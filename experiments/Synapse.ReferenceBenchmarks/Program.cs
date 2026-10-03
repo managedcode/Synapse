@@ -20,6 +20,8 @@ return await (args.FirstOrDefault() switch
     "layer-drop" => LayerDropCommand.RunAsync(args[1..]),
     "report-dialogue" => DialogueReportCommand.RunAsync(args[1..]),
     "aggregate" => HostedArtifactReportCommand.RunAsync(args[1..]),
+    "site-data" => SiteDataCommand.RunAsync(args[1..]),
+    "test-report" => TestResultsPublicationCommand.RunAsync(args[1..]),
     _ => ReferenceBenchmarkCommand.RunAsync(args),
 }).ConfigureAwait(false);
 
