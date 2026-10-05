@@ -16,16 +16,18 @@ internal sealed record SpeculationOutput(
     int DraftedTokens,
     int AcceptedTokens,
     double AcceptanceRate,
-    double CommittedTokensPerTargetPass);
+    double CommittedTokensPerTargetPass,
+    bool AdaptiveDepth,
+    IReadOnlyList<SpeculativeDepthMeasurement> DepthMeasurements);
 
 /// <summary>
 /// Speculative decoding options (ADR-020): <c>--draft-model</c> names an external draft; <c>--draft-drop-layers</c>
 /// drafts with a layer-dropped copy (ADR-019) of the draft file, or of the target file when no draft model is given, so
 /// the draft's weights are pages the target already maps. The target verifies every token either way.
 /// </summary>
-internal sealed record SpeculationArguments(string? DraftModel, LayerDropProfile? DraftDrop, int DraftTokens)
+internal sealed record SpeculationArguments(string? DraftModel, LayerDropProfile? DraftDrop, int DraftTokens, bool AdaptiveDepth)
 {
-    public const string Usage = "[--draft-model <model.synapse>] [--draft-drop-layers <i,j,...>] [--draft-tokens <1..7>]";
+    public const string Usage = "[--draft-model <model.synapse>] [--draft-drop-layers <i,j,...>] [--draft-tokens <1..7|auto>]";
 
     /// <summary>False only for malformed input; no draft option yields null.</summary>
     public static bool TryParse(IReadOnlyDictionary<string, string> values, out SpeculationArguments? speculation)
@@ -46,13 +48,14 @@ internal sealed record SpeculationArguments(string? DraftModel, LayerDropProfile
             drop = new LayerDropProfile(parsed);
         }
 
-        var tokens = GenerationOptions.ParsePositive(values.GetValueOrDefault("--draft-tokens"), 3);
+        var adaptive = values.GetValueOrDefault("--draft-tokens") == "auto";
+        var tokens = adaptive ? 3 : GenerationOptions.ParsePositive(values.GetValueOrDefault("--draft-tokens"), 3);
         if (model is null && drop is null)
         {
             return !values.ContainsKey("--draft-tokens");
         }
 
-        speculation = tokens is >= 1 and <= 7 ? new SpeculationArguments(model, drop, tokens) : null;
+        speculation = tokens is >= 1 and <= 7 ? new SpeculationArguments(model, drop, tokens, adaptive) : null;
         return speculation is not null;
     }
 
@@ -76,7 +79,8 @@ internal sealed record SpeculationArguments(string? DraftModel, LayerDropProfile
             draft,
             options.Tokens,
             options.MaximumTokens,
-            DraftTokens);
+            DraftTokens,
+            AdaptiveDepth);
         return (run.Result, new SpeculationOutput(
             Path.GetFullPath(draftPath),
             draft.RuntimeProfile,
@@ -85,6 +89,8 @@ internal sealed record SpeculationArguments(string? DraftModel, LayerDropProfile
             run.DraftedTokens,
             run.AcceptedTokens,
             run.DraftedTokens == 0 ? 0 : run.AcceptedTokens / (double)run.DraftedTokens,
-            run.TargetPasses == 0 ? 0 : (run.Result.GeneratedTokens.Count - 1) / (double)run.TargetPasses));
+            run.TargetPasses == 0 ? 0 : (run.Result.GeneratedTokens.Count - 1) / (double)run.TargetPasses,
+            AdaptiveDepth,
+            run.DepthMeasurements));
     }
 }

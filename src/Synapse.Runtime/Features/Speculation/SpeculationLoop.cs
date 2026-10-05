@@ -19,8 +19,9 @@ internal sealed class SpeculationLoop(
     private int _draftLength;
     private bool _draftable = true;
 
-    public SpeculativeResult Run(IReadOnlyList<int> prompt, int maximumNewTokens, int draftTokens)
+    public SpeculativeResult Run(IReadOnlyList<int> prompt, int maximumNewTokens, int draftTokens, bool adaptiveDepth)
     {
+        var policy = adaptiveDepth ? new AdaptiveDepth(draftTokens) : null;
         var timer = Stopwatch.StartNew();
         target.Reserve(prompt.Count + maximumNewTokens + draftTokens);
         draft.Reserve(prompt.Count + maximumNewTokens + draftTokens);
@@ -34,8 +35,16 @@ internal sealed class SpeculationLoop(
         var (passes, drafted, accepted) = (0, 0, 0);
         while (committed < maximumNewTokens && _sequence[^1] != endOfSequenceToken)
         {
-            var proposals = _draftable ? Propose(Math.Min(draftTokens, maximumNewTokens - committed - 1)) : [];
+            var available = Math.Min(draftTokens, maximumNewTokens - committed - 1);
+            var depth = _draftable ? policy?.Select(available) ?? available : 0;
+            var started = policy is null ? 0 : Stopwatch.GetTimestamp();
+            var proposals = Propose(depth);
+            var proposed = policy is null ? 0 : Stopwatch.GetTimestamp();
             var (taken, added) = Verify(proposals, maximumNewTokens - committed);
+            policy?.Observe(depth, taken, added,
+                Stopwatch.GetElapsedTime(started, proposed).TotalMilliseconds,
+                Stopwatch.GetElapsedTime(proposed).TotalMilliseconds,
+                learn: available == draftTokens && _sequence[^1] != endOfSequenceToken);
             passes++;
             drafted += proposals.Length;
             accepted += taken;
@@ -44,7 +53,10 @@ internal sealed class SpeculationLoop(
 
         var generated = _sequence.Skip(prompt.Count).ToArray();
         return new SpeculativeResult(
-            new TextGenerationResult([.. prompt], generated, timeToFirstToken, timer.Elapsed), passes, drafted, accepted);
+            new TextGenerationResult([.. prompt], generated, timeToFirstToken, timer.Elapsed), passes, drafted, accepted)
+        {
+            DepthMeasurements = policy?.Measurements ?? [],
+        };
     }
 
     /// <summary>The draft catches up on committed tokens it has not seen, then proposes <paramref name="count"/> tokens.</summary>
@@ -83,6 +95,12 @@ internal sealed class SpeculationLoop(
     private (int Accepted, int Committed) Verify(int[] proposals, int remaining)
     {
         var position = _sequence.Count - 1;
+        if (proposals.Length == 0)
+        {
+            Commit(GreedySampling.ArgMax(target.Decode(_sequence[^1], position).Span));
+            return (0, 1);
+        }
+
         var step = new BatchToken[proposals.Length + 1];
         step[0] = new BatchToken(0, _sequence[^1], position, 0);
         for (var index = 0; index < proposals.Length; index++)

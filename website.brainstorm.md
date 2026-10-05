@@ -32,6 +32,12 @@ Date: 2026-09-28. Status: accepted for `TASK-WEB-001`.
 
 ## Original rejected alternatives
 
+2026-10-05 (`TASK-WEB-004`): live audit confirms the artifact-to-Pages flow
+already works. Harden failure paths: earlier .NET/report failures must not
+skip independent Rust checks, and a bounded test step must leave reporting
+time. Keep genuine skips, independent revisions and diagnostic quality states;
+do not relabel all discovered tests or all benchmark rows as qualified passes.
+
 - A generated `gh-pages` branch was rejected because it adds a second mutable
   history and needs force-style publication behavior.
 - Rendering the README through Jekyll was rejected because the dedicated site

@@ -42,3 +42,14 @@ not delivery evidence.
 
 Keep the task `in_progress` until remote publication and live evidence exist.
 This does not close the statistical benchmark or broader runtime plans.
+
+## `TASK-WEB-004`: failure-independent verification and live audit
+
+- [x] Confirm hosted .NET/Rust steps, JSON artifacts, Pages and the public
+  endpoint for `4e86aa2`; preserve actual skips and diagnostic quality states.
+- [x] Red contract regression `TEST-WEB-002-5` on the existing workflow.
+- [x] Give the .NET test step a reporting reserve and keep Rust checks
+  independent of earlier failures after toolchain installation.
+- [x] Focused Website 25/25, format/build/workflow lint and evidence review;
+  `docs/Development/CiPublicationAudit-2026-10-05.md` records exact scope.
+- [ ] Deliver the workflow and confirm a new hosted verification/publication.

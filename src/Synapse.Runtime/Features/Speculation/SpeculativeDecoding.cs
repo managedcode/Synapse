@@ -1,3 +1,4 @@
+using ManagedCode.Synapse.Runtime.Features.GpuKernels;
 using ManagedCode.Synapse.Runtime.Features.TextGeneration;
 using ManagedCode.Synapse.Runtime.Features.TextGeneration.Qwen2;
 
@@ -8,7 +9,15 @@ namespace ManagedCode.Synapse.Runtime.Features.Speculation;
 /// <param name="TargetPasses">Target verification steps after the prompt; each commits at least one token.</param>
 /// <param name="DraftedTokens">Tokens the draft proposed.</param>
 /// <param name="AcceptedTokens">Proposed tokens that equal the target's own arg-max and were committed.</param>
-public sealed record SpeculativeResult(TextGenerationResult Result, int TargetPasses, int DraftedTokens, int AcceptedTokens);
+public sealed record SpeculativeResult(TextGenerationResult Result, int TargetPasses, int DraftedTokens, int AcceptedTokens)
+{
+    /// <summary>Per-depth real round totals in adaptive mode, including exploration and the request tail.</summary>
+    public IReadOnlyList<SpeculativeDepthMeasurement> DepthMeasurements { get; init; } = [];
+}
+
+/// <summary>Actual work at one draft depth; depth zero is an ordinary single-token target pass.</summary>
+public sealed record SpeculativeDepthMeasurement(
+    int Depth, int Rounds, int AcceptedTokens, int CommittedTokens, double DraftMilliseconds, double VerificationMilliseconds);
 
 /// <summary>
 /// Exact greedy speculative decoding with an external draft (ADR-020): the draft proposes tokens, the target checks
@@ -19,13 +28,15 @@ public static class SpeculativeDecoding
     /// <summary>
     /// Returns the target's greedy continuation of <paramref name="prompt"/>, using <paramref name="draft"/> to propose
     /// up to <paramref name="draftTokens"/> tokens per target pass.
+    /// With <paramref name="adaptiveDepth"/>, the cap is at most seven on CPU or three on GPU; throughput may select zero.
     /// </summary>
     public static SpeculativeResult Generate(
         Qwen2Model target,
         Qwen2Model draft,
         IReadOnlyList<int> prompt,
         int maximumNewTokens,
-        int draftTokens = 3)
+        int draftTokens = 3,
+        bool adaptiveDepth = false)
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(draft);
@@ -40,11 +51,17 @@ public static class SpeculativeDecoding
         RequireCompatible(target, draft, prompt, maximumNewTokens + draftTokens);
         return target.RunDirect(targetExecutor => draft.RunDirect(draftExecutor =>
         {
+            if (adaptiveDepth && targetExecutor is GpuDecoderExecutor && draftTokens > 3)
+            {
+                throw new NotSupportedException(
+                    "Adaptive GPU drafts are capped at three tokens: wider GEMM verification windows have not preserved greedy parity (ADR-020).");
+            }
+
             var verifier = targetExecutor as IBatchDecoder ?? throw new NotSupportedException(
                 "Speculative verification needs a backend with batched steps; the reference backend has none (ADR-020).");
             ArgumentOutOfRangeException.ThrowIfGreaterThan(draftTokens + 1, verifier.LogitsRowCapacity, nameof(draftTokens));
             return new SpeculationLoop(targetExecutor, verifier, draftExecutor, draft.VocabularySize, Qwen2Model.EndOfSequenceToken)
-                .Run(prompt, maximumNewTokens, draftTokens);
+                .Run(prompt, maximumNewTokens, draftTokens, adaptiveDepth);
         }));
     }
 

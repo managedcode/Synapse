@@ -1,5 +1,23 @@
 # Synapse master plan
 
+## 2026-10-05 CI publication audit (`TASK-WEB-004`)
+
+- [x] Inspect hosted runs, actual test JSON and the live metrics endpoint.
+- [x] Red contract test, independent Rust checks and bounded .NET step timeout.
+- [x] Website 25/25, format/build and workflow lint; preserve actual skips.
+- [ ] New hosted delivery evidence (see `website.plan.md`).
+
+## 2026-10-05 measured speculative depth (`TASK-SPC-005`)
+
+- [x] Red controller contract, real-model exactness and CLI process regressions.
+- [x] Opt-in online depth selection including ordinary target-only rounds;
+  report bounded per-depth measurements and preserve fixed depths.
+- [x] Format/build/analyzers, 18 focused tests, coverage, Rust and manual
+  security/architecture review. Full .NET gate remains unverified: the local
+  35-minute run was stopped after a reproduced evaluation child timeout.
+- [ ] Paired real-model speed/quality qualification including short requests,
+  warm-up and drift; broader runtime and benchmark tasks stay open.
+
 ## 2026-10-03 website comparison charts (`TASK-WEB-003`)
 
 - [x] Red regressions for model provenance and chart-only publication.

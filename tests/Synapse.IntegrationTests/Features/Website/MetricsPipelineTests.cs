@@ -7,6 +7,23 @@ namespace ManagedCode.Synapse.IntegrationTests.Features.Website;
 public sealed class MetricsPipelineTests
 {
     [Test]
+    public async Task VerificationKeepsIndependentRustChecksAndReportTimeAfterDotNetFailure()
+    {
+        var workflow = await File.ReadAllTextAsync(Path.Combine(FindRepositoryRoot(), ".github/workflows/verify.yml"));
+        workflow = workflow.Replace("\r\n", "\n", StringComparison.Ordinal);
+        await Assert.That(workflow).Contains("timeout-minutes: 45");
+        await Assert.That(workflow).Contains("name: Install pinned Rust toolchain\n        id: rust-toolchain");
+        await Assert.That(workflow).Contains("name: Test .NET\n        timeout-minutes: 25");
+        foreach (var check in new[] { "Check Rust formatting", "Lint Rust", "Test Rust" })
+        {
+            await Assert.That(workflow).Contains($"name: {check}\n        if: ${{{{ !cancelled() && steps.rust-toolchain.outcome == 'success' }}}}");
+        }
+
+        await Assert.That(workflow).Contains("name: Export real .NET test results as JSON\n        if: always()");
+        await Assert.That(workflow).Contains("name: Publish .NET test JSON\n        if: always()");
+    }
+
+    [Test]
     public async Task SiteShellKeepsRecordedAndLiveMetricsSeparate()
     {
         var root = FindRepositoryRoot();

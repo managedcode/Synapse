@@ -61,6 +61,40 @@ without changing its output.
     decode tolerance, and tokens can differ only at near-ties, as with
     prefix reuse (ADR-018).
 
+## 2026-10-05 adaptive depth amendment (`REQ-SPC-005`)
+
+Add an opt-in `adaptiveDepth` argument (default false) and CLI
+`--draft-tokens auto` (maximum three proposals). CPU callers may explicitly
+choose a cap through seven; adaptive GPU caps above three fail before generation.
+Fixed depths remain unchanged.
+This applies the measured-cost idea described in TensorFold commit
+`bcb8f01` independently to Synapse's external draft; it does not import MTP
+heads, upstream code or upstream performance claims.
+
+The request-local controller samples depths zero through the configured cap
+twice, then compares expected committed tokens per millisecond using an EWMA
+of actual committed counts and draft-plus-verification wall time at each depth.
+Draft timing includes catch-up after rejection or plain rounds. Depth zero
+uses the target's ordinary single-token Decode, leaves the draft idle and is
+the baseline. A draft must beat that baseline by 5%; ties prefer less drafting.
+Reprobes rotate across depths after 16, 32, 64 and then 128 exploitation rounds.
+Clipped end-of-request rounds are excluded from learning. Costs are scoped to
+this request/model/backend/context and never persisted or shared across devices.
+Counters include exploration, and per-depth counts and timing totals are exposed.
+
+All commits still come from the target. Online exploration and draft prefill
+can lose time on short requests; this is an experimental opt-in until real
+paired model/hardware evidence qualifies it. Startup calibration, trained MTP
+heads and a confidence-based per-level continuation policy remain future work.
+
+The first real Qwen2.5-0.5B Metal pilot with an adaptive cap of seven diverged
+from dense at output position 36 in all three measured rounds. Five or more
+verification rows enter the GEMM projection path and lack the matrix-vector
+path's batch invariance. Reject those adaptive GPU windows explicitly; the
+CLI samples only depths zero through three. Do not count the rejected pilot
+as a speed result, and retain its raw evidence. Fixed GPU speculation keeps
+its existing ADR-020 numerical-tolerance contract.
+
 ## Consequences
 
 - Committed tokens per target pass equal `1 +` the mean accepted run length.

@@ -173,6 +173,15 @@
       "tests": ["TEST-WEB-002-1", "TEST-WEB-002-2", "TEST-WEB-002-3", "TEST-WEB-002-4"]
     },
     {
+      "id": "TASK-WEB-004",
+      "requirement": "REQ-WEB-002",
+      "slice": "Website",
+      "stage": "D0",
+      "status": "in_progress",
+      "dependsOn": ["TASK-WEB-002"],
+      "tests": ["TEST-WEB-002-5"]
+    },
+    {
       "id": "TASK-WEB-003",
       "requirement": "REQ-WEB-003",
       "slice": "Website",
@@ -376,6 +385,15 @@
       "status": "in_progress",
       "dependsOn": ["TASK-SPC-001", "TASK-LDP-004"],
       "tests": ["TEST-SPC-003-1"]
+    },
+    {
+      "id": "TASK-SPC-005",
+      "requirement": "REQ-SPC-005",
+      "slice": "Speculation",
+      "stage": "D1",
+      "status": "in_progress",
+      "dependsOn": ["TASK-SPC-001", "TASK-SPC-003"],
+      "tests": ["TEST-SPC-005-1", "TEST-SPC-005-2", "TEST-SPC-005-3"]
     },
     {
       "id": "TASK-QNT-005",

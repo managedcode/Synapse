@@ -47,6 +47,92 @@ public sealed class SpeculativeDecodingTests
     }
 
     [Test]
+    [Arguments(KernelBackend.Managed, 30)]
+    [Arguments(KernelBackend.Managed, 31)]
+    [Arguments(KernelBackend.Metal, 31)]
+    public async Task AdaptiveOutputEqualsTargetGreedy(KernelBackend backend, int seed)
+    {
+        if (backend == KernelBackend.Metal)
+        {
+            GpuHardware.RequireMetal();
+        }
+
+        var target = TinyQwen2Gguf.Write(Target with { HeadDimension = 128 }, seed: 30);
+        var draft = TinyQwen2Gguf.Write(Target with { HeadDimension = 128 }, seed: seed);
+        try
+        {
+            using var targetModel = Load(target, backend);
+            using var draftModel = Load(draft, backend);
+            var expected = targetModel.Generate(Prompt, 48);
+            var cap = backend == KernelBackend.Metal ? 3 : 7;
+            var run = SpeculativeDecoding.Generate(targetModel, draftModel, Prompt, 48, cap, adaptiveDepth: true);
+            await Assert.That(run.Result.GeneratedTokens.SequenceEqual(expected.GeneratedTokens)).IsTrue();
+            await Assert.That(run.DepthMeasurements.Sum(row => row.Rounds)).IsEqualTo(run.TargetPasses);
+            await Assert.That(run.DepthMeasurements.Sum(row => row.CommittedTokens)).IsEqualTo(run.Result.GeneratedTokens.Count - 1);
+            await Assert.That(run.DepthMeasurements[0].Rounds).IsGreaterThanOrEqualTo(2);
+            await Assert.That(run.DepthMeasurements.Sum(row => row.AcceptedTokens)).IsEqualTo(run.AcceptedTokens);
+        }
+        finally
+        {
+            File.Delete(target);
+            File.Delete(draft);
+        }
+    }
+
+    [Test]
+    public async Task AdaptiveMetalRealModelKeepsGreedyTokenOrder()
+    {
+        GpuHardware.RequireMetal();
+        var path = await ReferenceBenchmarkFixture.GetCompiledModelPathAsync();
+        using var target = LoadPreparedMetal(path, null);
+        using var draft = LoadPreparedMetal(path, new LayerDropProfile([1]));
+        int[] prompt = [785, 6722, 315, 9625, 374];
+        var expected = target.Generate(prompt, 128);
+        var actual = SpeculativeDecoding.Generate(target, draft, prompt, 128, 3, adaptiveDepth: true);
+        await Assert.That(actual.Result.GeneratedTokens.SequenceEqual(expected.GeneratedTokens)).IsTrue();
+    }
+
+    [Test]
+    public async Task AdaptiveMetalRejectsUnqualifiedWideWindows()
+    {
+        GpuHardware.RequireMetal();
+        var source = TinyQwen2Gguf.Write(Target with { HeadDimension = 128 }, seed: 30);
+        try
+        {
+            using var target = Load(source, KernelBackend.Metal);
+            using var draft = Load(source, KernelBackend.Metal);
+            await Assert.That(() => SpeculativeDecoding.Generate(target, draft, Prompt, 8, 4, adaptiveDepth: true))
+                .Throws<NotSupportedException>();
+        }
+        finally
+        {
+            File.Delete(source);
+        }
+    }
+
+    [Test]
+    [Arguments(1)]
+    [Arguments(2)]
+    public async Task AdaptiveShortRequestsRemainExact(int maximumTokens)
+    {
+        var source = TinyQwen2Gguf.Write(Target, seed: 30);
+        try
+        {
+            using var target = Load(source, KernelBackend.Managed);
+            using var draft = Load(source, KernelBackend.Managed);
+            var expected = target.Generate(Prompt, maximumTokens);
+            var run = SpeculativeDecoding.Generate(target, draft, Prompt, maximumTokens, 3, adaptiveDepth: true);
+            await Assert.That(run.Result.GeneratedTokens.SequenceEqual(expected.GeneratedTokens)).IsTrue();
+            await Assert.That(run.DraftedTokens).IsEqualTo(0);
+            await Assert.That(run.TargetPasses).IsEqualTo(maximumTokens - 1);
+        }
+        finally
+        {
+            File.Delete(source);
+        }
+    }
+
+    [Test]
     public async Task SpeculationRejectsIncompatibleModels()
     {
         var target = TinyQwen2Gguf.Write(Target, seed: 30);
@@ -110,4 +196,17 @@ public sealed class SpeculativeDecodingTests
     private static Qwen2Model Load(string path, KernelBackend backend) => (Qwen2Model)ModelLoader.LoadSourceForValidation(
         path,
         new ModelLoadOptions { ContextSize = 1_024, MaximumParallelism = 8, KernelBackend = backend });
+
+    private static Qwen2Model LoadPreparedMetal(string path, LayerDropProfile? drop) => (Qwen2Model)ModelLoader.Load(
+        path,
+        new ModelLoadOptions
+        {
+            ContextSize = 512,
+            MaximumParallelism = 8,
+            KernelBackend = KernelBackend.Metal,
+            KvCachePrecision = KvCachePrecision.Fp16,
+            MaximumConcurrentSessions = 1,
+            ScoringRowsPerStep = 4,
+            LayerDrop = drop,
+        });
 }

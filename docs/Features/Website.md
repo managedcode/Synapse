@@ -22,6 +22,12 @@ Functional test runners publish `test-results.json` from real .NET TRX files;
 benchmark aggregation publishes `performance-results.json` from validated raw
 JSON. Both use schema version 1. Missing values are null and missing/invalid
 evidence is retained. .NET counts and whole-workflow conclusions are separate.
+`TASK-WEB-004` keeps Rust formatting, lint and tests independent of .NET/report
+failures once the Rust toolchain exists. The .NET step has a shorter timeout
+than its job so reporting can run after that step times out. Cancellation or
+a job-wide timeout can still prevent publication; missing artifacts remain
+explicit, never a passing count. This does not promise unavailable GPU/model
+tests execute on hosted hardware.
 
 Pages runs after trusted `main` push/manual workflows complete, downloads the
 latest completed verification and performance artifacts by authenticated run
@@ -36,6 +42,7 @@ replace the dated M2 Pro diagnostics.
 | `AC-WEB-002-2` numerical benchmark JSON retains sample counts, nullable metrics, phase scopes and invalid/missing evidence | `TEST-WEB-002-2` `PerformancePublicationTests` |
 | `AC-WEB-002-3` trusted completed runs trigger a confined artifact-to-Pages build with independently attributable streams | `TEST-WEB-002-3` `MetricsPipelineTests`, remote Actions evidence |
 | `AC-WEB-002-4` the responsive site displays current test counts and scoped benchmark charts, with provenance and honest unavailable states | `TEST-WEB-002-4` rendered desktop/mobile review and public JSON response |
+| `AC-WEB-002-5` independent Rust checks run after .NET failures; test-step timeouts leave reporting time without masking failure | `TEST-WEB-002-5` `VerificationKeepsIndependentRustChecksAndReportTimeAfterDotNetFailure`, hosted run evidence |
 
 ## Understandable comparisons (`REQ-WEB-003`, ADR-010)
 

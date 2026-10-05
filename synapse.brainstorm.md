@@ -396,6 +396,23 @@ stays (owner decision). The owner commits.
 - **Update the same day (ADR-021):** Q4_K/Q6_K now run on Metal. The 7B Q4_K_M peaks at 4.2 GB in
   Synapse (llama.cpp 4.8 GB) with no measured perplexity loss against Q8_0. Decode is 0.64× llama.cpp's, which is
   the next kernel target.
+## 2026-10-05 measured speculative depth
+
+Owner supplied TensorFold's measured draft/verify-depth idea. Synapse already
+has an external-draft exact greedy path and evidence that fixed long drafts
+lose. Test a request-local controller that compares committed tokens per time
+at each depth, including zero, with bounded exploration and later reprobes.
+Measure catch-up as draft work. Keep fixed depth and make auto opt-in because
+warm-up can dominate short requests. Do not infer MTP support or the upstream
+6–7% improvement for Synapse. Register REQ/AC/TASK/TEST-SPC-005 (004 remains
+reserved for planned self-speculation), retain paired
+qualification as unfinished, and validate ordinary decode after rejected tails.
+The real seven-depth Metal pilot lost greedy parity at position 36 in all
+three measured pairs. Restrict CLI auto to three and reject adaptive GPU
+caps above three; they cross into the existing GEMM verification path. Keep
+the rejected raw pilot and add a real prepared-model regression, rather than
+qualifying GPU behavior from tiny fixtures alone.
+
 # Format-neutral conversion checkpoint (2026-10-03)
 
 The user wants one explicit source-to-`.synapse` slice covering GGUF, ONNX and

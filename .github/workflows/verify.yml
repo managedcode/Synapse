@@ -51,7 +51,8 @@ jobs:
             executable_suffix: .exe
             llama_binary_directory: build/bin/Release
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 35
+    # Reserve time for JSON/TRX publication and independent Rust checks.
+    timeout-minutes: 45
     env:
       DOTNET_NOLOGO: true
       DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
@@ -86,6 +87,7 @@ jobs:
           global-json-file: global.json
 
       - name: Install pinned Rust toolchain
+        id: rust-toolchain
         run: rustup toolchain install 1.98.1 --profile minimal --component clippy,rustfmt
 
       - name: Restore locked dependencies
@@ -154,6 +156,7 @@ jobs:
         run: echo "SYNAPSE_LLAMACPP_EXECUTABLE=${GITHUB_WORKSPACE}/_external/llama.cpp/${{ matrix.llama_binary_directory }}/llama-completion${{ matrix.executable_suffix }}" >> "${GITHUB_ENV}"
 
       - name: Test .NET
+        timeout-minutes: 25
         run: >-
           dotnet test Synapse.slnx --configuration Release --no-build --
           --report-trx --results-directory "${{ runner.temp }}/test-results"
@@ -186,12 +189,15 @@ jobs:
           retention-days: 90
 
       - name: Check Rust formatting
+        if: ${{ !cancelled() && steps.rust-toolchain.outcome == 'success' }}
         run: cargo fmt --manifest-path native/Cargo.toml --all --check
 
       - name: Lint Rust
+        if: ${{ !cancelled() && steps.rust-toolchain.outcome == 'success' }}
         run: cargo clippy --manifest-path native/Cargo.toml --workspace --all-targets -- -D warnings
 
       - name: Test Rust
+        if: ${{ !cancelled() && steps.rust-toolchain.outcome == 'success' }}
         run: cargo test --manifest-path native/Cargo.toml --locked
 
       - name: Exercise both doctor entry points

@@ -81,3 +81,15 @@ request and fresh-process wall time, and resident and peak RSS remain separate
 charts. Missing Synapse measurements stay visible; no speedup or quality
 verdict is inferred from unlike formats or unreviewed answers. Dated local
 Apple GPU charts remain clearly separate from current hosted CI.
+
+## 2026-10-05: independent checks and report time (`TASK-WEB-004`)
+
+Rust formatting, lint and tests each run after earlier failures when their
+toolchain installation succeeded and the workflow has not been cancelled.
+Their own failures still fail verification. Bound the .NET test step to 25
+minutes within a 45-minute job, leaving time after the usual preparation for
+the existing always-run JSON/TRX publication and Rust checks. A cancelled job,
+unusually slow preparation or job-wide timeout may still lack reports; the
+existing missing-evidence path remains authoritative. Public counts continue
+to describe .NET only, with actual skips distinct from passes. Performance and
+verification remain independent streams with their own revision provenance.

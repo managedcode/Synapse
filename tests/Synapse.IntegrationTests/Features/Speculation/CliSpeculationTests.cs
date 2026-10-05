@@ -24,6 +24,8 @@ public sealed class CliSpeculationTests
             var speculative = await RunAsync(
                 "--model", compiled, "--tokens", "1,2,3,4,5,6", "--max-tokens", "24", "--draft-drop-layers", "2", "--draft-tokens", "4");
             var malformed = await RunAsync("--model", compiled, "--tokens", "1,2", "--draft-tokens", "4");
+            var adaptive = await RunAsync(
+                "--model", compiled, "--tokens", "1,2,3,4,5,6", "--max-tokens", "24", "--draft-drop-layers", "2", "--draft-tokens", "auto");
 
             await Assert.That(plain.ExitCode).IsEqualTo(0).Because(plain.Error);
             await Assert.That(speculative.ExitCode).IsEqualTo(0).Because(speculative.Error);
@@ -35,6 +37,13 @@ public sealed class CliSpeculationTests
             await Assert.That(speculation.GetProperty("draft_profile").GetString()).EndsWith("drop1x");
             await Assert.That(speculation.GetProperty("target_passes").GetInt32()).IsGreaterThan(0).And.IsLessThanOrEqualTo(23);
             await Assert.That(malformed.ExitCode).IsEqualTo(2);
+            await Assert.That(adaptive.ExitCode).IsEqualTo(0).Because(adaptive.Error);
+            using var adaptiveJson = JsonDocument.Parse(adaptive.Output);
+            await Assert.That(adaptiveJson.RootElement.GetProperty("generated_tokens").GetRawText())
+                .IsEqualTo(plainJson.RootElement.GetProperty("generated_tokens").GetRawText());
+            var adaptiveOutput = adaptiveJson.RootElement.GetProperty("speculation");
+            await Assert.That(adaptiveOutput.GetProperty("adaptive_depth").GetBoolean()).IsTrue();
+            await Assert.That(adaptiveOutput.GetProperty("depth_measurements").GetArrayLength()).IsEqualTo(4);
         }
         finally
         {
