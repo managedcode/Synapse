@@ -5,7 +5,9 @@
 - [x] Inspect hosted runs, actual test JSON and the live metrics endpoint.
 - [x] Red contract test, independent Rust checks and bounded .NET step timeout.
 - [x] Website 25/25, format/build and workflow lint; preserve actual skips.
-- [ ] New hosted delivery evidence (see `website.plan.md`).
+- [x] Hosted `verify` 37290201607, performance 37290201688 and Pages
+  37293092158 succeed for executable/workflow revision `501e35d`; canonical
+  public JSON and rendered counts match the uploaded artifact exactly.
 
 ## 2026-10-05 measured speculative depth (`TASK-SPC-005`)
 
@@ -15,6 +17,9 @@
 - [x] Format/build/analyzers, 18 focused tests, coverage, Rust and manual
   security/architecture review. Full .NET gate remains unverified: the local
   35-minute run was stopped after a reproduced evaluation child timeout.
+  Subsequent hosted full suites succeed: 577 discovered tests per OS, zero
+  failures, 47/48 genuine skips; this does not resolve the local timeout or
+  confer unavailable GPU qualification.
 - [ ] Paired real-model speed/quality qualification including short requests,
   warm-up and drift; broader runtime and benchmark tasks stay open.
 

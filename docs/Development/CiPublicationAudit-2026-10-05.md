@@ -79,3 +79,36 @@ unsafe content injection, schema or data ownership change. Pinned Actions,
 run/attempt freshness, hash validation and bounded root-member extraction stay
 in place. New hosted completion and public source-revision confirmation are
 required before this task is marked verified.
+
+## Delivered executable/workflow revision `501e35d`
+
+[verify #28](https://github.com/managedcode/Synapse/actions/runs/37290201607),
+[performance #16](https://github.com/managedcode/Synapse/actions/runs/37290201688)
+and the final [Pages deployment](https://github.com/managedcode/Synapse/actions/runs/37293092158)
+all succeed. .NET, Rust checks and JSON publication succeed on every runner.
+
+| .NET runner | Total | Passed | Failed | Skipped |
+|---|---:|---:|---:|---:|
+| osx-arm64 | 577 | 530 | 0 | 47 |
+| linux-x64 | 577 | 529 | 0 | 48 |
+| win-x64 | 577 | 529 | 0 | 48 |
+
+The new performance report contains 22/22 expected artifacts, no missing or
+invalid artifacts, and 124 rows: 12 matched and 112 unreviewed variants.
+The canonical HTTPS JSON equals the uploaded Pages artifact byte-independent
+JSON projection exactly. Its generation time is
+`2026-10-05T09:56:20.2981639+00:00`; verification and performance both retain
+source SHA `501e35dbeab34468205f3e5f34679daa050f9c09`. Every original benchmark
+row field/value is unchanged by site publication (optional model enrichment
+is excluded from that equality comparison). No missing test artifacts.
+The live browser renders these new counts, scopes, run numbers and SHA.
+
+The performance-triggered publication initially kept the still-running
+verification stream's previous completed SHA, explicitly shown separately.
+Verification completion automatically caused a second publication with both
+new streams. Its deploy job queued without an allocated runner or pending
+approval, then completed successfully; it was not cancelled or bypassed.
+The red/green source regression checks failure conditions; no hosted failure
+or timeout branch was deliberately fault-injected. Raw final JSON, producer
+artifacts, Pages artifact and watch logs remain in the ignored audit directory.
+This post-delivery record changes documentation only.

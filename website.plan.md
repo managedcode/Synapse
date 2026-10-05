@@ -52,4 +52,8 @@ This does not close the statistical benchmark or broader runtime plans.
   independent of earlier failures after toolchain installation.
 - [x] Focused Website 25/25, format/build/workflow lint and evidence review;
   `docs/Development/CiPublicationAudit-2026-10-05.md` records exact scope.
-- [ ] Deliver the workflow and confirm a new hosted verification/publication.
+- [x] Deliver the workflow at `501e35d` and confirm hosted verification,
+  performance JSON and Pages; the canonical endpoint and browser display the
+  exact new artifact, including 577 tests per OS and 124 benchmark rows.
+  Failure conditions have a red/green source contract; hosted failure/timeout
+  branches were not deliberately fault-injected. Broader qualification stays open.

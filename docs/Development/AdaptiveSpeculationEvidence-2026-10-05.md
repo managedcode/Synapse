@@ -141,3 +141,36 @@ Initial sampling, draft prefill and catch-up after plain rounds can cost more
 than speculation saves. No speed improvement is guaranteed. No NVIDIA run,
 MTP-family support, broad corpus qualification, statistical paired speed
 claim, commit/push or deployment is established by this checkpoint.
+
+## Additional 7B diagnostic and hosted delivery
+
+Executable revision `501e35d` is pushed; full hosted verification and public
+JSON publication succeed (see `CiPublicationAudit-2026-10-05.md`). Hosted
+Metal skips are real: Apple's paravirtual device reports GPU family zero.
+Local real Metal coverage above is separate from that hosted evidence.
+
+An additional existing Qwen2.5-7B-Instruct-1M Q8_0 source was losslessly
+prepared with the C# compiler, source SHA-256
+`d81ca8ca04442ed5ff7d036fa546183170b8269281380bed977431a5449c84b2` and package
+identity `9c1e2aca1f23bcc51f06802cac5e9e25e2835e0f9a6988faf92971a2c3986a16`
+(the identity is not a whole-file hash). External draft: prepared 0.5B Q8_0,
+without layer drop. Metal/f16 KV, eight threads, context 512, the same
+37-token chat prompt as the earlier 7B diagnostic, and 256 generated tokens.
+One warm-up per mode and three alternating measured fresh-process pairs.
+Final compiler/helper/12 generation processes and the C# reporter exit 0;
+every fixed and auto output has all 256 tokens in the same order as its paired
+dense output. Raw prompt, tokens, JSON/stderr, C# reporter, orchestration,
+summary and fuller limits are under `artifacts/adaptive-speculation/seven-billion/`.
+
+| Mode | Median generation wall ms | Median reported decode tokens/s |
+|---|---:|---:|
+| Dense | 13085.350 | 20.313 |
+| Fixed 3 | 10466.081 | 26.105 |
+| Auto cap 3 | 12371.546 | 24.239 |
+
+Fixed 3 remains fastest here, and remains the default. Adaptive choices vary
+by round, including zero in the third. Other user-owned CPU work exists on
+the shared host; identical load/thermal conditions are not established.
+Only three pairs on one prompt/model pair, with no semantic answer-quality
+or statistical speedup verdict. This does not close `TASK-SPC-005` or add
+these local diagnostic rows to the public hosted benchmark stream.
