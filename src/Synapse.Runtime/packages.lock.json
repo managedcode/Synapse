@@ -4,9 +4,9 @@
     "net10.0": {
       "ZoneTree": {
         "type": "Direct",
-        "requested": "[1.9.8, )",
-        "resolved": "1.9.8",
-        "contentHash": "pCH4glui4AI1oIGFpjOrzr/wf6wBuQpxxOG9hviuQPXTiYGOu/TTFW4T18QBtH0iRbvlyjivHTffqu1fW2lMqg==",
+        "requested": "[1.9.9, )",
+        "resolved": "1.9.9",
+        "contentHash": "zoU1/VH7f4SBKRs6iR/yAVfHzBxC4ULbky9Sq3VfWPMVQhzPKno2K0NAf0+hDJXXvju0A9eg5PtH+EBWCa6Rmw==",
         "dependencies": {
           "K4os.Compression.LZ4": "1.3.8",
           "ZstdSharp.Port": "0.8.8"

@@ -82,7 +82,7 @@ public sealed class FoundryLocalRunTests
         await Assert.That(root.GetProperty("family").GetString()).IsEqualTo(family);
         await Assert.That(root.GetProperty("device").GetString()).IsEqualTo(device);
         await Assert.That(root.GetProperty("execution_provider").GetString()).IsEqualTo("CPUExecutionProvider");
-        await Assert.That(root.GetProperty("sdk_version").GetString()).StartsWith("2.0.1");
+        await Assert.That(root.GetProperty("sdk_version").GetString()).StartsWith("2.2.1");
         await Assert.That(root.GetProperty("thread_policy").GetString())
             .IsEqualTo("runtime_default_not_configurable");
         await Assert.That(root.GetProperty("context_mode").GetString())
